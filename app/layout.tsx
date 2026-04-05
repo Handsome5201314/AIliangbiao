@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./globals.print.css";
+import { AssessmentProvider } from "@/contexts/AssessmentContext";
+import { ProfileProvider } from "@/contexts/ProfileContext";
+import { ConversationHistoryProvider } from "@/contexts/ConversationHistoryContext";
 
 export const metadata: Metadata = {
-  title: "AI量表系统",
-  description: "一核双门 - 医疗量表 AI 平台",
+  title: "AI量表系统 - 智能心理评估平台",
+  description: "基于 MCP 协议的 AI 驱动临床量表评估系统",
 };
 
 export default function RootLayout({
@@ -13,7 +17,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <ProfileProvider>
+          <ConversationHistoryProvider>
+            <AssessmentProvider>
+              {children}
+            </AssessmentProvider>
+          </ConversationHistoryProvider>
+        </ProfileProvider>
+      </body>
     </html>
   );
 }

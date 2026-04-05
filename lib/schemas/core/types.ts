@@ -37,6 +37,8 @@ export interface ScaleScoreResult {
 export interface ScaleDefinition {
   /** 量表唯一标识 */
   id: string;
+  /** 量表版本号 */
+  version?: string;
   /** 量表名称 */
   title: string;
   /** 量表简介 */

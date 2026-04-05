@@ -414,6 +414,7 @@ const ABC_QUESTIONS: ScaleQuestion[] = [
 
 export const ABC_Scale: ScaleDefinition = {
   id: "ABC",
+  version: "1.0",  // ✅ 新增版本号
   title: "孤独症行为评定量表 (ABC)",
   description: "用于筛查和评估儿童孤独症的严重程度，包含感觉、交往、躯体运动、语言和生活自理五个维度的异常表现。",
   questions: ABC_QUESTIONS,

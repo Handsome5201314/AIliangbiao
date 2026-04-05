@@ -92,6 +92,7 @@ const SRS_QUESTIONS: ScaleQuestion[] = [
 
 export const SRS_Scale: ScaleDefinition = {
   id: "SRS",
+  version: "1.0",  // ✅ 新增版本号
   title: "社交反应量表 (SRS)",
   description: "用于评估儿童在自然社会环境中的社交互动能力，识别孤独症谱系障碍相关的社交缺陷。共65题。",
   questions: SRS_QUESTIONS,

@@ -1,81 +1,384 @@
-# AI 量表系统 - 一核双门
+<div align="center">
 
-> 基于 MCP 协议的医疗量表 AI 平台，提供纯本地运行的量表引擎和标准化接口
+# 🧠 AI 量表系统
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-16.2-black.svg)](https://nextjs.org/)
-[![MCP](https://img.shields.io/badge/MCP-2024--11-green.svg)](https://modelcontextprotocol.io/)
+**智伴童行 - 儿童心理评估 AI 平台**
+
+基于 4D 临床数据结构的智能心理量表评估系统，支持语音交互与多模态AI诊断
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.0-black.svg)](https://nextjs.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-5.0-2D3748.svg)](https://www.prisma.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 📖 项目简介
+[在线演示](#) | [快速开始](#-快速开始) | [功能特性](#-功能特性) | [API文档](docs/AGENT_SCALE_INTEGRATION_GUIDE.md) | [贡献指南](CONTRIBUTING.md)
 
-> *"致力于打破专业医疗评估的理解壁垒与隐私焦虑。将冷冰冰的医学量表，转化为拥有三甲儿科医生温度的 AI 交互基建。"*
+</div>
 
-**一核双门**是一个创新的医疗量表 AI 平台架构：
+---
 
-- **一核**：纯本地运行的 TypeScript 医学量表引擎，零 LLM 网络请求，基于 4D 临床数据结构
-- **两门**：
-  - **前门**：面向普通用户的 Web UI（后续开发）
-  - **后门**：面向外部 Agent 调用的 MCP (Model Context Protocol) SSE 服务端
+## 📖 目录
 
-## 🎯 核心特性
+- [项目简介](#-项目简介)
+- [功能特性](#-功能特性)
+- [技术架构](#-技术架构)
+- [已支持量表](#-已支持量表)
+- [快速开始](#-快速开始)
+- [安装部署](#-安装部署)
+- [使用指南](#-使用指南)
+- [API文档](#-api文档)
+- [贡献指南](#-贡献指南)
+- [许可证](#-许可证)
+- [致谢](#-致谢)
 
-### 1. 4D 临床数据结构
+---
 
-每个量表题目都包含四个维度的信息：
+## 🌟 项目简介
+
+**AI 量表系统**是一个创新的儿童心理评估平台，将传统医学量表转化为智能语音交互体验。通过 **4D 临床数据结构**，实现量表题目的口语化表达、智能追问和精准评分。
+
+### 为什么选择 AI 量表系统？
+
+- 🎯 **精准评估**：基于权威医学量表，支持自闭症、ADHD、焦虑等多种心理评估
+- 🗣️ **语音交互**：支持语音答题，让家长像聊天一样完成评估
+- 🔒 **隐私保护**：数据本地存储，符合医疗隐私合规要求
+- 🤖 **AI 智能**：智能分诊、追问澄清、个性化建议
+- 📊 **可视化报告**：自动生成专业评估报告和干预建议
+
+---
+
+## ✨ 功能特性
+
+### 核心功能
+
+#### 1. 智能分诊系统
+
+- **症状收集**：通过自然对话收集家长的主诉和症状
+- **量表推荐**：AI 自动推荐最合适的评估量表
+- **断点续诊**：支持会话保存，随时继续评估
+
+#### 2. 4D 临床数据结构
+
+每个量表题目包含四个维度：
 
 | 维度 | 说明 | 示例 |
 |------|------|------|
-| **D1 - 量表元信息** | 量表基本信息 | ID、标题、描述 |
-| **D2 - 题目本体** | 学术原版文本 | "喜欢长时间的自身旋转" |
-| **D3 - 临床意图与追问** | 核心意图、通俗表述、追问策略 | "评估前庭觉寻求行为和刻板动作模式" |
-| **D4 - 评分与结论** | 选项分值、算分逻辑 | 0-3 分，总分判断结论 |
+| **D1 - 量表元信息** | 基本信息 | ID、名称、描述 |
+| **D2 - 题目本体** | 学术原版 | "喜欢长时间的自身旋转" |
+| **D3 - 临床意图与追问** | 智能交互 | 通俗表述、追问策略 |
+| **D4 - 评分与结论** | 算分逻辑 | 分值、判定标准 |
 
-```typescript
-interface ScaleQuestion {
-  id: number;                    // 题目序号
-  text: string;                  // 学术原版文本
-  clinical_intent: string;       // 核心临床意图
-  colloquial: string;            // 破冰大白话
-  fallback_examples: string[];   // 追问策略
-  options: ScaleOption[];        // 可选项列表
-}
+#### 3. 多模态交互
+
+- **语音输入**：支持语音答题，解放双手
+- **语音播报**：题目自动朗读，适合视力不佳的家长
+- **文本输入**：支持传统文本输入方式
+
+#### 4. 可视化报告
+
+- **评估结果**：总分、维度分、百分位
+- **临床结论**：基于医学标准的诊断建议
+- **干预建议**：个性化的家庭干预方案
+- **历史对比**：评估结果的纵向追踪
+
+### 技术亮点
+
+- ✅ **纯本地算分**：所有评分逻辑本地执行，零外部依赖
+- ✅ **MCP 协议支持**：标准化接口，易于集成到其他系统
+- ✅ **会话持久化**：断点续诊，用户体验友好
+- ✅ **性能优化**：LRU缓存、预定义响应、数据库索引
+- ✅ **测试覆盖**：功能测试、性能测试、端到端测试
+
+---
+
+## 🏗️ 技术架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     前端层 (Next.js)                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │ 分诊界面 │  │ 量表答题 │  │ 结果展示 │  │ 用户中心 │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                     API 层 (REST)                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │ 分诊API  │  │ 量表API  │  │ 语音API  │  │ 用户API  │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                   服务层 (Business)                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │ 分诊流程 │  │ 量表引擎 │  │ AI服务   │  │ 语音服务 │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                   数据层 (PostgreSQL)                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │ 用户数据 │  │ 评估记录 │  │ 分诊会话 │  │ API密钥  │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### 2. 已实装量表
+### 技术栈
 
-#### ABC 量表（孤独症行为评定量表）
+| 类别 | 技术 | 版本 |
+|------|------|------|
+| **前端框架** | Next.js | 15.0 |
+| **开发语言** | TypeScript | 5.0 |
+| **UI框架** | Tailwind CSS | 3.4 |
+| **数据库** | PostgreSQL (Supabase) | 15.0 |
+| **ORM** | Prisma | 5.0 |
+| **AI集成** | 腾讯混元 / DeepSeek | - |
+| **语音识别** | 腾讯云语音识别 | - |
+| **协议** | MCP (Model Context Protocol) | 2024-11 |
 
-- **题目数量**：57 题
-- **适用年龄**：18 个月 - 35 岁
-- **评分标准**：总分 ≥68 高度疑似，54-67 边缘/疑似，≤53 正常范围
-- **维度覆盖**：感觉、交往、躯体运动、语言、生活自理
+---
 
-#### CARS 量表（卡氏儿童孤独症评定量表）
+## 📊 已支持量表
 
-- **题目数量**：15 个核心评估维度
-- **适用年龄**：2 岁以上儿童
-- **评分标准**：总分 ≥37 重度异常，30-36.5 轻/中度异常，<30 正常范围
-- **梯度评分**：采用 1-4 分梯度评估行为的"偏离程度"与"频率"，完美兼容 MCP 加法引擎。
+### 自闭症谱系障碍
 
-### 3. MCP 服务端
+| 量表ID | 名称 | 题目数 | 用途 | 完成度 |
+|--------|------|--------|------|--------|
+| **ABC** | 孤独症行为评定量表 | 57题 | 自闭症广筛 | ✅ 100% |
+| **CARS** | 卡氏儿童孤独症评定量表 | 15题 | 自闭症诊断 | ✅ 100% |
+| **SRS** | 社交反应量表 | 65题 | 社交能力评估 | ✅ 100% |
 
-提供三个标准化工具：
+### 注意缺陷多动障碍
 
-#### `recommend_scale` - 量表推荐
-根据症状关键词推荐匹配的量表
+| 量表ID | 名称 | 题目数 | 用途 | 完成度 |
+|--------|------|--------|------|--------|
+| **SNAP-IV** | 注意力量表 | 26题 | ADHD评估 | ✅ 100% |
 
-```json
+### 评分示例
+
+```typescript
+// ABC 量表评分示例
+const answers = [4, 2, 4, 2, 4, ...]; // 用户每题得分
+const result = ABC_Scale.calculateScore(answers);
+
+// 输出
 {
-  "name": "recommend_scale",
-  "arguments": {
-    "symptoms": "转圈 不理人 自闭"
+  totalScore: 142,
+  conclusion: "高度疑似",
+  details: {
+    level: "高度疑似",
+    description: "孤独症相关行为特征非常明显，强烈建议立即就医..."
   }
 }
 ```
 
-#### `get_scale_questions` - 获取题目
-支持分页获取量表题目
+---
+
+## 🚀 快速开始
+
+### 前置要求
+
+- Node.js >= 18.0.0
+- PostgreSQL >= 15.0 (推荐使用 Supabase)
+- npm 或 pnpm
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/Handsome5201314/ai-scale-system.git
+cd ai-scale-system
+```
+
+### 2. 安装依赖
+
+```bash
+npm install
+# 或使用 pnpm
+pnpm install
+```
+
+### 3. 配置环境变量
+
+复制 `.env.example` 为 `.env` 并填写配置：
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env` 文件：
+
+```env
+# 数据库配置 (Supabase)
+DATABASE_URL="postgresql://user:password@host:5432/dbname"
+DIRECT_URL="postgresql://user:password@host:5432/dbname"
+
+# AI 服务配置
+DEEPSEEK_API_KEY="your-deepseek-api-key"
+TENCENT_SECRET_ID="your-tencent-secret-id"
+TENCENT_SECRET_KEY="your-tencent-secret-key"
+
+# 应用配置
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+```
+
+### 4. 初始化数据库
+
+```bash
+# 生成 Prisma Client
+npx prisma generate
+
+# 同步数据库结构
+npx prisma db push
+
+# (可选) 查看数据库
+npx prisma studio
+```
+
+### 5. 启动开发服务器
+
+```bash
+npm run dev
+```
+
+访问 http://localhost:3000 开始使用！
+
+---
+
+## 📦 安装部署
+
+### 开发环境
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+
+# 运行测试
+npm test
+
+# 代码检查
+npm run lint
+```
+
+### 生产环境
+
+#### 方式1: Vercel 部署（推荐）
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Handsome5201314/ai-scale-system)
+
+1. 点击上方按钮
+2. 配置环境变量
+3. 自动部署完成
+
+#### 方式2: Docker 部署
+
+```bash
+# 构建镜像
+docker build -t ai-scale-system .
+
+# 运行容器
+docker run -p 3000:3000 \
+  -e DATABASE_URL="your-database-url" \
+  -e DEEPSEEK_API_KEY="your-api-key" \
+  ai-scale-system
+```
+
+#### 方式3: 传统部署
+
+```bash
+# 构建
+npm run build
+
+# 启动
+npm start
+
+# 使用 PM2 管理进程
+pm2 start npm --name "ai-scale-system" -- start
+```
+
+详细部署文档请查看 [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
+
+---
+
+## 📚 使用指南
+
+### 1. 管理员设置
+
+首次使用需要配置管理员账户和API密钥：
+
+```bash
+# 访问管理后台
+http://localhost:3000/admin
+
+# 默认账号
+用户名: admin
+密码: admin123
+```
+
+在管理后台配置：
+- AI 服务密钥（DeepSeek、腾讯混元等）
+- 语音服务密钥
+- 系统参数
+
+### 2. 用户评估流程
+
+1. **进入分诊**：用户打开系统，开始语音对话
+2. **症状描述**：家长描述孩子的行为特征
+3. **量表推荐**：AI 推荐合适的评估量表
+4. **量表答题**：通过语音或文本完成量表题目
+5. **查看报告**：系统生成评估报告和干预建议
+
+### 3. 开发者集成
+
+通过 MCP 协议集成到其他系统：
+
+```javascript
+// Python 示例
+from mcp import Client
+
+client = Client("http://localhost:3000/api/mcp/scale")
+
+# 获取量表列表
+scales = await client.call_tool("list_scales", {})
+
+# 获取量表题目
+questions = await client.call_tool("get_scale_questions", {
+    "scaleId": "ABC"
+})
+
+# 提交评估
+result = await client.call_tool("submit_assessment", {
+    "deviceId": "user-123",
+    "scaleId": "ABC",
+    "answers": [0, 1, 2, 1, 0, ...]
+})
+```
+
+详细API文档请查看 [docs/AGENT_SCALE_INTEGRATION_GUIDE.md](docs/AGENT_SCALE_INTEGRATION_GUIDE.md)
+
+---
+
+## 🔌 API文档
+
+### MCP 接口
+
+提供三个核心工具：
+
+#### 1. `list_scales` - 获取量表列表
+
+```json
+{
+  "name": "list_scales",
+  "arguments": {}
+}
+```
+
+#### 2. `get_scale_questions` - 获取量表题目
 
 ```json
 {
@@ -83,227 +386,137 @@ interface ScaleQuestion {
   "arguments": {
     "scaleId": "ABC",
     "offset": 0,
-    "limit": 5
+    "limit": 10
   }
 }
 ```
 
-#### `submit_and_evaluate` - 提交评分
-提交答案并获取临床结论
+#### 3. `submit_assessment` - 提交评估
 
 ```json
 {
-  "name": "submit_and_evaluate",
+  "name": "submit_assessment",
   "arguments": {
+    "deviceId": "user-123",
     "scaleId": "ABC",
-    "answers": [4, 2, 4, 2, 4]
+    "answers": [0, 1, 2, 1, 0, ...]
   }
 }
 ```
 
-## 🏗️ 技术架构
+### REST API
 
-```
-├── lib/
-│   ├── schemas/
-│   │   ├── core/
-│   │   │   ├── types.ts          # 4D 数据结构定义
-│   │   │   └── registry.ts       # 量表注册表
-│   │   ├── autism/
-│   │   │   └── abc.ts            # ABC 量表（完整 57 题）
-│   │   └── adhd/                 # ADHD 量表（预留）
-│   └── mcp/
-│       ├── transport.ts          # SSE 会话管理
-│       └── server-handlers.ts    # 工具处理逻辑
-├── app/
-│   ├── api/mcp/
-│   │   └── route.ts              # MCP SSE 端点
-│   ├── layout.tsx
-│   └── page.tsx
-```
+详细的 REST API 文档请查看 [API Reference](docs/API_REFERENCE.md)
 
-### 协议支持
-
-- **HTTP+SSE**（MCP 2024-11 规范）
-- 单端点 `/api/mcp` 同时处理 GET（SSE 流）和 POST（消息）
-- 兼容 ModelScope、Claude Desktop 等客户端
-
-## 🚀 快速开始
-
-### 安装依赖
-
-```bash
-npm install
-```
-
-### 本地开发
-
-```bash
-npm run dev
-```
-
-访问 http://localhost:3000
-
-### 生产构建
-
-```bash
-npm run build
-npm start
-```
-
-### MCP 客户端配置
-
-#### ModelScope / Claude Desktop
-
-```json
-{
-  "mcpServers": {
-    "ai-scale-engine": {
-      "url": "http://localhost:3000/api/mcp"
-    }
-  }
-}
-```
-
-## 📊 使用示例
-
-### 通过 MCP 客户端调用
-
-```bash
-# 建立 SSE 连接
-curl -N http://localhost:3000/api/mcp
-
-# 初始化会话
-curl -X POST http://localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-Session-Id: <your-session-id>" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
-
-# 调用工具
-curl -X POST http://localhost:3000/api/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-Session-Id: <your-session-id>" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/call",
-    "params": {
-      "name": "recommend_scale",
-      "arguments": {"symptoms": "转圈 不理人"}
-    }
-  }'
-```
-
-## 🔬 临床应用
-
-### ABC 量表评估流程
-
-1. **症状描述**：用户描述儿童行为特征
-2. **量表推荐**：系统自动推荐 ABC 量表
-3. **题目问答**：逐题询问，支持追问澄清
-4. **评分计算**：本地引擎计算总分
-5. **结论输出**：给出筛查结论和建议
-
-### 评分示例
-
-```javascript
-// 用户答案（每题得分）
-const answers = [4, 2, 4, 2, 4, 3, 4, 3, 3, 3, ...];
-
-// 调用评分
-const result = scale.calculateScore(answers);
-
-// 输出
-{
-  "totalScore": 142,
-  "conclusion": "高度疑似",
-  "details": {
-    "level": "高度疑似",
-    "description": "孤独症相关行为特征非常明显，强烈建议立即前往儿童精神科或发育行为科进行专业临床医学评估。"
-  }
-}
-```
-
-## 🛣️ 开发路线
-
-- [x] 4D 临床数据结构设计
-- [x] ABC 量表实装（57 题）
-- [x] CARS 量表实装（15 题）
-- [x] MCP Server SSE 协议支持
-- [x] 三个核心工具实现
-- [ ] Web UI 界面开发
-- [ ] 更多量表实装（M-CHAT、SNAP-IV 等）
-- [ ] 多语言支持
-- [ ] 测试覆盖率提升
-- [ ] Docker 部署方案
-
-## 📚 量表扩展
-
-### 新增量表示例
-
-```typescript
-// lib/schemas/autism/cars.ts
-import type { ScaleDefinition } from "../core/types";
-
-export const CARS_Scale: ScaleDefinition = {
-  id: "CARS",
-  title: "儿童孤独症评定量表 (CARS)",
-  description: "用于评估儿童孤独症严重程度的评定量表",
-  questions: [
-    // 按照 ScaleQuestion 结构定义题目
-  ],
-  calculateScore: (answers: number[]) => {
-    // 实现算分逻辑
-    const totalScore = answers.reduce((sum, s) => sum + s, 0);
-    // ...
-    return { totalScore, conclusion };
-  }
-};
-```
-
-```typescript
-// lib/schemas/core/registry.ts
-import { CARS_Scale } from "../autism/cars";
-
-export const AllScales: ScaleDefinition[] = [
-  ABC_Scale,
-  CARS_Scale,
-  // 添加更多量表...
-];
-```
-
-## 🔒 隐私与安全 & 本地生态闭环
-
-- **纯本地运算**：所有量表数据和算分逻辑在本地 Node.js 环境执行。
-- **零 Token 消耗**：MCP Server 不依赖、不请求任何外部 LLM API，出具报告 0 成本。
-- **物理级数据隔离**：架构天然契合 **OpenClaw** 等本地多智能体框架。
-  - *推荐落地场景*：使用本地轻量级模型（如 Qwen3 8B）负责语音前台，推理模型（如 DeepSeek R1）负责临床意图解析，对接本 MCP 服务进行本地算分。实现患儿数据 100% 不出户、不上云。
-- **开源透明**：所有核心医学算法和 4D 数据结构完全开源，接受临床检验。
+---
 
 ## 🤝 贡献指南
 
-欢迎贡献量表数据、Bug 修复和新功能！
+我们欢迎所有形式的贡献！
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/new-scale`)
-3. 提交更改 (`git commit -m 'feat: 添加 CARS 量表'`)
-4. 推送到分支 (`git push origin feature/new-scale`)
-5. 创建 Pull Request
+### 贡献方式
+
+1. **报告 Bug** - 提交 [Bug 报告](https://github.com/Handsome5201314/ai-scale-system/issues/new?template=bug_report.md)
+2. **建议功能** - 提交 [功能请求](https://github.com/Handsome5201314/ai-scale-system/issues/new?template=feature_request.md)
+3. **添加量表** - 提交 [量表请求](https://github.com/Handsome5201314/ai-scale-system/issues/new?template=scale_request.md)
+4. **改进文档** - 完善 README 或其他文档
+5. **提交代码** - 修复 Bug 或实现新功能
+
+### 开发流程
+
+```bash
+# 1. Fork 项目
+git clone https://github.com/your-username/ai-scale-system.git
+
+# 2. 创建特性分支
+git checkout -b feature/amazing-feature
+
+# 3. 提交变更
+git commit -m 'feat: 添加某某功能'
+
+# 4. 推送到分支
+git push origin feature/amazing-feature
+
+# 5. 创建 Pull Request
+```
+
+### 代码规范
+
+- 使用 TypeScript 编写代码
+- 遵循 ESLint 配置
+- 添加必要的注释和文档
+- 编写单元测试
+
+详细贡献指南请查看 [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
 
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
+---
+
 ## 🙏 致谢
 
-- [Model Context Protocol](https://modelcontextprotocol.io/) - 提供标准化的 AI 工具协议
-- [Next.js](https://nextjs.org/) - 强大的 React 框架
-- 所有贡献者和医学专家
+### 技术支持
 
-## 📧 联系方式
+- [Next.js](https://nextjs.org/) - React 框架
+- [Prisma](https://www.prisma.io/) - 数据库 ORM
+- [Supabase](https://supabase.com/) - PostgreSQL 托管服务
+- [Tailwind CSS](https://tailwindcss.com/) - CSS 框架
+- [MCP](https://modelcontextprotocol.io/) - Model Context Protocol
 
-- **GitHub Issues**: [https://github.com/Handsome5201314/ai-scale-system/issues](https://github.com/Handsome5201314/ai-scale-system/issues)
+### 医学支持
+
+感谢所有为儿童心理健康事业做出贡献的医学专家和研究机构。
 
 ---
 
-**⚠️ 免责声明**：本系统仅供筛查参考，不能替代专业医疗诊断。如有疑虑，请及时就医咨询专业医生。
+## 📞 联系方式
+
+- **GitHub Issues**: [提交问题](https://github.com/Handsome5201314/ai-scale-system/issues)
+- **项目主页**: [https://github.com/Handsome5201314/ai-scale-system](https://github.com/Handsome5201314/ai-scale-system)
+
+---
+
+## ⚠️ 免责声明
+
+本系统**仅供筛查参考**，不能替代专业医疗诊断。评估结果仅供参考，如有疑虑，请及时就医咨询专业医生。
+
+---
+
+## 🗺️ 项目路线图
+
+### v1.0.0 (当前版本)
+
+- ✅ 核心 4D 数据结构
+- ✅ 4 个医学量表（ABC, CARS, SRS, SNAP-IV）
+- ✅ 智能分诊系统
+- ✅ 语音交互功能
+- ✅ MCP 协议支持
+- ✅ 评估报告生成
+
+### v1.1.0 (计划中)
+
+- [ ] 更多量表（M-CHAT, ADOS等）
+- [ ] 多语言支持
+- [ ] 移动端适配
+- [ ] 数据导出功能
+
+### v2.0.0 (未来规划)
+
+- [ ] AI 辅助诊断
+- [ ] 家长培训课程
+- [ ] 医生协作平台
+- [ ] 区域数据统计
+
+---
+
+<div align="center">
+
+**⭐ 如果这个项目对您有帮助，请给一个 Star ⭐**
+
+Made with ❤️ by [Handsome5201314](https://github.com/Handsome5201314)
+
+</div>

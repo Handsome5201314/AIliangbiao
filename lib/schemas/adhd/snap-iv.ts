@@ -203,6 +203,7 @@ const SNAP_QUESTIONS: ScaleQuestion[] = [
 
 export const SNAP_Scale: ScaleDefinition = {
   id: "SNAP-IV",
+  version: "1.0",  // ✅ 新增版本号
   title: "注意缺陷多动障碍筛查量表 (SNAP-IV-26)",
   description: "用于评估儿童及青少年注意力缺陷、多动/冲动以及对立违抗行为的严重程度。分为三个独立维度计分。",
   questions: SNAP_QUESTIONS,

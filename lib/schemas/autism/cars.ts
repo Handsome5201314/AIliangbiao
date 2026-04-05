@@ -5,18 +5,18 @@ import type { ScaleDefinition, ScaleQuestion } from "../core/types";
  */
 const createCARSOptions = () => [
   { label: "1分：与年龄相当 (正常)", score: 1 },
-  { label: "2分：轻度异常", score: 2 },
-  { label: "3分：中度异常", score: 3 },
-  { label: "4分：严重异常", score: 4 }
+  { label: "2分：轻度异常 (偶尔、轻微)", score: 2 },
+  { label: "3分：中度异常 (经常、需要干预)", score: 3 },
+  { label: "4分：严重异常 (极频、难以打断)", score: 4 }
 ];
 
-// 完整 15 题 4D 结构化数据
+// 完整 15 个维度的 4D 结构化数据
 const CARS_QUESTIONS: ScaleQuestion[] = [
   { 
     id: 1, text: '人际关系（如缺乏眼光接触、回避他人或过度依赖）', 
     clinical_intent: '评估社交互动、眼神接触及对人的依恋状态',
     colloquial: '宝宝平时跟人亲不亲？您叫他或者看着他的时候，他会看您的眼睛回应吗？',
-    fallback_examples: ['他会不会总是自己玩自己的，或者故意躲开别人的眼神？', '或者走向另一个极端，像块膏药一样死死粘着大人不放？'],
+    fallback_examples: ['他会不会总是自己玩自己的，故意躲开别人的眼神？', '或者走向另一个极端，像块膏药一样死死粘着大人不放？'],
     options: createCARSOptions() 
   },
   { 
@@ -121,38 +121,39 @@ const CARS_QUESTIONS: ScaleQuestion[] = [
 
 export const CARS_Scale: ScaleDefinition = {
   id: "CARS",
+  version: "1.0",  // ✅ 新增版本号
   title: "卡氏儿童孤独症评定量表 (CARS)",
   description: "用于评估和诊断儿童孤独症的严重程度，涵盖人际关系、视觉反应、情感表现等15个核心维度的行为表现。满分60分，正常范围<30分。",
   questions: CARS_QUESTIONS,
   
-  // 算分逻辑：CARS 每一题是 1-4 分
   calculateScore: (answers: number[]) => {
-    // 简单求和
-    const totalScore = answers.reduce((sum, score) => sum + score, 0);
+    // 防止传参长度不对，CARS 最低分为全选 1 分 (即 15 分)
+    const safeAnswers = answers.length === 15 ? answers : [...answers, ...Array(15 - answers.length).fill(1)];
+    
+    // 直接累加得分
+    const totalScore = safeAnswers.reduce((sum, score) => sum + score, 0);
     
     let conclusion: string;
-    let details = { level: "", description: "" };
+    let detailsStr = `【CARS总分】: ${totalScore}/60分\n\n`;
 
+    // 完美对接你的临床分级标准
     if (totalScore >= 37) {
       conclusion = "重度异常征象";
-      details = {
-        level: "重度异常征象",
-        description: "表现出非常多的孤独症征象，强烈建议立即进行全面的医疗干预和儿童精神科评估。"
-      };
+      detailsStr += "临床建议：表现出非常多的孤独症征象，强烈建议立即进行全面的医疗干预和儿童精神专科深度评估。";
     } else if (totalScore >= 30) {
       conclusion = "轻/中度异常征象";
-      details = {
-        level: "轻/中度异常征象",
-        description: "呈现出孤独症的中度征象，建议结合临床医生面诊进一步确认。"
-      };
+      detailsStr += "临床建议：呈现出孤独症的中度征象，建议结合临床医生面诊进一步确认，并考虑早期干预。";
     } else {
       conclusion = "正常范围/非典型";
-      details = {
-        level: "正常范围/非典型",
-        description: "总分在正常范围内（低于30分），未达到典型孤独症的筛查界限。"
-      };
+      detailsStr += "临床建议：总分在正常范围内（低于30分），暂未达到典型孤独症的筛查界限，建议保持观察。";
     }
 
-    return { totalScore, conclusion, details };
+    return { 
+      totalScore, 
+      conclusion, 
+      details: {
+        description: detailsStr
+      } 
+    };
   }
 };
