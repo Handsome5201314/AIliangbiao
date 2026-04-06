@@ -1,0 +1,451 @@
+import type { ScaleDefinition, ScaleQuestion } from "../core/types";
+
+/**
+ * 辅助函数：根据原版权重生成带分数的选项
+ * @param weight 该题如果选"是"对应的得分权重
+ */
+const createOptions = (weight: number) => [
+  { label: "否", score: 0 },
+  { label: "是", score: weight }
+];
+
+// 完整 57 题 4D 结构化数据
+const ABC_QUESTIONS: ScaleQuestion[] = [
+  { 
+    id: 1, text: '喜欢长时间的自身旋转', 
+    clinical_intent: '评估前庭觉寻求行为和刻板动作模式',
+    colloquial: '宝宝平时喜欢自己转圈圈吗？转很久也不觉得头晕？',
+    fallback_examples: ['比如喜欢盯着旋转的风扇看吗？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 2, text: '学会做一件简单的事，但是很快就"忘记"', 
+    clinical_intent: '评估工作记忆和技能维持能力',
+    colloquial: '宝宝教他做件简单的事，比如把垃圾扔进垃圾桶，他是不是很快就好像忘了怎么做？',
+    fallback_examples: ['是不是感觉他学东西一阵一阵的，今天会了明天又不会了？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 3, text: '经常没有接触环境或进行交往的要求', 
+    clinical_intent: '评估社交发起和探索环境的动机',
+    colloquial: '宝宝是不是很少主动去找别的小朋友玩，或者对周围的新鲜事物没什么兴趣？',
+    fallback_examples: ['带他去公园，他是不是宁愿自己待着，也不去凑热闹？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 4, text: '不能执行只说一遍的简单的指令(如坐下、来这儿等)', 
+    clinical_intent: '评估听觉信息处理和指令服从',
+    colloquial: '您平时叫他“过来”或者“坐下”，只说一遍他听吗？',
+    fallback_examples: ['是不是经常得说好几遍，或者得拉着他去做才行？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 5, text: '不会玩玩具等(如没完没了地转动或乱扔、揉等)', 
+    clinical_intent: '评估功能性游戏能力及是否存在刻板玩法',
+    colloquial: '宝宝玩玩具的时候，会正常玩吗？比如拿小汽车在地上推。',
+    fallback_examples: ['他是不是只会把玩具拿在手里转，或者就是乱扔、乱敲？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 6, text: '视觉辨别能力差(专注于物体的细微特征 大小、颜色或位置)', 
+    clinical_intent: '评估局部视觉偏好及过度关注细节',
+    colloquial: '宝宝是不是特别喜欢盯着东西的某个小地方看？比如只看小汽车的轮子。',
+    fallback_examples: ['他会对东西的颜色或者摆放位置有特别死板的要求吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 7, text: '无交往性微笑(无社交性微笑，即不会与人点头、招呼、微笑)', 
+    clinical_intent: '评估社交互动中的情感共鸣',
+    colloquial: '看到熟人或者您逗他的时候，他会看着您主动微笑吗？',
+    fallback_examples: ['别人冲他笑或者打招呼，他有反应吗？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 8, text: '代词运用的颠倒或混乱(如反"你"说成"我"等等)', 
+    clinical_intent: '评估语言发育中的代词反转现象',
+    colloquial: '宝宝说话的时候，“你”、“我”、“他”是不是经常分不清？',
+    fallback_examples: ['比如他想要饼干，是不是说“你要吃饼干”，而不是“我要吃饼干”？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 9, text: '长时间的总拿着某件东西', 
+    clinical_intent: '评估对特定物品的异常依恋',
+    colloquial: '宝宝是不是总喜欢手里攥着个特定的东西不肯放？比如一根小棍或者一块布。',
+    fallback_examples: ['拿走这个东西他是不是会特别发脾气？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 10, text: '似乎不在听人说话，以致怀疑他/她有听力问题', 
+    clinical_intent: '评估对社交声音的忽视（听而不闻）',
+    colloquial: '有时候您跟他说话，他是不是完全没反应，就跟听不见一样？',
+    fallback_examples: ['您有没有曾经怀疑过他耳朵听力有问题？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 11, text: '说话不含语调、无抑扬顿挫、无节奏', 
+    clinical_intent: '评估言语的韵律异常（机械音/平铺直叙）',
+    colloquial: '宝宝说话的时候，声音是不是平平的，没什么感情，像机器人一样？',
+    fallback_examples: ['高兴或者生气的时候，听他说话的语气有变化吗？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 12, text: '长时间的摇摆身体', 
+    clinical_intent: '评估本体觉寻求和自我刺激行为',
+    colloquial: '宝宝坐着或站着的时候，会经常长时间地前后摇晃身体吗？',
+    fallback_examples: ['发呆或者无聊的时候，摇晃身体的动作明显吗？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 13, text: '要去拿什么东西，但又不是身体所能达到的地方(即对自身与物体距离估计不足)', 
+    clinical_intent: '评估深度知觉和空间距离判断',
+    colloquial: '他去抓东西的时候，会不会经常抓空？明明够不着还非要去够？',
+    fallback_examples: ['感觉他对东西离自己有多远是不是判断不太准？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 14, text: '对外界环境微小的变化和日常生活规律的改变产生强烈反应', 
+    clinical_intent: '评估对同一性的坚持和环境改变的不耐受',
+    colloquial: '如果家里家具换个位置，或者突然改变了每天的出门路线，他会发很大脾气吗？',
+    fallback_examples: ['他对每天做事的顺序是不是有严格的要求，不能打乱？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 15, text: '当他和其他人一起被叫到名字时，对呼唤他的名字无反应', 
+    clinical_intent: '评估社交注意力及名字呼唤反应',
+    colloquial: '在一群人里，您或者别人大声叫他的名字，他会抬头看吗？',
+    fallback_examples: ['还是得走到他跟前拍他，他才有反应？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 16, text: '经常做出猛冲、旋转、脚尖行走、拍手等动作', 
+    clinical_intent: '评估大运动相关的刻板行为',
+    colloquial: '平时经常看到他突然猛冲、垫着脚尖走路或者毫无意义地拍手吗？',
+    fallback_examples: ['一兴奋或者紧张的时候，这些动作多吗？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 17, text: '对其他人的面部表情或情感没有反应', 
+    clinical_intent: '评估面部表情解读和共情能力',
+    colloquial: '您装作很疼或者很生气的样子，他能看出来并且有反应吗？',
+    fallback_examples: ['别人哭的时候，他会关心，还是像没看见一样？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 18, text: '说话时很少用"是"或"我"等词', 
+    clinical_intent: '评估自我意识和确认表达',
+    colloquial: '他平时说话，会用“我”这个字吗？回答问题会清楚地说“是”吗？',
+    fallback_examples: ['问他吃不吃苹果，他会怎么回答？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 19, text: '有某一方面的特殊能力，似乎与智力低下不相符合', 
+    clinical_intent: '评估孤岛能力（如机械记忆、数字拼图等）',
+    colloquial: '宝宝在某一方面是不是特别厉害，比如认车标、记数字或者拼图？',
+    fallback_examples: ['这种能力是不是远超同龄孩子，但其他普通生活技能却不太行？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 20, text: '不能执行简单的含有介词的指令(如把球放在盒子上或把球放在盒子里)', 
+    clinical_intent: '评估对空间方位介词的理解',
+    colloquial: '您让他“把玩具放在桌子底下”或者“放在盒子里”，他能放对位置吗？',
+    fallback_examples: ['他是不是分不清“上、下、里、外”？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 21, text: '有时对很大的声音不产生吃惊的反应(可能让人想到儿童是聋子)', 
+    clinical_intent: '评估听觉反应迟钝',
+    colloquial: '旁边突然有个很大的声音，比如摔了个碗，他会被吓一跳吗？',
+    fallback_examples: ['是不是有时候多大的声音他都没反应，完全不怕？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 22, text: '经常拍打手(或其他自我刺激的行为)', 
+    clinical_intent: '评估刻板的自我刺激行为',
+    colloquial: '他平时无聊或者兴奋的时候，会频繁地拍手或者挥舞双手吗？',
+    fallback_examples: ['除了拍手，还有没有其他的重复小动作？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 23, text: '发大脾气或经常发点小脾气', 
+    clinical_intent: '评估情绪调节能力',
+    colloquial: '宝宝是不是脾气很大，动不动就发脾气哭闹？',
+    fallback_examples: ['很难哄好吗？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 24, text: '主动回避与别人进行眼光接触', 
+    clinical_intent: '评估眼神对视的缺失或主动逃避',
+    colloquial: '您跟他说话的时候，他会看您的眼睛吗？',
+    fallback_examples: ['他是不是故意躲开别人的眼神，不跟人对视？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 25, text: '拒绝别人接触或拥抱', 
+    clinical_intent: '评估触觉防御及身体亲密接触回避',
+    colloquial: '您或者家里人想抱抱他，他会推开或者显得很抗拒吗？',
+    fallback_examples: ['是不是不喜欢别人碰到他？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 26, text: '有时对很痛苦的刺激(如摔伤、割破或注射)不引起反应', 
+    clinical_intent: '评估痛觉迟钝',
+    colloquial: '他摔了一跤或者打针的时候，是不是不太怕疼，也不怎么哭？',
+    fallback_examples: ['有时候磕青了，他自己都没察觉？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 27, text: '身体表现很僵硬很难抱住(如打挺)', 
+    clinical_intent: '评估肌张力异常及拥抱姿态抗拒',
+    colloquial: '抱他的时候，他是不是经常往后打挺，身体绷得直直的，很难抱？',
+    fallback_examples: ['感觉像块木板一样僵硬吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 28, text: '当抱着他时，感到他肌肉松弛(即他不紧贴着抱他的人)', 
+    clinical_intent: '评估拥抱时的低肌张力或缺乏姿势依附',
+    colloquial: '您抱他的时候，他是不是软绵绵的，不会主动搂着您的脖子贴紧您？',
+    fallback_examples: ['感觉像抱了个布娃娃一样？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 29, text: '想要什么东西时，以姿势、手势表示(而不倾向用语言表示)', 
+    clinical_intent: '评估非言语沟通偏好',
+    colloquial: '他想要吃东西，是自己去拉您的手去拿，还是张嘴说话要？',
+    fallback_examples: ['是不是能用手指或者拉人，就不愿意开口说话？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 30, text: '常用脚尖走路', 
+    clinical_intent: '评估异常步态及本体觉刺激',
+    colloquial: '他走路的时候，是不是经常垫着脚尖走？',
+    fallback_examples: ['平时在家里不穿鞋的时候更明显吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 31, text: '用咬人、撞人、踢人等来伤害他人', 
+    clinical_intent: '评估攻击性行为',
+    colloquial: '他一生气或者着急，会不会去咬人、撞人或者踢人？',
+    fallback_examples: ['这种情况经常发生吗？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 32, text: '一遍一遍不断地重复短句', 
+    clinical_intent: '评估刻板言语及延迟仿言',
+    colloquial: '他会不会总是在嘴里反复嘟囔某一句动画片台词，或者同一句话？',
+    fallback_examples: ['是不是完全不在聊天的情境下，自己在那儿重复？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 33, text: '游戏时不模仿其他儿童', 
+    clinical_intent: '评估社交模仿能力缺失',
+    colloquial: '跟别的小朋友一起玩的时候，别人在玩什么，他会跟着学吗？',
+    fallback_examples: ['是不是别人玩别人的，他只顾玩自己的？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 34, text: '当强光直接照射眼睛时常常不眨眼', 
+    clinical_intent: '评估视觉反应迟钝及异常',
+    colloquial: '突然有手电筒或者太阳强光晃到眼睛，他会马上眨眼或者闭眼吗？',
+    fallback_examples: ['他是不是有时候对强光毫无反应，甚至还盯着看？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 35, text: '以撞头、咬手等行为来自伤', 
+    clinical_intent: '评估自伤行为',
+    colloquial: '他一着急或者发脾气，会不会用头撞墙，或者自己咬自己的手？',
+    fallback_examples: ['身上有因为自己弄伤留下的痕迹吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 36, text: '想要什么东西不能等待(一想要什么就马上要得到什么)', 
+    clinical_intent: '评估延迟满足能力缺失',
+    colloquial: '他想要一个东西，是不是必须马上拿到，让他等一分钟都不行？',
+    fallback_examples: ['如果不马上给他，是不是立刻就崩溃大哭？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 37, text: '不能指出5个以上物体的名称', 
+    clinical_intent: '评估指物命名能力和词汇量',
+    colloquial: '您问他“苹果在哪”、“小狗在哪”，他能用手指出来至少5样常见的东西吗？',
+    fallback_examples: ['他认识的东西多吗？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 38, text: '不能发展任何友谊(不会和小朋友来往交朋友)', 
+    clinical_intent: '评估同伴关系建立能力',
+    colloquial: '他在幼儿园或者小区里，有玩得特别好的固定小伙伴吗？',
+    fallback_examples: ['是不是基本上不怎么理其他小孩，都是各玩各的？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 39, text: '有许多声音的时候常常盖着耳朵', 
+    clinical_intent: '评估听觉敏感及防御',
+    colloquial: '外面如果有电钻声、汽车喇叭声，他会立刻用手捂住耳朵吗？',
+    fallback_examples: ['在人很多、很吵的地方，他会表现得很害怕、捂耳朵吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 40, text: '经常旋转碰撞物体', 
+    clinical_intent: '评估对物品的刻板操作',
+    colloquial: '他是不是特别喜欢把各种东西放在地上转，或者拿着东西瞎敲瞎碰？',
+    fallback_examples: ['比如喜欢转盘子、转盖子？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 41, text: '在训练大小便方面有困难(不会控制住小便)', 
+    clinical_intent: '评估生活自理能力及如厕训练延迟',
+    colloquial: '宝宝现在会自己控制大小便吗？还是经常尿裤子？',
+    fallback_examples: ['教他上厕所是不是特别困难？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 42, text: '一天只能提出5个以内的要求', 
+    clinical_intent: '评估主动沟通的频率',
+    colloquial: '他一天主动找您要东西或者帮忙的次数多吗？能有五次吗？',
+    fallback_examples: ['是不是非常少主动找大人提需求？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 43, text: '经常受到惊吓或非常焦虑不安', 
+    clinical_intent: '评估情绪状态与焦虑水平',
+    colloquial: '宝宝平时是不是很容易受到惊吓，或者看起来总是很紧张、很不安？',
+    fallback_examples: ['一点小动静就会让他很害怕吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 44, text: '在正常光线下眯眼、皱眉或遮住眼睛', 
+    clinical_intent: '评估视觉敏感',
+    colloquial: '在正常的房间灯光或者白天外面，他会经常眯着眼睛或者拿手遮眼睛吗？',
+    fallback_examples: ['感觉他是不是很怕亮光？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 45, text: '不是经常帮助的话，不会自己给自己穿衣', 
+    clinical_intent: '评估穿衣自理能力延迟',
+    colloquial: '穿衣服、穿裤子这些事，如果不帮忙，他能自己穿好吗？',
+    fallback_examples: ['是不是完全依赖大人帮忙穿？'],
+    options: createOptions(1) 
+  },
+  { 
+    id: 46, text: '一遍一遍重复一些声音或词', 
+    clinical_intent: '评估无意义的刻板发音',
+    colloquial: '他会不会总是没完没了地发出同一个怪声音，或者重复同一个词？',
+    fallback_examples: ['没有任何沟通意义地自己嘟囔？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 47, text: '瞪着眼看人，好象要"看穿"似的', 
+    clinical_intent: '评估异常的眼神凝视',
+    colloquial: '他看人的时候，眼神会不会直勾勾的，盯着看很久，让人感觉有点奇怪？',
+    fallback_examples: ['不像正常的眼神交流，更像是瞪着看？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 48, text: '重复别人的问话和回答', 
+    clinical_intent: '评估即时仿言（鹦鹉学舌）',
+    colloquial: '您问他“吃不吃饭？”，他是不是不回答“吃”，而是跟着学您说“吃不吃饭”？',
+    fallback_examples: ['就像个小鹦鹉一样重复您刚才的话？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 49, text: '经常察觉不到所处的环境，并且可能意识不到危险情况', 
+    clinical_intent: '评估危险意识缺失和环境抽离感',
+    colloquial: '在马路上或者高的地方，他是不是完全不知道害怕危险？',
+    fallback_examples: ['感觉他整个人沉浸在自己的世界里，不管周围发生什么？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 50, text: '特别喜欢摆弄并着迷于单调的东西或游戏、活动等(如来回的走或跑、没完没了地蹦、跳、拍敲)', 
+    clinical_intent: '评估狭隘的兴趣和刻板动作',
+    colloquial: '他是不是会长时间重复做一件很单调的事？比如没完没了地开关门、来回跑或者一直敲桌子？',
+    fallback_examples: ['怎么叫他都不停？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 51, text: '对周围东西喜欢触摸、嗅和/或尝', 
+    clinical_intent: '评估异常的感官探索方式',
+    colloquial: '拿到一个新东西，他是不是第一时间去闻一闻，或者放在嘴里舔一舔、咬一咬？',
+    fallback_examples: ['喜欢摸各种奇怪材质的东西吗？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 52, text: '对生人常无视觉反应(对来人不看)', 
+    clinical_intent: '评估对陌生人的社交忽视',
+    colloquial: '家里来了不认识的客人，他会看人家一眼吗？',
+    fallback_examples: ['是不是完全当人家不存在，头都不抬？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 53, text: '纠缠在一些复杂的仪式行为上(如走路一定要走一定的路线，饭前或睡前等一定要把东西摆在特定地方或做特定动作)', 
+    clinical_intent: '评估复杂的仪式化刻板行为',
+    colloquial: '他是不是有一些必须要遵守的“死规矩”？比如出门必须走同一条路，或者睡觉前玩具必须摆成一条直线？',
+    fallback_examples: ['如果规矩被破坏了，他是不是会大发脾气？'],
+    options: createOptions(4) 
+  },
+  { 
+    id: 54, text: '经常毁坏东西(如玩具、家庭物品很快就弄坏)', 
+    clinical_intent: '评估破坏性行为',
+    colloquial: '家里的玩具或者东西，是不是到他手里很快就被摔坏或者拆坏了？',
+    fallback_examples: ['是不是不懂得爱惜东西？'],
+    options: createOptions(2) 
+  },
+  { 
+    id: 55, text: '在2岁半以前就发现该儿童发育延迟', 
+    clinical_intent: '评估发育异常的起病年龄',
+    colloquial: '您是不是在宝宝两岁半之前，就觉得他比别的小孩发育得慢，不太对劲？',
+    fallback_examples: ['比如说话晚，或者走路晚？'],
+    options: createOptions(1) 
+  },
+  { 
+    id: 56, text: '在日常生活中至今仅会用15个以上、30个以下的短句进行交流', 
+    clinical_intent: '评估表达性语言的严重受损',
+    colloquial: '宝宝到现在为止，平时能说出来的句子，是不是非常少，加起来也就一二十句左右？',
+    fallback_examples: ['很少能用长句子完整表达自己的意思？'],
+    options: createOptions(3) 
+  },
+  { 
+    id: 57, text: '长期凝视一个地方(呆呆地看一处)', 
+    clinical_intent: '评估发呆及视觉沉浸',
+    colloquial: '他会不会经常盯着一个地方，比如墙角或者地板发呆，看很久都不动？',
+    fallback_examples: ['叫他好几声都回不过神来？'],
+    options: createOptions(4) 
+  }
+];
+
+export const ABC_Scale: ScaleDefinition = {
+  id: "ABC",
+  version: "1.0",  // ✅ 新增版本号
+  title: "孤独症行为评定量表 (ABC)",
+  description: "用于筛查和评估儿童孤独症的严重程度，包含感觉、交往、躯体运动、语言和生活自理五个维度的异常表现。",
+  questions: ABC_QUESTIONS,
+  
+  // 算分逻辑：由于权重已经内置在 answers 的 score 中，只需简单求和
+  calculateScore: (answers: number[]) => {
+    const totalScore = answers.reduce((sum, score) => sum + score, 0);
+    
+    let conclusion: string;
+    let details = { level: "", description: "" };
+
+    if (totalScore >= 68) {
+      conclusion = "高度疑似";
+      details = {
+        level: "高度疑似",
+        description: "孤独症相关行为特征非常明显，强烈建议立即前往儿童精神科或发育行为科进行专业临床医学评估。"
+      };
+    } else if (totalScore >= 53) {
+      conclusion = "边缘/疑似界限";
+      details = {
+        level: "边缘/疑似界限",
+        description: "存在较多孤独症相关特征，具有一定的临床风险，建议尽快咨询专业医生做进一步的筛查与观察。"
+      };
+    } else {
+      conclusion = "正常范围/非典型";
+      details = {
+        level: "正常范围/非典型",
+        description: "目前评估总分未达到典型的孤独症筛查界限，但若家长仍对孩子的发育有疑虑，建议保持日常观察。"
+      };
+    }
+
+    return { totalScore, conclusion, details };
+  }
+};

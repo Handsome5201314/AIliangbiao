@@ -1,0 +1,242 @@
+// 运行命令生成客户端：npx prisma generate
+// 运行命令推送到数据库：npx prisma db push
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // 完美适配腾讯云 PostgreSQL
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 1. 用户与额度系统 ====================
+
+model User {
+  id            String    @id @default(cuid())
+  isGuest       Boolean   @default(true)      // 标识是否为免登录游客
+  deviceId      String?   @unique             // 浏览器指纹 UUID（游客依赖）
+  phone         String?   @unique             // 手机号（注册用户依赖）
+  
+  // 商业化额度字段
+  dailyUsed     Int       @default(0)         // 今日已调用量表的次数
+  dailyLimit    Int       @default(1)         // 每日限制（游客默认1，注册可提升）
+  totalTokens   Int       @default(0)         // 高级资产：充值的 Token 额度
+  lastResetAt   DateTime  @default(now())     // 每日额度重置的标记时间
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 关系映射
+  profiles        ChildProfile[]
+  assessments     AssessmentHistory[]
+  triageSessions  TriageSession[]
+  mcpLogs         McpLog[]
+  apiKeys         ApiKey[]
+  speechUsages    SpeechUsage[]
+}
+
+// ==================== 2. 千人千面：儿童画像 ====================
+
+model ChildProfile {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  nickname      String    // 孩子小名（如：明明）
+  gender        String    // boy / girl
+  ageMonths     Int?      // 月龄
+  
+  // 扩展的上下文记忆字段
+  traits        Json      // 行为特征和记忆上下文
+                        // {
+                        //   "interests": ["恐龙", "汽车"],
+                        //   "fears": ["打针"],
+                        //   "behaviors": ["喜欢看旋转的东西"],
+                        //   "medicalHistory": ["早产", "过敏史"],
+                        //   "lastConversation": "2024-01-15",
+                        //   "conversationCount": 5,
+                        //   "recentTopics": ["体检", "社交问题"]
+                        // }
+  avatarConfig  Json      // 国风小人换装 {"base": "tiger", "clothes": "hanfu"}
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // 关系映射
+  growthRecords GrowthRecord[]
+}
+
+// ==================== 3. 临床数据：量表评估历史 ====================
+
+model AssessmentHistory {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  scaleId       String    // 量表标识 (如 "ABC", "CARS", "SNAP-IV")
+  scaleVersion  String    @default("1.0") // ✅ 题目版本号，防止未来改版导致历史数据无法解读
+  totalScore    Float     // 总得分
+  conclusion    String    // 临床结论 (如 "高度疑似")
+  answers       Json      // 用户的选项明细 [1, 0, 3, 2...] 供医生回溯
+  
+  createdAt     DateTime  @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([scaleId, scaleVersion])
+}
+
+// ==================== 4. B端开放平台：MCP 调用流水 ====================
+
+model McpLog {
+  id            String    @id @default(cuid())
+  userId        String?   // 关联调用该 MCP 接口的账号（如果有）
+  user          User?     @relation(fields: [userId], references: [id])
+  
+  clientId      String    // 外部 Agent 的标识 (如 "hospital-agent-01")
+  action        String    // 调用的 Tool (recommend_scale / get_scale_questions / submit_and_evaluate)
+  scaleId       String?   // 涉及的具体量表
+  
+  createdAt     DateTime  @default(now())
+}
+
+// ==================== 5. 新生儿生长曲线数据 ====================
+
+model GrowthRecord {
+  id            String    @id @default(cuid())
+  profileId     String
+  profile       ChildProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  ageMonths     Int       // 月龄（0-60个月）
+  
+  // 生长指标
+  weight        Float?    // 体重（kg）
+  height        Float?    // 身高/身长（cm）
+  headCircumference Float? // 头围（cm）
+  
+  // WHO标准评估结果
+  weightPercentile Float? // 体重百分位
+  heightPercentile Float? // 身高百分位
+  headPercentile  Float?  // 头围百分位
+  
+  weightStatus    String? // 体重评估：正常/偏轻/偏重
+  heightStatus    String? // 身高评估：正常/偏矮/偏高
+  headStatus      String? // 头围评估：正常/偏小/偏大
+  
+  notes         String?   // 医生备注
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([profileId, ageMonths])
+}
+
+// ==================== 6. 语音分诊会话表 ====================
+
+model TriageSession {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  status              String    @default("ONGOING") // ONGOING(进行中), CONSENT(已同意), COMPLETED(已完成)
+  symptoms            Json      // 数组：AI 提取的症状 ["不和人交流", "喜欢转圈"]
+  conversationHistory Json      // 数组：对话历史，保证刷新不失忆
+  recommendedScale    String?   // 推荐的量表 ID
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@index([userId, status])
+  @@index([updatedAt])
+}
+
+// ==================== 7. 管理员账户系统 ====================
+
+model Admin {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  passwordHash  String    // bcrypt加密后的密码
+  email         String?   @unique
+  role          String    @default("admin") // admin, superadmin
+  
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ==================== 7. API密钥管理 ====================
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  userId        String?   // 关联的用户（可选，系统级密钥为null）
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider      String    // siliconflow, sophon, openai等
+  keyName       String    // 密钥名称/备注
+  keyValue      String    // 加密后的API密钥
+  
+  // 服务类型：text（文本对话）、speech（语音识别）
+  serviceType   String    @default("text") // text, speech
+
+  // 自定义配置
+  customEndpoint String?  // 自定义API端点URL（可选）
+  customModel    String?  // 自定义模型名称（可选）
+
+  // 连接状态
+  connectionStatus String? @default("unknown") // online, offline, unknown
+  lastTestedAt   DateTime? // 最后测试时间
+  responseTime   Int?      // 响应时间（毫秒）
+
+  isActive      Boolean   @default(true)
+
+  lastUsedAt    DateTime?
+  usageCount    Int       @default(0)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([provider, isActive])
+  @@index([serviceType, isActive])
+}
+
+// ==================== 8. 系统配置 ====================
+
+model SystemConfig {
+  id            String    @id @default(cuid())
+  configKey     String    @unique   // 配置键名
+  configValue   String              // 配置值（JSON字符串或简单值）
+  description   String?             // 配置说明
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ==================== 9. 语音识别使用记录 ====================
+
+model SpeechUsage {
+  id            String    @id @default(cuid())
+  userId        String?   // 关联用户（可选）
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 语音识别详情
+  audioDuration Float?    // 音频时长（秒）
+  audioSize     Int?      // 音频大小（字节）
+  provider      String    // 服务商：siliconflow, openai, custom
+  model         String    // 使用的模型
+  
+  // 转写结果
+  transcriptText  String? // 转写文本
+  confidence      Float?  // 置信度（0-1）
+  
+  // 上下文信息
+  context       String?   // 使用场景：triage, questionnaire, command
+  success       Boolean   @default(true) // 是否成功
+  
+  // 成本信息
+  costTokens    Int       @default(0) // 消耗的 Token
+  
+  createdAt     DateTime  @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([provider, createdAt])
+}
