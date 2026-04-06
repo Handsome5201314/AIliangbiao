@@ -38,7 +38,7 @@ export async function updateUserContext(
     }
 
     const profile = user.profiles[0];
-    const currentTraits = (profile.traits as UserTraits) || {
+    const currentTraits = (profile.traits as unknown as UserTraits) || {
       interests: [],
       fears: [],
       behaviors: [],
@@ -67,7 +67,7 @@ export async function updateUserContext(
     // 更新数据库
     await prisma.childProfile.update({
       where: { id: profile.id },
-      data: { traits: updatedTraits }
+      data: { traits: JSON.parse(JSON.stringify(updatedTraits)) }
     });
 
     return { success: true, traits: updatedTraits };
@@ -92,7 +92,7 @@ export async function getUserContext(deviceId: string): Promise<string> {
     }
 
     const profile = user.profiles[0];
-    const traits = (profile.traits as UserTraits) || {};
+    const traits = (profile.traits as unknown as UserTraits) || {};
 
     // 构建上下文文本
     const contextParts: string[] = [];

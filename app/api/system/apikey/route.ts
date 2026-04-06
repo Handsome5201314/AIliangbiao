@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
 // 支持的AI服务商配置
-export const PROVIDER_CONFIGS: Record<string, { endpoint: string; model: string; name: string }> = {
+const PROVIDER_CONFIGS: Record<string, { endpoint: string; model: string; name: string }> = {
   siliconflow: {
     endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
     model: 'Qwen/Qwen2.5-7B-Instruct',

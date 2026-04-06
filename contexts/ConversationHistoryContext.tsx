@@ -18,7 +18,7 @@ interface ConversationMessage {
   content: string;
   timestamp: string;
   scaleId?: string;  // 如果涉及量表
-  action?: 'scale_recommend' | 'scale_complete' | 'question';
+  action?: 'scale_recommend' | 'scale_complete' | 'question' | 'triage' | 'recommend' | 'start_scale' | 'recommendation';
 }
 
 // 对话历史Context类型

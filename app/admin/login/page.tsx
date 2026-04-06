@@ -123,13 +123,6 @@ export default function AdminLoginPage() {
               )}
             </button>
           </form>
-
-          {/* 提示 */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-sm text-slate-400 text-center">
-              默认管理员账户：admin / admin123
-            </p>
-          </div>
         </div>
 
         {/* 返回首页 */}

@@ -158,7 +158,7 @@ export async function handleScaleToolCall(name: string, args: any) {
       // 返回问题列表（简化版，不包含评估逻辑）
       const questions = scale.questions.map((q, index) => ({
         index: index + 1,
-        question: q.question,
+        question: q.text,
         options: q.options
       }));
 

@@ -318,7 +318,7 @@ export default function Questionnaire({ scale }: QuestionnaireProps) {
         result={result}
         scale={{
           id: scale.id,
-          name: scale.name,
+          name: scale.title,
           questions: scale.questions
         }}
         answers={answers}

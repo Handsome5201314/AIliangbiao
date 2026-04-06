@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./globals.print.css";
+import "@/lib/polyfills/crypto"; // crypto.randomUUID polyfill
 import { AssessmentProvider } from "@/contexts/AssessmentContext";
 import { ProfileProvider } from "@/contexts/ProfileContext";
 import { ConversationHistoryProvider } from "@/contexts/ConversationHistoryContext";

@@ -60,27 +60,37 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 初始化默认管理员账户
+// 初始化或更新管理员账户（从 .env 读取配置）
 export async function GET() {
   try {
+    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
     const existingAdmin = await prisma.admin.findUnique({
-      where: { username: 'admin' }
+      where: { username: adminUsername }
     });
 
     if (!existingAdmin) {
-      const passwordHash = await bcrypt.hash('admin123', 10);
+      // 创建新管理员
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
       await prisma.admin.create({
         data: {
-          username: 'admin',
+          username: adminUsername,
           passwordHash,
-          email: 'admin@example.com',
+          email: `${adminUsername}@example.com`,
           role: 'superadmin'
         }
       });
-      return NextResponse.json({ message: 'Default admin created' });
+      return NextResponse.json({ message: `Admin "${adminUsername}" created from .env` });
+    } else {
+      // 更新密码（如果 .env 中的密码已更改）
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      await prisma.admin.update({
+        where: { username: adminUsername },
+        data: { passwordHash }
+      });
+      return NextResponse.json({ message: `Admin "${adminUsername}" password updated from .env` });
     }
-
-    return NextResponse.json({ message: 'Admin already exists' });
   } catch (error) {
     console.error('Init error:', error);
     return NextResponse.json({ error: 'Initialization failed' }, { status: 500 });
