@@ -4,11 +4,10 @@
 
 ### ✅ 已完成的优化
 
-- [x] 删除开发测试文件（tests/）
-- [x] 删除构建缓存（.next/）
-- [x] 删除开发文档（CHANGELOG.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, REFACTORING_REPORT.md）
-- [x] 删除开发配置（.github/, docs/）
-- [x] 删除临时文件（tsconfig.tsbuildinfo, test_agent_integration.mjs）
+- [x] 清理本地构建缓存与临时日志（如 `.next/`、`.tmp-*`）
+- [x] 删除一次性测试与分析产物（如 `test_agent_integration.mjs`、`tmp_*`）
+- [x] 删除历史备份组件与非必要生成物（如 `*.old.tsx`、`tsconfig.tsbuildinfo`）
+- [x] 保留部署脚本、运维文档与环境模板，便于重复交付
 - [x] 构建测试通过（无错误）
 - [x] TypeScript 类型检查通过
 
@@ -84,6 +83,13 @@ NEXT_PUBLIC_APP_NAME="AI 量表系统"
 # Session Secret（请修改为随机字符串）
 SESSION_SECRET="your-random-secret-key-change-me-in-production"
 
+# AgentPit 平台接入
+AGENTPIT_SHARED_BEARER="change-me-to-a-long-random-bearer"
+AGENTPIT_CLIENT_ID=""
+AGENTPIT_CLIENT_SECRET=""
+AGENTPIT_OAUTH_BASE_URL="https://api.agentpit.io"
+AGENTPIT_OAUTH_REDIRECT_URI="https://ailiangbiao.agentpit.io/api/agentpit/oauth/callback"
+
 # ============================================
 # 管理员配置
 # ============================================
@@ -130,7 +136,9 @@ chmod +x scripts/deploy-with-domain.sh
 
 - 🏠 **首页**: http://ailiangbiao.agentpit.io
 - 🔐 **管理后台**: http://ailiangbiao.agentpit.io/admin/login
-- 🏥 **健康检查**: http://ailiangbiao.agentpit.io/api/health
+- 🏥 **健康检查**: http://ailiangbiao.agentpit.io/healthz
+- 📘 **OpenAPI**: http://ailiangbiao.agentpit.io/openapi.json
+- 🤖 **Agent 工作台**: http://ailiangbiao.agentpit.io/agent
 
 ---
 
@@ -144,6 +152,9 @@ chmod +x scripts/deploy-with-domain.sh
 | `SESSION_SECRET` | 会话加密密钥 | 随机 32 位以上字符串 |
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
 | `ADMIN_PASSWORD` | 管理员密码 | 强密码 |
+| `AGENTPIT_SHARED_BEARER` | AgentPit 调用公开量表 Agent 的共享 Bearer | 长随机字符串 |
+| `AGENTPIT_CLIENT_ID` | AgentPit OAuth Client ID | 控制台生成 |
+| `AGENTPIT_CLIENT_SECRET` | AgentPit OAuth Client Secret | 控制台生成 |
 
 ### 可选配置
 
@@ -154,6 +165,8 @@ chmod +x scripts/deploy-with-domain.sh
 | `TENCENT_SECRET_KEY` | 腾讯云 API Key | 空 |
 | `ENABLE_VOICE_INTERACTION` | 启用语音交互 | `true` |
 | `ENABLE_MCP_SERVER` | 启用 MCP 服务器 | `true` |
+| `AGENTPIT_OAUTH_BASE_URL` | AgentPit OAuth 基础地址 | `https://api.agentpit.io` |
+| `AGENTPIT_OAUTH_REDIRECT_URI` | AgentPit OAuth 回调地址 | `https://ailiangbiao.agentpit.io/api/agentpit/oauth/callback` |
 
 ---
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Bot, Brain, ChevronRight, Loader2, MessageSquareMore, ShieldCheck, UserRound } from 'lucide-react';
 
 import { useProfile } from '@/contexts/ProfileContext';
@@ -33,7 +33,16 @@ type SkillMember = {
 
 export default function AgentWorkspace() {
   const router = useRouter();
-  const { profile, profiles, activeProfileId, selectProfile } = useProfile();
+  const searchParams = useSearchParams();
+  const {
+    profile,
+    profiles,
+    activeProfileId,
+    isGuest,
+    email,
+    selectProfile,
+    refreshProfiles,
+  } = useProfile();
 
   const [token, setToken] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -61,6 +70,27 @@ export default function AgentWorkspace() {
     }
     return deviceId;
   }, []);
+
+  const oauthStatus = searchParams.get('oauth');
+  const oauthReason = searchParams.get('reason');
+  const oauthBanner =
+    oauthStatus === 'success'
+      ? {
+          tone: 'success' as const,
+          text:
+            profile.languagePreference === 'en'
+              ? 'AgentPit account linked successfully. Local profile data has been refreshed.'
+              : 'AgentPit 授权已完成，本地账号与当前设备数据已同步。',
+        }
+      : oauthStatus === 'error'
+        ? {
+            tone: 'error' as const,
+            text:
+              profile.languagePreference === 'en'
+                ? `AgentPit OAuth failed${oauthReason ? `: ${oauthReason}` : '.'}`
+                : `AgentPit 授权未完成${oauthReason ? `：${oauthReason}` : '。'}`,
+          }
+        : null;
 
   const bootstrapAgent = useCallback(async () => {
     setLoading(true);
@@ -143,6 +173,25 @@ export default function AgentWorkspace() {
   useEffect(() => {
     void bootstrapAgent();
   }, [bootstrapAgent]);
+
+  useEffect(() => {
+    if (!oauthStatus) {
+      return;
+    }
+
+    void refreshProfiles().catch((refreshError) => {
+      console.error('Failed to refresh profiles after OAuth:', refreshError);
+    });
+  }, [oauthStatus, refreshProfiles]);
+
+  const startAgentPitOAuth = useCallback(() => {
+    const params = new URLSearchParams({
+      deviceId: getDeviceId(),
+      returnTo: '/agent',
+    });
+
+    window.location.href = `/api/agentpit/oauth/start?${params.toString()}`;
+  }, [getDeviceId]);
 
   const sendMessage = useCallback(async () => {
     if (!token || !input.trim() || sending) {
@@ -234,18 +283,43 @@ export default function AgentWorkspace() {
               这个页面作为 `/agent` 的前台入口，只通过受控 skill 读取当前用户与当前成员的数据，不直接访问数据库。
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push('/')}
-            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            返回主站
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={startAgentPitOAuth}
+              className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              {isGuest
+                ? '连接 AgentPit 账号'
+                : email
+                  ? `AgentPit 已连接: ${email}`
+                  : '刷新 AgentPit 授权'}
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              返回主站
+            </button>
+          </div>
         </div>
 
         {error && (
           <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
+          </div>
+        )}
+
+        {oauthBanner && (
+          <div
+            className={`mb-6 rounded-2xl px-4 py-3 text-sm ${
+              oauthBanner.tone === 'success'
+                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border border-amber-200 bg-amber-50 text-amber-700'
+            }`}
+          >
+            {oauthBanner.text}
           </div>
         )}
 
