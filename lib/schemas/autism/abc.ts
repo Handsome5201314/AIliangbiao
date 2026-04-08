@@ -1,4 +1,4 @@
-import type { ScaleDefinition, ScaleQuestion } from "../core/types";
+import type { ExecutableScaleDefinition, ScaleQuestion } from "../core/types";
 
 /**
  * 辅助函数：根据原版权重生成带分数的选项
@@ -412,11 +412,23 @@ const ABC_QUESTIONS: ScaleQuestion[] = [
   }
 ];
 
-export const ABC_Scale: ScaleDefinition = {
+export const ABC_Scale: ExecutableScaleDefinition = {
+  source: "builtin",
   id: "ABC",
   version: "1.0",  // ✅ 新增版本号
-  title: "孤独症行为评定量表 (ABC)",
-  description: "用于筛查和评估儿童孤独症的严重程度，包含感觉、交往、躯体运动、语言和生活自理五个维度的异常表现。",
+  title: {
+    zh: "孤独症行为评定量表 (ABC)",
+    en: "Autism Behavior Checklist (ABC)"
+  },
+  description: {
+    zh: "用于筛查和评估儿童孤独症的严重程度，包含感觉、交往、躯体运动、语言和生活自理五个维度的异常表现。",
+    en: "A screening and assessment scale for autism-related behaviors across sensory, social, motor, language, and self-care domains."
+  },
+  category: "Child Development",
+  tags: ["儿童发育", "孤独症", "自闭症", "筛查"],
+  interactionMode: "voice_guided",
+  supportedLanguages: ["zh", "en"],
+  requiresConfirmation: true,
   questions: ABC_QUESTIONS,
   
   // 算分逻辑：由于权重已经内置在 answers 的 score 中，只需简单求和

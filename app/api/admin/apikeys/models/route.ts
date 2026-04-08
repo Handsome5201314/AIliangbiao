@@ -23,6 +23,10 @@ const PROVIDER_ENDPOINTS: Record<string, { base: string; models: string }> = {
     base: 'https://api.openai.com/v1',
     models: 'https://api.openai.com/v1/models'
   },
+  oneapi: {
+    base: 'http://104.197.139.51:3000/v1',
+    models: 'http://104.197.139.51:3000/v1/models'
+  },
   qwen: {
     base: 'https://dashscope.aliyuncs.com/api/v1',
     models: '' // 通义千问可能不支持标准 models 接口
@@ -57,6 +61,17 @@ const FALLBACK_MODELS: Record<string, Array<{ id: string; name: string; descript
     { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: '快速经济' },
     { id: 'gpt-4', name: 'GPT-4', description: '更强大' },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: '最新' }
+  ],
+  oneapi: [
+    { id: 'gemini-2.0-flash', name: 'gemini-2.0-flash', description: 'Gemini 2.0 Flash' },
+    { id: 'gemini-2.0-flash-exp', name: 'gemini-2.0-flash-exp', description: 'Gemini 2.0 实验版' },
+    { id: 'gemini-2.0-flash-lite-preview-02-05', name: 'gemini-2.0-flash-lite-preview-02-05', description: 'Gemini 2.0 Lite Preview' },
+    { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'gemini-2.0-flash-thinking-exp-01-21', description: 'Gemini 2.0 Thinking Experimental' },
+    { id: 'gemini-2.0-pro-exp-02-05', name: 'gemini-2.0-pro-exp-02-05', description: 'Gemini 2.0 Pro Experimental' },
+    { id: 'gemini-3-flash-preview', name: 'gemini-3-flash-preview', description: 'Gemini 3 Flash' },
+    { id: 'gemini-3-pro-preview', name: 'gemini-3-pro-preview', description: 'Gemini 3 Pro' },
+    { id: 'gemini-3-pro-image-preview', name: 'gemini-3-pro-image-preview', description: 'Gemini 3 Pro Image Preview' },
+    { id: 'gemini-3.1-pro-preview', name: 'gemini-3.1-pro-preview', description: 'Gemini 3.1 Pro Preview' }
   ],
   custom: []
 };
@@ -104,9 +119,15 @@ export async function POST(request: NextRequest) {
     // 确定 models 接口地址
     let modelsEndpoint = '';
     
-    if (provider === 'custom' && endpoint) {
+    if ((provider === 'custom' || provider === 'oneapi') && endpoint) {
       // 自定义接口：从 chat/completions 推断 models 接口
-      modelsEndpoint = endpoint.replace('/chat/completions', '/models');
+      if (endpoint.endsWith('/models')) {
+        modelsEndpoint = endpoint;
+      } else if (endpoint.endsWith('/v1')) {
+        modelsEndpoint = `${endpoint}/models`;
+      } else {
+        modelsEndpoint = endpoint.replace('/chat/completions', '/models');
+      }
     } else if (PROVIDER_ENDPOINTS[provider]) {
       // 标准服务商：使用预设的 models 接口
       modelsEndpoint = PROVIDER_ENDPOINTS[provider].models;
@@ -211,6 +232,17 @@ function getModelDescription(modelId: string, provider: string): string {
     if (id.includes('gpt-4-turbo')) return '最新最强';
     if (id.includes('gpt-4')) return '更强大';
     if (id.includes('gpt-3.5')) return '快速经济';
+  }
+
+  if (provider === 'oneapi') {
+    if (id.includes('gemini-3-pro-image-preview')) return '图片生成/多模态预览';
+    if (id.includes('gemini-3.1')) return 'Gemini 3.1 Pro';
+    if (id.includes('gemini-3-pro')) return 'Gemini 3 Pro';
+    if (id.includes('gemini-3-flash')) return 'Gemini 3 Flash';
+    if (id.includes('thinking')) return 'Gemini Thinking Experimental';
+    if (id.includes('flash-lite')) return 'Gemini Flash Lite';
+    if (id.includes('gemini-2.0-pro')) return 'Gemini 2.0 Pro 实验版';
+    if (id.includes('gemini-2.0-flash')) return 'Gemini 2.0 Flash';
   }
   
   // 通义千问模型

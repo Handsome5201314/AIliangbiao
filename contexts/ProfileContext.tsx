@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import type { LanguageCode } from '@/lib/schemas/core/types';
 
-// 1. 定义用户画像数据结构
 export interface AvatarState {
   baseModel: string;
   headwear: 'none' | 'hu_tou_mao' | 'flower';
@@ -10,7 +10,13 @@ export interface AvatarState {
   mood: 'happy' | 'nervous' | 'curious' | 'normal';
 }
 
+export type MemberRelation = 'self' | 'child' | 'parent' | 'spouse' | 'sibling' | 'other';
+export type AccountRole = 'GUEST' | 'REGISTERED' | 'VIP';
+
 export interface UserProfile {
+  id: string;
+  relation: MemberRelation;
+  languagePreference: LanguageCode;
   nickname: string;
   gender: 'boy' | 'girl';
   ageMonths: number;
@@ -20,11 +26,23 @@ export interface UserProfile {
   completedScales: string[];
 }
 
-// 默认画像（新用户初始状态）
+interface StoredProfileState {
+  profiles: UserProfile[];
+  activeProfileId: string;
+  accountRole: AccountRole;
+  isGuest: boolean;
+  dailyLimit: number;
+  phone?: string;
+  email?: string;
+}
+
 const DEFAULT_PROFILE: UserProfile = {
-  nickname: '宝宝',
+  id: 'local-self',
+  relation: 'self',
+  languagePreference: 'zh',
+  nickname: '本人',
   gender: 'boy',
-  ageMonths: 36,
+  ageMonths: 360,
   interests: [],
   fears: [],
   avatarState: {
@@ -36,139 +54,348 @@ const DEFAULT_PROFILE: UserProfile = {
   completedScales: []
 };
 
-// 2. 创建 Context
+const STORAGE_KEY = 'member_profiles_state';
+const LEGACY_STORAGE_KEY = 'child_profile';
+
 interface ProfileContextType {
   profile: UserProfile;
+  profiles: UserProfile[];
+  activeProfileId: string;
+  accountRole: AccountRole;
+  isGuest: boolean;
+  dailyLimit: number;
+  phone?: string;
+  email?: string;
   updateProfile: (updates: Partial<UserProfile>) => void;
   updateAvatar: (updates: Partial<AvatarState>) => void;
+  selectProfile: (profileId: string) => void;
+  createProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  upgradeAccount: (payload: {
+    phone?: string;
+    email?: string;
+    profile?: Partial<UserProfile>;
+  }) => Promise<void>;
+  refreshProfiles: () => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
-// 3. Provider 组件
+function ensureProfileDefaults(profile: Partial<UserProfile> & { id?: string }): UserProfile {
+  return {
+    ...DEFAULT_PROFILE,
+    ...profile,
+    id: profile.id || crypto.randomUUID(),
+    relation: profile.relation || DEFAULT_PROFILE.relation,
+    languagePreference: profile.languagePreference || DEFAULT_PROFILE.languagePreference,
+    nickname: profile.nickname || DEFAULT_PROFILE.nickname,
+    gender: profile.gender || DEFAULT_PROFILE.gender,
+    ageMonths: profile.ageMonths ?? DEFAULT_PROFILE.ageMonths,
+    interests: profile.interests || [],
+    fears: profile.fears || [],
+    avatarState: { ...DEFAULT_PROFILE.avatarState, ...(profile.avatarState || {}) },
+    completedScales: profile.completedScales || [],
+  };
+}
+
+function getInitialState(): StoredProfileState {
+  return {
+    profiles: [DEFAULT_PROFILE],
+    activeProfileId: DEFAULT_PROFILE.id,
+    accountRole: 'GUEST',
+    isGuest: true,
+    dailyLimit: 5,
+  };
+}
+
+function getDeviceId(): string {
+  let deviceId = localStorage.getItem('device_id');
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem('device_id', deviceId);
+  }
+  return deviceId;
+}
+
+function resolveActiveProfile(state: StoredProfileState): UserProfile {
+  return state.profiles.find((item) => item.id === state.activeProfileId) || state.profiles[0] || DEFAULT_PROFILE;
+}
+
+function persistState(state: StoredProfileState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function mapServerProfile(profile: any): UserProfile {
+  return ensureProfileDefaults({
+    id: profile.id,
+    relation: (profile.relation || 'self').toLowerCase(),
+    languagePreference: (profile.languagePreference || 'zh').toLowerCase(),
+    nickname: profile.nickname,
+    gender: profile.gender === 'girl' ? 'girl' : 'boy',
+    ageMonths: profile.ageMonths ?? DEFAULT_PROFILE.ageMonths,
+    interests: profile.interests || [],
+    fears: profile.fears || [],
+    avatarState: profile.avatarConfig || DEFAULT_PROFILE.avatarState,
+    completedScales: profile.completedScales || [],
+  });
+}
+
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [state, setState] = useState<StoredProfileState>(getInitialState());
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // 页面加载时从 LocalStorage 读取记忆，并尝试从数据库同步
-  useEffect(() => {
-    const loadProfile = async () => {
-      // 获取或生成 deviceId
-      let deviceId = localStorage.getItem('device_id');
-      if (!deviceId) {
-        deviceId = crypto.randomUUID();
-        localStorage.setItem('device_id', deviceId);
-      }
+  const applyServerPayload = useCallback((payload: any) => {
+    const serverProfiles = Array.isArray(payload?.profiles) && payload.profiles.length > 0
+      ? payload.profiles.map(mapServerProfile)
+      : [DEFAULT_PROFILE];
+    const nextState: StoredProfileState = {
+      profiles: serverProfiles,
+      activeProfileId: payload?.activeProfileId || serverProfiles[0].id,
+      accountRole: payload?.user?.role || 'GUEST',
+      isGuest: payload?.user?.isGuest ?? true,
+      dailyLimit: payload?.user?.dailyLimit ?? 5,
+      phone: payload?.user?.phone || undefined,
+      email: payload?.user?.email || undefined,
+    };
+    setState(nextState);
+    persistState(nextState);
+  }, []);
 
-      // 尝试从数据库加载画像（优先级高于本地）
+  const refreshProfiles = useCallback(async () => {
+    const deviceId = getDeviceId();
+    const response = await fetch(`/api/skill/v1/profile/sync?deviceId=${deviceId}`);
+    if (!response.ok) {
+      throw new Error('获取成员档案失败');
+    }
+    const data = await response.json();
+    if (data.profiles?.length) {
+      applyServerPayload(data);
+    }
+  }, [applyServerPayload]);
+
+  useEffect(() => {
+    const loadProfileState = async () => {
+      const deviceId = getDeviceId();
+
       try {
-        const response = await fetch(`/api/profile/sync?deviceId=${deviceId}`);
+        const response = await fetch(`/api/skill/v1/profile/sync?deviceId=${deviceId}`);
         if (response.ok) {
           const data = await response.json();
-          if (data.profile) {
-            // 数据库有数据，使用数据库数据
-            setProfile({
-              nickname: data.profile.nickname,
-              gender: data.profile.gender,
-              ageMonths: data.profile.ageMonths || 36,
-              interests: data.profile.interests || [],
-              fears: data.profile.fears || [],
-              avatarState: data.profile.avatarConfig || DEFAULT_PROFILE.avatarState,
-              completedScales: DEFAULT_PROFILE.completedScales,
-            });
+          if (data.profiles?.length) {
+            applyServerPayload(data);
             setIsLoaded(true);
             return;
           }
         }
       } catch (error) {
-        console.error('Failed to load profile from database:', error);
+        console.error('Failed to load profiles from database:', error);
       }
 
-      // 数据库无数据或加载失败，使用本地存储
-      const saved = localStorage.getItem('child_profile');
-      if (saved) {
+      const savedState = localStorage.getItem(STORAGE_KEY);
+      if (savedState) {
         try {
-          setProfile(JSON.parse(saved));
-        } catch (e) {
-          console.error("Failed to parse profile", e);
+          const parsed = JSON.parse(savedState) as StoredProfileState;
+          setState({
+            ...parsed,
+            profiles: parsed.profiles.map(ensureProfileDefaults),
+          });
+          setIsLoaded(true);
+          return;
+        } catch (error) {
+          console.error('Failed to parse profile state', error);
         }
       }
+
+      const legacyProfile = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacyProfile) {
+        try {
+          const parsed = JSON.parse(legacyProfile);
+          const migratedProfile = ensureProfileDefaults({
+            id: 'local-migrated',
+            relation: 'child',
+            languagePreference: 'zh',
+            nickname: parsed.nickname,
+            gender: parsed.gender,
+            ageMonths: parsed.ageMonths,
+            interests: parsed.interests,
+            fears: parsed.fears,
+            avatarState: parsed.avatarState,
+            completedScales: parsed.completedScales,
+          });
+          const migratedState: StoredProfileState = {
+            profiles: [migratedProfile],
+            activeProfileId: migratedProfile.id,
+            accountRole: 'GUEST',
+            isGuest: true,
+            dailyLimit: 5,
+          };
+          setState(migratedState);
+          persistState(migratedState);
+          setIsLoaded(true);
+          return;
+        } catch (error) {
+          console.error('Failed to migrate legacy profile', error);
+        }
+      }
+
+      const fallbackState = getInitialState();
+      setState(fallbackState);
+      persistState(fallbackState);
       setIsLoaded(true);
     };
 
-    loadProfile();
+    void loadProfileState();
+  }, [applyServerPayload]);
+
+  const selectProfile = useCallback((profileId: string) => {
+    setState((prev) => {
+      const next = { ...prev, activeProfileId: profileId };
+      persistState(next);
+      return next;
+    });
   }, []);
 
-  // 🔧 修复：使用 useCallback 稳定函数，防止无限循环
-  // 保存更新到 LocalStorage 并同步到数据库（使用函数式更新，无需依赖 profile）
+  const syncMember = useCallback(async (payload: Partial<UserProfile> & { id?: string }) => {
+    const deviceId = getDeviceId();
+    const response = await fetch('/api/skill/v1/profile/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId,
+        memberId: payload.id,
+        relation: payload.relation,
+        languagePreference: payload.languagePreference,
+        nickname: payload.nickname,
+        gender: payload.gender,
+        ageMonths: payload.ageMonths,
+        interests: payload.interests,
+        fears: payload.fears,
+        avatarConfig: payload.avatarState,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || '同步成员档案失败');
+    }
+
+    const data = await response.json();
+    if (data.profiles?.length) {
+      applyServerPayload(data);
+    }
+  }, [applyServerPayload]);
+
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
-    setProfile(prev => {
-      const next = { ...prev, ...updates };
-      localStorage.setItem('child_profile', JSON.stringify(next));
-      
-      // 异步同步到数据库（不阻塞UI）
-      const deviceId = localStorage.getItem('device_id');
-      if (deviceId) {
-        fetch('/api/profile/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deviceId,
-            nickname: next.nickname,
-            gender: next.gender,
-            ageMonths: next.ageMonths,
-            interests: next.interests,
-            fears: next.fears,
-            avatarConfig: next.avatarState,
-          }),
-        }).catch(err => console.error('Failed to sync profile:', err));
-      }
-      
-      return next;
-    });
-  }, []); // 👈 空依赖数组，函数永不改变
+    setState((prev) => {
+      const activeProfile = resolveActiveProfile(prev);
+      const nextProfile = ensureProfileDefaults({ ...activeProfile, ...updates });
+      const nextProfiles = prev.profiles.map((item) => item.id === nextProfile.id ? nextProfile : item);
+      const nextState = { ...prev, profiles: nextProfiles };
+      persistState(nextState);
 
-  // 更新头像状态（使用函数式更新，无需依赖 profile）
+      void syncMember(nextProfile).catch((error) => {
+        console.error('Failed to sync member profile:', error);
+      });
+
+      return nextState;
+    });
+  }, [syncMember]);
+
   const updateAvatar = useCallback((updates: Partial<AvatarState>) => {
-    setProfile(prev => {
-      const next = {
-        ...prev,
-        avatarState: { ...prev.avatarState, ...updates }
-      };
-      localStorage.setItem('child_profile', JSON.stringify(next));
-      
-      // 异步同步到数据库
-      const deviceId = localStorage.getItem('device_id');
-      if (deviceId) {
-        fetch('/api/profile/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deviceId,
-            nickname: next.nickname,
-            gender: next.gender,
-            ageMonths: next.ageMonths,
-            interests: next.interests,
-            fears: next.fears,
-            avatarConfig: next.avatarState,
-          }),
-        }).catch(err => console.error('Failed to sync avatar:', err));
-      }
-      
-      return next;
-    });
-  }, []); // 👈 空依赖数组，函数永不改变
+    setState((prev) => {
+      const activeProfile = resolveActiveProfile(prev);
+      const nextProfile = ensureProfileDefaults({
+        ...activeProfile,
+        avatarState: {
+          ...activeProfile.avatarState,
+          ...updates,
+        },
+      });
+      const nextProfiles = prev.profiles.map((item) => item.id === nextProfile.id ? nextProfile : item);
+      const nextState = { ...prev, profiles: nextProfiles };
+      persistState(nextState);
 
-  if (!isLoaded) return null; // 防止 hydration 不匹配
+      void syncMember(nextProfile).catch((error) => {
+        console.error('Failed to sync avatar state:', error);
+      });
+
+      return nextState;
+    });
+  }, [syncMember]);
+
+  const createProfile = useCallback(async (profileInput: Partial<UserProfile>) => {
+    const nextProfile = ensureProfileDefaults({
+      ...DEFAULT_PROFILE,
+      ...profileInput,
+      id: profileInput.id || crypto.randomUUID(),
+    });
+
+    setState((prev) => {
+      const nextState = {
+        ...prev,
+        profiles: [...prev.profiles, nextProfile],
+        activeProfileId: nextProfile.id,
+      };
+      persistState(nextState);
+      return nextState;
+    });
+
+    await syncMember(nextProfile);
+  }, [syncMember]);
+
+  const upgradeAccount = useCallback(async (payload: {
+    phone?: string;
+    email?: string;
+    profile?: Partial<UserProfile>;
+  }) => {
+    const deviceId = getDeviceId();
+    const response = await fetch('/api/skill/v1/account/upgrade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId,
+        phone: payload.phone,
+        email: payload.email,
+        profile: payload.profile,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || '注册/登录失败');
+    }
+
+    const data = await response.json();
+    applyServerPayload(data);
+  }, [applyServerPayload]);
+
+  if (!isLoaded) return null;
+
+  const activeProfile = resolveActiveProfile(state);
 
   return (
-    <ProfileContext.Provider value={{ profile, updateProfile, updateAvatar }}>
+    <ProfileContext.Provider
+      value={{
+        profile: activeProfile,
+        profiles: state.profiles,
+        activeProfileId: state.activeProfileId,
+        accountRole: state.accountRole,
+        isGuest: state.isGuest,
+        dailyLimit: state.dailyLimit,
+        phone: state.phone,
+        email: state.email,
+        updateProfile,
+        updateAvatar,
+        selectProfile,
+        createProfile,
+        upgradeAccount,
+        refreshProfiles,
+      }}
+    >
       {children}
     </ProfileContext.Provider>
   );
 }
 
-// 4. Hook 导出
 export function useProfile() {
   const context = useContext(ProfileContext);
   if (context === undefined) {

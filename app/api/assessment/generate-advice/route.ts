@@ -62,6 +62,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const scoreLabel = typeof result.details?.scoreLabel === 'string' ? result.details.scoreLabel : '总分';
+    const scoreDisplay = typeof result.details?.scoreDisplay === 'string'
+      ? result.details.scoreDisplay
+      : `${result.totalScore}分`;
+    const totalScoreLabel = typeof result.details?.totalScoreLabel === 'string'
+      ? result.details.totalScoreLabel
+      : '总分';
+    const totalScoreHint = typeof result.details?.totalScoreHint === 'string'
+      ? result.details.totalScoreHint
+      : '';
+    const numericScoreLine = scoreLabel === totalScoreLabel
+      ? `- ${totalScoreLabel}：${result.totalScore}`
+      : `- ${totalScoreLabel}：${result.totalScore}`;
+
     // 获取用户上下文
     let userContext = '';
     try {
@@ -128,9 +142,11 @@ ${profile.ageMonths ? `- 月龄：${profile.ageMonths}个月` : ''}
 
 评估结果：
 - 量表名称：${result.scaleName}
-- 总分：${result.totalScore}
+- ${scoreLabel}：${scoreDisplay}
+${scoreLabel === totalScoreLabel ? '' : numericScoreLine}
 - 评估结论：${result.conclusion}
 ${result.details?.description ? `- 详细说明：${result.details.description}` : ''}
+${totalScoreHint ? `- 结果说明：${totalScoreHint}` : ''}
 
 请根据以上信息，生成个性化的建议和指导。注意：
 - 如果评估结果正常，重点关注如何保持和促进发展

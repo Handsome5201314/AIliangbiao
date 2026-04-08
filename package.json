@@ -6,7 +6,9 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "skill:build": "tsc -p packages/assessment-skill/tsconfig.build.json",
+    "skill:start": "node packages/assessment-skill/dist/standalone.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

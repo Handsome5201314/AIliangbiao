@@ -1,22 +1,96 @@
-/**
- * 用户画像同步API - 将用户画像数据同步到数据库
- * 
- * 功能：
- * 1. 接收前端画像数据
- * 2. 获取或创建用户账号
- * 3. 更新/创建 ChildProfile 记录
- */
-
 import { prisma } from '@/lib/db/prisma';
 import { QuotaManager } from '@/lib/auth/quotaManager';
 import { NextRequest, NextResponse } from 'next/server';
 
+type ServerMemberProfile = {
+  id: string;
+  relation: string;
+  languagePreference: string;
+  nickname: string;
+  gender: string;
+  ageMonths: number | null;
+  interests: string[];
+  fears: string[];
+  avatarConfig: unknown;
+  completedScales: string[];
+};
+
+function mapProfile(profile: any, completedScales: string[]): ServerMemberProfile {
+  const traits = (profile.traits as any) || {};
+  return {
+    id: profile.id,
+    relation: String(profile.relation || 'SELF').toLowerCase(),
+    languagePreference: String(profile.languagePreference || 'ZH').toLowerCase(),
+    nickname: profile.nickname,
+    gender: profile.gender,
+    ageMonths: profile.ageMonths,
+    interests: traits.interests || [],
+    fears: traits.fears || [],
+    avatarConfig: profile.avatarConfig,
+    completedScales,
+  };
+}
+
+async function getMemberProfileModel() {
+  return (prisma as any).memberProfile ?? (prisma as any).childProfile;
+}
+
+async function loadUserWithProfiles(deviceId: string) {
+  return await prisma.user.findUnique({
+    where: { deviceId },
+    include: {
+      profiles: {
+        orderBy: { createdAt: 'asc' },
+      },
+      assessments: {
+        orderBy: { createdAt: 'desc' },
+        select: { scaleId: true },
+      },
+    },
+  });
+}
+
+function buildResponsePayload(user: any) {
+  const completedScales = Array.from(
+    new Set<string>(
+      (user.assessments || [])
+        .map((item: any) => String(item.scaleId))
+        .filter((value: string) => Boolean(value))
+    )
+  );
+  const profiles = (user.profiles || []).map((profile: any) => mapProfile(profile, completedScales));
+  return {
+    user: {
+      id: user.id,
+      role: user.role || (user.isGuest ? 'GUEST' : 'REGISTERED'),
+      isGuest: user.isGuest,
+      phone: user.phone,
+      email: user.email,
+      dailyLimit: user.dailyLimit,
+      dailyUsed: user.dailyUsed,
+    },
+    activeProfileId: profiles[0]?.id || null,
+    profile: profiles[0] || null,
+    profiles,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, nickname, gender, ageMonths, interests, fears, avatarConfig } = body;
+    const {
+      deviceId,
+      memberId,
+      relation,
+      languagePreference,
+      nickname,
+      gender,
+      ageMonths,
+      interests,
+      fears,
+      avatarConfig
+    } = body;
 
-    // 参数验证
     if (!deviceId || !nickname || !gender) {
       return NextResponse.json(
         { error: '缺少必要参数' },
@@ -24,57 +98,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 获取或创建用户
     const user = await QuotaManager.getOrCreateGuest(deviceId);
+    const memberProfileModel = await getMemberProfileModel();
 
-    // 查找是否存在该用户的画像
-    let profile = await prisma.childProfile.findFirst({
-      where: { userId: user.id },
-    });
+    const profileData = {
+      userId: user.id,
+      relation: String(relation || 'SELF').toUpperCase(),
+      languagePreference: String(languagePreference || 'ZH').toUpperCase(),
+      nickname,
+      gender,
+      ageMonths: ageMonths || null,
+      traits: {
+        interests: interests || [],
+        fears: fears || [],
+      },
+      avatarConfig: avatarConfig || {},
+    };
 
-    if (profile) {
-      // 更新现有画像
-      profile = await prisma.childProfile.update({
-        where: { id: profile.id },
-        data: {
-          nickname,
-          gender,
-          ageMonths: ageMonths || null,
-          traits: { 
-            interests: interests || [], 
-            fears: fears || [] 
-          },
-          avatarConfig: avatarConfig || {},
-        },
+    if (memberId) {
+      const existingProfile = await memberProfileModel.findFirst({
+        where: { id: memberId, userId: user.id },
       });
+
+      if (existingProfile) {
+        await memberProfileModel.update({
+          where: { id: memberId },
+          data: profileData,
+        });
+      } else {
+        await memberProfileModel.create({
+          data: profileData,
+        });
+      }
     } else {
-      // 创建新画像
-      profile = await prisma.childProfile.create({
-        data: {
-          userId: user.id,
-          nickname,
-          gender,
-          ageMonths: ageMonths || null,
-          traits: { 
-            interests: interests || [], 
-            fears: fears || [] 
-          },
-          avatarConfig: avatarConfig || {},
-        },
+      await memberProfileModel.create({
+        data: profileData,
       });
     }
 
-    console.log(`[Profile Synced] User: ${user.id}, Nickname: ${nickname}`);
+    const freshUser = await loadUserWithProfiles(deviceId);
 
-    return NextResponse.json({ 
-      success: true, 
-      profile: {
-        id: profile.id,
-        nickname: profile.nickname,
-        gender: profile.gender,
-        ageMonths: profile.ageMonths,
-        updatedAt: profile.updatedAt,
-      }
+    if (!freshUser) {
+      return NextResponse.json({ error: '同步用户画像失败' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      ...buildResponsePayload(freshUser),
     });
   } catch (error) {
     console.error('[Sync Profile Error]:', error);
@@ -85,9 +155,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * 获取用户画像
- */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -100,28 +167,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 获取用户
-    const user = await prisma.user.findUnique({
-      where: { deviceId },
-      include: { profiles: true },
-    });
+    const user = await loadUserWithProfiles(deviceId);
 
-    if (!user || user.profiles.length === 0) {
-      return NextResponse.json({ profile: null });
+    if (!user) {
+      return NextResponse.json({
+        user: {
+          role: 'GUEST',
+          isGuest: true,
+          dailyLimit: 5,
+          dailyUsed: 0,
+          phone: null,
+          email: null,
+        },
+        activeProfileId: null,
+        profile: null,
+        profiles: [],
+      });
     }
 
-    const profile = user.profiles[0];
-
-    return NextResponse.json({ 
-      profile: {
-        nickname: profile.nickname,
-        gender: profile.gender,
-        ageMonths: profile.ageMonths,
-        interests: (profile.traits as any)?.interests || [],
-        fears: (profile.traits as any)?.fears || [],
-        avatarConfig: profile.avatarConfig,
-      }
-    });
+    return NextResponse.json(buildResponsePayload(user));
   } catch (error) {
     console.error('[Get Profile Error]:', error);
     return NextResponse.json(

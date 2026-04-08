@@ -39,6 +39,7 @@ export const memoryTools = [
 // 2. 实现具体的调用逻辑
 export async function handleMemoryToolCall(name: string, args: any) {
   const { deviceId } = args;
+  const memberProfileModel = (prisma as any).memberProfile ?? (prisma as any).childProfile;
 
   // 校验用户是否存在
   const user = await prisma.user.findUnique({
@@ -73,7 +74,7 @@ export async function handleMemoryToolCall(name: string, args: any) {
         currentTraits.fears.push(fear);
       }
 
-      await prisma.childProfile.update({
+      await memberProfileModel.update({
         where: { id: profile.id },
         data: { traits: currentTraits }
       });

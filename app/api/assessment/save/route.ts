@@ -9,12 +9,13 @@
 
 import { prisma } from '@/lib/db/prisma';
 import { QuotaManager } from '@/lib/auth/quotaManager';
+import { getScaleDefinitionById } from '@/lib/scales/catalog';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, scaleId, totalScore, conclusion, answers } = body;
+    const { deviceId, profileId, scaleId, totalScore, conclusion, answers } = body;
 
     // 参数验证
     if (!deviceId || !scaleId || totalScore === undefined || !conclusion || !answers) {
@@ -40,13 +41,13 @@ export async function POST(request: NextRequest) {
 
     // 3. 保存评估结果到数据库
     // ✅ 优化：从 AllScales 注册表获取量表版本号
-    const { AllScales } = await import('@/lib/schemas/core/registry');
-    const scale = AllScales.find(s => s.id === scaleId);
+    const scale = getScaleDefinitionById(scaleId);
     const scaleVersion = scale?.version || '1.0'; // 如果量表定义中有 version 字段则使用，否则默认 1.0
     
     const assessment = await prisma.assessmentHistory.create({
       data: {
         userId: user.id,
+        profileId: profileId || null,
         scaleId,
         scaleVersion, // ✅ 新增：保存版本号
         totalScore: parseFloat(totalScore.toFixed(2)),

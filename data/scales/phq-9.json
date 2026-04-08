@@ -1,0 +1,254 @@
+{
+  "id": "PHQ-9",
+  "version": "1.0",
+  "title": {
+    "zh": "患者健康问卷抑郁量表 (PHQ-9)",
+    "en": "Patient Health Questionnaire (PHQ-9)"
+  },
+  "description": {
+    "zh": "用于快速筛查近两周抑郁相关症状强度的配置化心理量表示例。",
+    "en": "A configurable scale example for screening depressive symptoms over the last two weeks."
+  },
+  "source": "manifest",
+  "category": "Mental Health",
+  "tags": ["心理", "抑郁", "配置化"],
+  "estimatedMinutes": 4,
+  "interactionMode": "full_voice",
+  "supportedLanguages": ["zh", "en"],
+  "requiresConfirmation": true,
+  "questions": [
+    {
+      "id": 1,
+      "text": "做事时提不起劲或没有兴趣。",
+      "clinical_intent": "评估兴趣减退与快感缺失。",
+      "colloquial": "最近两周，你会不会觉得很多事情都提不起兴趣？",
+      "fallback_examples": ["比如平常愿意做的事，现在也不太想碰。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["没兴趣", "提不起劲", "不想做", "什么都不想"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "text": "感到心情低落、沮丧或绝望。",
+      "clinical_intent": "评估核心抑郁情绪。",
+      "colloquial": "最近会不会经常觉得情绪很低落、很压抑？",
+      "fallback_examples": ["比如觉得看不到希望，或者总是提不起精神。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["低落", "沮丧", "绝望", "压抑"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "text": "入睡困难、睡不安稳或睡眠过多。",
+      "clinical_intent": "评估睡眠异常。",
+      "colloquial": "最近睡觉情况怎么样，会失眠或者睡很多吗？",
+      "fallback_examples": ["比如很难入睡、容易醒，或者怎么都睡不够。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["失眠", "睡不着", "早醒", "睡太多", "睡很多"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "正常"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "text": "感觉疲倦或没有活力。",
+      "clinical_intent": "评估精力下降。",
+      "colloquial": "最近会不会总觉得累、没精神？",
+      "fallback_examples": ["哪怕没做什么，也会感觉很疲惫。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["疲倦", "没精神", "没力气", "疲惫"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "text": "食欲不振或吃太多。",
+      "clinical_intent": "评估食欲与进食变化。",
+      "colloquial": "最近食欲有变化吗，比如吃不下或者暴食？",
+      "fallback_examples": ["和平时比起来，吃东西明显变少或变多。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["食欲差", "吃不下", "暴食", "吃太多"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "正常"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "text": "觉得自己很糟，或觉得自己很失败，或让自己或家人失望。",
+      "clinical_intent": "评估无价值感与自责。",
+      "colloquial": "最近会不会经常责怪自己，觉得自己很失败？",
+      "fallback_examples": ["比如总觉得拖累家人，或者什么都做不好。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["自责", "失败", "没用", "拖累家人"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "text": "对事物专注有困难，例如阅读报纸或看电视时。",
+      "clinical_intent": "评估注意力下降。",
+      "colloquial": "最近会不会很难集中注意力？",
+      "fallback_examples": ["比如看手机、看书、开会时总是走神。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["注意力不集中", "走神", "难以专注"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "text": "动作或说话速度缓慢到别人已经察觉，或刚好相反，烦躁或坐立不安、动来动去比平常多很多。",
+      "clinical_intent": "评估精神运动性迟滞或激越。",
+      "colloquial": "最近会不会明显变得很慢，或者反过来特别烦躁、坐不住？",
+      "fallback_examples": ["别人也能看出来你的动作或说话状态和平时不一样。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["坐立不安", "烦躁", "动作变慢", "反应很慢"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "text": "有不如死掉或用某种方式伤害自己的念头。",
+      "clinical_intent": "评估自伤自杀风险。",
+      "colloquial": "最近有没有出现过伤害自己或者不想活的想法？",
+      "fallback_examples": ["哪怕只是闪过一下，也算在内。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["不想活", "伤害自己", "自杀", "轻生"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "从来没有"] },
+          { "score": 1, "keywords": ["偶尔", "几天", "闪过"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    }
+  ],
+  "scoring": {
+    "method": "sum",
+    "thresholds": [
+      {
+        "min": 0,
+        "max": 4,
+        "conclusion": "最小或无抑郁症状",
+        "description": "总分处于 PHQ-9 的最小症状范围，建议继续观察近期情绪变化。"
+      },
+      {
+        "min": 5,
+        "max": 9,
+        "conclusion": "轻度抑郁症状",
+        "description": "提示存在轻度抑郁相关表现，可结合睡眠、压力和生活事件继续评估。"
+      },
+      {
+        "min": 10,
+        "max": 14,
+        "conclusion": "中度抑郁症状",
+        "description": "提示已达到需要重点关注的抑郁症状水平，建议结合专业评估进一步确认。"
+      },
+      {
+        "min": 15,
+        "max": 19,
+        "conclusion": "中重度抑郁症状",
+        "description": "症状负担较重，建议尽快寻求专业帮助并评估功能受损情况。"
+      },
+      {
+        "min": 20,
+        "max": 27,
+        "conclusion": "重度抑郁症状",
+        "description": "提示严重抑郁风险，尤其若第 9 题阳性，应尽快联系专业人员或危机支持资源。"
+      }
+    ]
+  }
+}

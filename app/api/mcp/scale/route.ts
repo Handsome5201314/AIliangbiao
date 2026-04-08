@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scaleTools, handleScaleToolCall } from '@/lib/mcp/skills/scale/handlers';
 import { prisma } from '@/lib/db/prisma';
+import { listSerializableScales } from '@/lib/scales/catalog';
+import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,6 +133,8 @@ export async function POST(req: NextRequest) {
  * GET 处理器 - 返回服务状态
  */
 export async function GET() {
+  const scales = listSerializableScales();
+
   return NextResponse.json({
     service: "Scale Assessment Service",
     version: "1.0.0",
@@ -141,13 +145,10 @@ export async function GET() {
       name: t.name,
       description: t.description
     })),
-    supportedScales: AllScales.map(s => ({
+    supportedScales: scales.map(s => ({
       id: s.id,
-      title: s.title,
+      title: resolveLocalizedText(s.title, 'zh'),
       questionCount: s.questions.length
     }))
   });
 }
-
-// 导入量表注册表
-import { AllScales } from '@/lib/schemas/core/registry';

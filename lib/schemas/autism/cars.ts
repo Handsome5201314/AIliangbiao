@@ -1,4 +1,4 @@
-import type { ScaleDefinition, ScaleQuestion } from "../core/types";
+import type { ExecutableScaleDefinition, ScaleQuestion } from "../core/types";
 
 /**
  * 辅助函数：生成 CARS 专用的 1-4 分选项
@@ -119,11 +119,20 @@ const CARS_QUESTIONS: ScaleQuestion[] = [
   }
 ];
 
-export const CARS_Scale: ScaleDefinition = {
+export const CARS_Scale: ExecutableScaleDefinition = {
+  source: "builtin",
   id: "CARS",
   version: "1.0",  // ✅ 新增版本号
-  title: "卡氏儿童孤独症评定量表 (CARS)",
-  description: "用于评估和诊断儿童孤独症的严重程度，涵盖人际关系、视觉反应、情感表现等15个核心维度的行为表现。满分60分，正常范围<30分。",
+  title: {
+    zh: "卡氏儿童孤独症评定量表 (CARS)",
+    en: "Childhood Autism Rating Scale (CARS)"
+  },
+  description: {
+    zh: "用于评估和诊断儿童孤独症的严重程度，涵盖人际关系、视觉反应、情感表现等15个核心维度的行为表现。满分60分，正常范围<30分。",
+    en: "A diagnostic scale for rating autism severity across 15 core behavioral dimensions."
+  },
+  category: "Child Development",
+  tags: ["儿童发育", "孤独症", "诊断", "自闭症"],
   questions: CARS_QUESTIONS,
   
   calculateScore: (answers: number[]) => {

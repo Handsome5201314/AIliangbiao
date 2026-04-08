@@ -14,6 +14,7 @@ const PROVIDER_OPTIONS = [
   { value: 'deepseek', label: 'DeepSeek', description: '深度求索，性价比高' },
   { value: 'qwen', label: '通义千问 (Qwen)', description: '阿里云出品' },
   { value: 'openai', label: 'OpenAI', description: '国际领先' },
+  { value: 'oneapi', label: 'OneAPI (OpenAI兼容)', description: '支持 OneAPI 网关与 Gemini 系列模型' },
   { value: 'custom', label: '自定义 (OpenAI兼容)', description: '支持OpenAI格式API' }
 ];
 
@@ -24,6 +25,7 @@ const DEFAULT_ENDPOINTS: Record<string, string> = {
   deepseek: 'https://api.deepseek.com/v1/chat/completions',
   qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
   openai: 'https://api.openai.com/v1/chat/completions',
+  oneapi: 'http://104.197.139.51:3000/v1/chat/completions',
   custom: ''
 };
 
@@ -147,7 +149,7 @@ export default function ApiKeysPage() {
           provider: newKey.provider,
           keyName: newKey.keyName,
           keyValue: newKey.keyValue,
-          customEndpoint: newKey.provider === 'custom' ? newKey.customEndpoint : null,
+          customEndpoint: newKey.provider === 'custom' || newKey.provider === 'oneapi' ? newKey.customEndpoint : null,
           customModel: newKey.customModel || null,
           serviceType: newKey.serviceType // 保存服务类型
         })
@@ -566,7 +568,7 @@ export default function ApiKeysPage() {
               </div>
 
               {/* 自定义接口配置（仅自定义服务商且为文本模型显示） */}
-              {newKey.provider === 'custom' && newKey.serviceType === 'text' && (
+              {(newKey.provider === 'custom' || newKey.provider === 'oneapi') && newKey.serviceType === 'text' && (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -576,11 +578,13 @@ export default function ApiKeysPage() {
                       type="text"
                       value={newKey.customEndpoint}
                       onChange={(e) => setNewKey({ ...newKey, customEndpoint: e.target.value })}
-                      placeholder="https://api.example.com/v1/chat/completions"
+                      placeholder={newKey.provider === 'oneapi' ? 'http://your-oneapi-host:3000/v1/chat/completions' : 'https://api.example.com/v1/chat/completions'}
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                      支持 OpenAI 兼容的 API 格式
+                      {newKey.provider === 'oneapi'
+                        ? 'OneAPI 基地址必须兼容 /v1/chat/completions，模型名需与 OneAPI 后台别名完全一致'
+                        : '支持 OpenAI 兼容的 API 格式'}
                     </p>
                   </div>
                 </>
@@ -676,7 +680,7 @@ export default function ApiKeysPage() {
                         setIsUserManualInput(true);
                         setNewKey({ ...newKey, customModel: e.target.value });
                       }}
-                      placeholder={newKey.provider === 'custom' ? '输入模型名称' : '将使用默认模型'}
+                      placeholder={newKey.provider === 'custom' || newKey.provider === 'oneapi' ? '输入模型名称' : '将使用默认模型'}
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
                     />
                     {newKey.keyValue && !loadingModels && (
@@ -745,7 +749,7 @@ export default function ApiKeysPage() {
               </button>
               <button
                 onClick={handleAddKey}
-                disabled={!newKey.keyName || !newKey.keyValue || (newKey.provider === 'custom' && !newKey.customEndpoint)}
+                disabled={!newKey.keyName || !newKey.keyValue || ((newKey.provider === 'custom' || newKey.provider === 'oneapi') && !newKey.customEndpoint)}
                 className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 添加

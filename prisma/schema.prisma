@@ -10,17 +10,39 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  GUEST
+  REGISTERED
+  VIP
+}
+
+enum MemberRelation {
+  SELF
+  CHILD
+  PARENT
+  SPOUSE
+  SIBLING
+  OTHER
+}
+
+enum LanguagePreference {
+  ZH
+  EN
+}
+
 // ==================== 1. 用户与额度系统 ====================
 
 model User {
   id            String    @id @default(cuid())
-  isGuest       Boolean   @default(true)      // 标识是否为免登录游客
+  role          UserRole  @default(GUEST)     // GUEST / REGISTERED / VIP
+  isGuest       Boolean   @default(true)      // 兼容旧逻辑，后续可逐步移除
   deviceId      String?   @unique             // 浏览器指纹 UUID（游客依赖）
   phone         String?   @unique             // 手机号（注册用户依赖）
+  email         String?   @unique             // 邮箱（注册用户依赖）
   
   // 商业化额度字段
   dailyUsed     Int       @default(0)         // 今日已调用量表的次数
-  dailyLimit    Int       @default(1)         // 每日限制（游客默认1，注册可提升）
+  dailyLimit    Int       @default(5)         // 每日限制（游客默认5，注册默认10）
   totalTokens   Int       @default(0)         // 高级资产：充值的 Token 额度
   lastResetAt   DateTime  @default(now())     // 每日额度重置的标记时间
 
@@ -28,24 +50,28 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // 关系映射
-  profiles        ChildProfile[]
+  profiles        MemberProfile[]
   assessments     AssessmentHistory[]
   triageSessions  TriageSession[]
   mcpLogs         McpLog[]
   apiKeys         ApiKey[]
   speechUsages    SpeechUsage[]
+
+  @@index([role])
 }
 
-// ==================== 2. 千人千面：儿童画像 ====================
+// ==================== 2. 千人千面：家庭成员画像 ====================
 
-model ChildProfile {
+model MemberProfile {
   id            String    @id @default(cuid())
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  nickname      String    // 孩子小名（如：明明）
-  gender        String    // boy / girl
-  ageMonths     Int?      // 月龄
+
+  relation      MemberRelation    @default(SELF) // self / child / parent / spouse / sibling / other
+  languagePreference LanguagePreference @default(ZH)
+  nickname      String    // 成员显示名（本人/家人都适用）
+  gender        String    // boy / girl / male / female / other
+  ageMonths     Int?      // 保留月龄，兼容儿童场景
   
   // 扩展的上下文记忆字段
   traits        Json      // 行为特征和记忆上下文
@@ -65,6 +91,10 @@ model ChildProfile {
   
   // 关系映射
   growthRecords GrowthRecord[]
+  assessments   AssessmentHistory[]
+
+  @@index([userId, relation])
+  @@map("ChildProfile")
 }
 
 // ==================== 3. 临床数据：量表评估历史 ====================
@@ -73,6 +103,8 @@ model AssessmentHistory {
   id            String    @id @default(cuid())
   userId        String
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId     String?
+  profile       MemberProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
   
   scaleId       String    // 量表标识 (如 "ABC", "CARS", "SNAP-IV")
   scaleVersion  String    @default("1.0") // ✅ 题目版本号，防止未来改版导致历史数据无法解读
@@ -83,6 +115,7 @@ model AssessmentHistory {
   createdAt     DateTime  @default(now())
   
   @@index([userId, createdAt])
+  @@index([profileId, createdAt])
   @@index([scaleId, scaleVersion])
 }
 
@@ -105,7 +138,7 @@ model McpLog {
 model GrowthRecord {
   id            String    @id @default(cuid())
   profileId     String
-  profile       ChildProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile       MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   
   ageMonths     Int       // 月龄（0-60个月）
   

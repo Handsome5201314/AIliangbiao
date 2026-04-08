@@ -15,7 +15,7 @@ export type AudioFormat = 'webm' | 'wav' | 'mp3' | 'm4a' | 'ogg';
 
 // 语音识别配置
 export interface TranscriptionConfig {
-  provider: 'siliconflow' | 'openai' | 'custom';
+  provider: 'siliconflow' | 'openai' | 'oneapi' | 'custom';
   model?: string;
   language?: string; // 语言代码：zh-CN, en-US
   apiKey?: string;
@@ -105,6 +105,8 @@ function getDefaultEndpoint(provider: string): string {
       return 'https://api.siliconflow.cn/v1/audio/transcriptions';
     case 'openai':
       return 'https://api.openai.com/v1/audio/transcriptions';
+    case 'oneapi':
+      return '';
     default:
       return '';
   }
@@ -119,6 +121,8 @@ function getDefaultModel(provider: string): string {
       return 'FunAudioLLM/SenseVoiceSmall'; // SiliconFlow 推荐模型
     case 'openai':
       return 'whisper-1'; // OpenAI Whisper
+    case 'oneapi':
+      return '';
     default:
       return 'whisper-1';
   }

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { exportToCSV, exportToImage, exportToPDF, formatDateTime, AssessmentExportData } from '@/lib/utils/exportUtils';
 import { useProfile } from '@/contexts/ProfileContext';
+import { useSkillSession } from '@/contexts/SkillSessionContext';
 import Avatar from './Avatar';
 
 interface AssessmentResultProps {
@@ -37,10 +38,21 @@ interface AssessmentResultProps {
 
 export default function AssessmentResult({ result, scale, answers, deviceId }: AssessmentResultProps) {
   const { profile } = useProfile();
+  const { token: skillToken, memberId: skillMemberId } = useSkillSession();
   const [aiAdvice, setAiAdvice] = useState<string>('');
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
   const [adviceError, setAdviceError] = useState<string>('');
   const [exportStatus, setExportStatus] = useState<string>('');
+  const scoreLabel = typeof result.details?.scoreLabel === 'string' ? result.details.scoreLabel : '总分';
+  const scoreDisplay = typeof result.details?.scoreDisplay === 'string'
+    ? result.details.scoreDisplay
+    : `${result.totalScore} 分`;
+  const totalScoreLabel = typeof result.details?.totalScoreLabel === 'string'
+    ? result.details.totalScoreLabel
+    : '总分';
+  const totalScoreHint = typeof result.details?.totalScoreHint === 'string'
+    ? result.details.totalScoreHint
+    : '';
 
   const completedAt = new Date().toISOString();
 
@@ -54,9 +66,18 @@ export default function AssessmentResult({ result, scale, answers, deviceId }: A
     setAdviceError('');
     
     try {
-      const response = await fetch('/api/assessment/generate-advice', {
+      if (!skillToken) {
+        throw new Error('Skill session is not ready yet.');
+      }
+
+      const adviceEndpoint = `/api/skill/v1/me/members/${encodeURIComponent(skillMemberId || profile.id)}/advice`;
+
+      const response = await fetch(adviceEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${skillToken}`,
+        },
         body: JSON.stringify({
           deviceId,
           result: {
@@ -243,11 +264,20 @@ export default function AssessmentResult({ result, scale, answers, deviceId }: A
           
           <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 mb-6">
             <div className="text-5xl font-bold text-indigo-600 mb-2">
-              {result.totalScore} 分
+              {scoreDisplay}
+            </div>
+            <div className="text-sm font-medium text-indigo-500 mb-2">
+              {scoreLabel}
             </div>
             <div className="text-lg font-semibold text-gray-700 mb-4">
               {result.conclusion}
             </div>
+            {scoreLabel !== '总分' && (
+              <p className="text-sm text-gray-600 text-left mb-3">
+                {totalScoreLabel}：{result.totalScore}
+                {totalScoreHint ? `。${totalScoreHint}` : ''}
+              </p>
+            )}
             {result.details?.description && (
               <p className="text-sm text-gray-600 text-left">
                 {result.details.description}

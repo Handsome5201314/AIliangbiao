@@ -5,6 +5,7 @@ import "@/lib/polyfills/crypto"; // crypto.randomUUID polyfill
 import { AssessmentProvider } from "@/contexts/AssessmentContext";
 import { ProfileProvider } from "@/contexts/ProfileContext";
 import { ConversationHistoryProvider } from "@/contexts/ConversationHistoryContext";
+import { SkillSessionProvider } from "@/contexts/SkillSessionContext";
 
 export const metadata: Metadata = {
   title: "AI量表系统 - 智能心理评估平台",
@@ -20,11 +21,13 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         <ProfileProvider>
-          <ConversationHistoryProvider>
-            <AssessmentProvider>
-              {children}
-            </AssessmentProvider>
-          </ConversationHistoryProvider>
+          <SkillSessionProvider>
+            <ConversationHistoryProvider>
+              <AssessmentProvider>
+                {children}
+              </AssessmentProvider>
+            </ConversationHistoryProvider>
+          </SkillSessionProvider>
         </ProfileProvider>
       </body>
     </html>

@@ -1,61 +1,29 @@
-/**
- * MCP Server Handlers — 工具列表和调用逻辑
- */
-
 import { z } from "zod";
-import { AllScales } from "@/lib/schemas/core/registry";
 
-// ─── 症状 → 量表关键词映射 ──────────────────────────────────────
-const SYMPTOM_KEYWORDS: Record<string, string[]> = {
-  ABC: [
-    "转圈",
-    "旋转",
-    "刻板",
-    "不理人",
-    "不应名",
-    "说话",
-    "语言",
-    "自闭",
-    "孤独症",
-    "眼神",
-    "社交",
-    "重复",
-    "兴趣狭窄",
-    "发呆",
-    "沟通障碍",
-  ],
-  CARS: [
-    "人际关系",
-    "模仿",
-    "情感反应",
-    "躯体",
-    "视觉",
-    "听觉",
-    "焦虑",
-    "多动",
-    "严重程度",
-    "诊断",
-    "眼神接触",
-    "依恋",
-    "情绪",
-    "协调性",
-  ],
+import { evaluateScaleAnswers, getScaleDefinitionById, listSerializableScales } from "@/lib/scales/catalog";
+import { resolveLocalizedText } from "@/lib/schemas/core/i18n";
+
+const symptomKeywords: Record<string, string[]> = {
+  ABC: ["社交", "不理人", "重复动作", "刻板", "眼神", "自闭"],
+  CARS: ["诊断", "严重程度", "模仿", "情感反应", "感官"],
+  SRS: ["社交困难", "同伴关系", "眼神接触", "不合群"],
+  "SNAP-IV": ["注意力", "多动", "坐不住", "冲动"],
+  "PHQ-9": ["抑郁", "低落", "没兴趣", "绝望", "失眠"],
+  "GAD-7": ["焦虑", "紧张", "担心", "坐立不安", "易怒"],
 };
 
-// ─── 列出可用工具 ───────────────────────────────────────────────
 export async function listTools() {
   return {
     tools: [
       {
         name: "recommend_scale",
-        description:
-          "根据用户描述的症状关键词，从已注册的量表中推荐最匹配的量表。",
+        description: "Recommend scales by symptom keywords",
         inputSchema: {
           type: "object" as const,
           properties: {
             symptoms: {
               type: "string",
-              description: "用户描述的症状关键词（逗号或空格分隔）",
+              description: "Comma separated symptom summary",
             },
           },
           required: ["symptoms"],
@@ -63,22 +31,21 @@ export async function listTools() {
       },
       {
         name: "get_scale_questions",
-        description:
-          "获取指定量表的题目列表，支持分页。返回题目原文本、通俗表述、选项等信息。",
+        description: "Get question list for a scale",
         inputSchema: {
           type: "object" as const,
           properties: {
             scaleId: {
               type: "string",
-              description: "量表 ID（如 ABC）",
+              description: "Scale ID",
             },
             offset: {
               type: "number",
-              description: "起始题号偏移（从 0 开始），默认 0",
+              description: "Start offset",
             },
             limit: {
               type: "number",
-              description: "返回题目数量上限，默认 5",
+              description: "Page size",
             },
           },
           required: ["scaleId"],
@@ -86,19 +53,18 @@ export async function listTools() {
       },
       {
         name: "submit_and_evaluate",
-        description:
-          "提交用户对某量表的所有答案，由本地引擎计算总分并返回临床结论。",
+        description: "Evaluate answers with the deterministic scoring engine",
         inputSchema: {
           type: "object" as const,
           properties: {
             scaleId: {
               type: "string",
-              description: "量表 ID",
+              description: "Scale ID",
             },
             answers: {
               type: "array",
               items: { type: "number" },
-              description: "用户选择的每题分数（顺序与题目一致）",
+              description: "Answer scores in order",
             },
           },
           required: ["scaleId", "answers"],
@@ -108,7 +74,6 @@ export async function listTools() {
   };
 }
 
-// ─── 处理工具调用 ───────────────────────────────────────────────
 export async function handleToolCall(params: {
   name: string;
   arguments: unknown;
@@ -118,32 +83,29 @@ export async function handleToolCall(params: {
   switch (name) {
     case "recommend_scale": {
       const parsed = z.object({ symptoms: z.string() }).parse(args);
-      const matchedScales = AllScales.filter((scale) => {
-        const keywords = SYMPTOM_KEYWORDS[scale.id];
-        if (!keywords) return false;
-        return keywords.some((kw) => parsed.symptoms.includes(kw));
+      const availableScales = listSerializableScales();
+      const matchedScales = availableScales.filter((scale) => {
+        const keywords = symptomKeywords[scale.id] || [];
+        return keywords.some((keyword) => parsed.symptoms.includes(keyword));
       });
 
-      if (matchedScales.length > 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                matchedScales.map((s) => ({ id: s.id, title: s.title })),
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      }
+      const recommendations = matchedScales.length > 0
+        ? matchedScales
+        : availableScales.filter((scale) => scale.id === "ABC").slice(0, 1);
 
       return {
         content: [
           {
             type: "text",
-            text: "暂无完全匹配的量表，建议先使用 ABC 筛查。",
+            text: JSON.stringify(
+              recommendations.map((scale) => ({
+                id: scale.id,
+                title: resolveLocalizedText(scale.title, "zh"),
+                description: resolveLocalizedText(scale.description, "zh"),
+              })),
+              null,
+              2
+            ),
           },
         ],
       };
@@ -158,18 +120,15 @@ export async function handleToolCall(params: {
         })
         .parse(args);
 
-      const scale = AllScales.find((s) => s.id === parsed.scaleId);
+      const scale = getScaleDefinitionById(parsed.scaleId);
       if (!scale) {
         return {
-          content: [{ type: "text", text: `未找到量表: "${parsed.scaleId}"` }],
+          content: [{ type: "text", text: `Scale "${parsed.scaleId}" not found` }],
           isError: true,
         };
       }
 
-      const paged = scale.questions.slice(
-        parsed.offset,
-        parsed.offset + parsed.limit
-      );
+      const pagedQuestions = scale.questions.slice(parsed.offset, parsed.offset + parsed.limit);
       const hasMore = parsed.offset + parsed.limit < scale.questions.length;
 
       return {
@@ -177,7 +136,17 @@ export async function handleToolCall(params: {
           {
             type: "text",
             text: JSON.stringify(
-              { questions: paged, total: scale.questions.length, hasMore },
+              {
+                scaleId: scale.id,
+                total: scale.questions.length,
+                hasMore,
+                questions: pagedQuestions.map((question) => ({
+                  ...question,
+                  text: resolveLocalizedText(question.text, "zh"),
+                  colloquial: resolveLocalizedText(question.colloquial, "zh"),
+                  fallback_examples: question.fallback_examples.map((item) => resolveLocalizedText(item, "zh")),
+                })),
+              },
               null,
               2
             ),
@@ -194,15 +163,27 @@ export async function handleToolCall(params: {
         })
         .parse(args);
 
-      const scale = AllScales.find((s) => s.id === parsed.scaleId);
+      const scale = getScaleDefinitionById(parsed.scaleId);
       if (!scale) {
         return {
-          content: [{ type: "text", text: `未找到量表: "${parsed.scaleId}"` }],
+          content: [{ type: "text", text: `Scale "${parsed.scaleId}" not found` }],
           isError: true,
         };
       }
 
-      const result = scale.calculateScore(parsed.answers);
+      if (parsed.answers.length !== scale.questions.length) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Expected ${scale.questions.length} answers, received ${parsed.answers.length}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const result = evaluateScaleAnswers(scale.id, parsed.answers);
 
       return {
         content: [
@@ -215,6 +196,6 @@ export async function handleToolCall(params: {
     }
 
     default:
-      throw new Error(`未知工具: ${name}`);
+      throw new Error(`Unknown tool: ${name}`);
   }
 }

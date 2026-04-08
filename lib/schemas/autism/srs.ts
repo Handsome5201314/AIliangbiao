@@ -1,4 +1,4 @@
-import type { ScaleDefinition, ScaleQuestion } from "../core/types";
+import type { ExecutableScaleDefinition, ScaleQuestion } from "../core/types";
 
 /**
  * 辅助函数：生成 SRS 专用的 1-4 分选项
@@ -90,11 +90,20 @@ const SRS_QUESTIONS: ScaleQuestion[] = [
   { id: 65, text: '无目的地凝视或注视。', clinical_intent: '评估发呆与环境抽离', colloquial: '他会不会经常两眼发直，盯着空气或者某个地方发呆，也不知道在看什么？', fallback_examples: ['叫他好几声都回不过神来？'], options: createSRSOptions(false) }
 ];
 
-export const SRS_Scale: ScaleDefinition = {
+export const SRS_Scale: ExecutableScaleDefinition = {
+  source: "builtin",
   id: "SRS",
   version: "1.0",  // ✅ 新增版本号
-  title: "社交反应量表 (SRS)",
-  description: "用于评估儿童在自然社会环境中的社交互动能力，识别孤独症谱系障碍相关的社交缺陷。共65题。",
+  title: {
+    zh: "社交反应量表 (SRS)",
+    en: "Social Responsiveness Scale (SRS)"
+  },
+  description: {
+    zh: "用于评估儿童在自然社会环境中的社交互动能力，识别孤独症谱系障碍相关的社交缺陷。共65题。",
+    en: "A scale for assessing social interaction difficulties related to autism spectrum conditions."
+  },
+  category: "Child Development",
+  tags: ["儿童发育", "社交", "孤独症", "社交能力"],
   questions: SRS_QUESTIONS,
   
   calculateScore: (answers: number[]) => {

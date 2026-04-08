@@ -1,0 +1,204 @@
+{
+  "id": "GAD-7",
+  "version": "1.0",
+  "title": {
+    "zh": "广泛性焦虑量表 (GAD-7)",
+    "en": "Generalized Anxiety Disorder Scale (GAD-7)"
+  },
+  "description": {
+    "zh": "用于快速筛查近两周焦虑症状强度的配置化心理量表示例。",
+    "en": "A configurable scale example for screening anxiety symptoms over the last two weeks."
+  },
+  "source": "manifest",
+  "category": "Mental Health",
+  "tags": ["心理", "焦虑", "配置化"],
+  "estimatedMinutes": 3,
+  "interactionMode": "full_voice",
+  "supportedLanguages": ["zh", "en"],
+  "requiresConfirmation": true,
+  "questions": [
+    {
+      "id": 1,
+      "text": "感到紧张、焦虑或急切。",
+      "clinical_intent": "评估基础焦虑张力。",
+      "colloquial": "最近两周，会不会老是觉得紧张、绷着、心里发慌？",
+      "fallback_examples": ["哪怕没发生什么事，身体和心里也像一直在警戒。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["紧张", "焦虑", "发慌", "绷着"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "text": "无法停止或控制担忧。",
+      "clinical_intent": "评估担忧失控感。",
+      "colloquial": "会不会一担心起来就停不下来？",
+      "fallback_examples": ["明知道没必要，也很难让自己别想。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["停不下来", "控制不住担心", "反复想"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "text": "对各种各样的事情担忧过多。",
+      "clinical_intent": "评估广泛化担忧。",
+      "colloquial": "是不是很多事情都会让你担心，范围还挺广？",
+      "fallback_examples": ["工作、家庭、健康、小事都可能反复担心。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["担心很多", "什么都担心", "想太多"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "text": "很难放松下来。",
+      "clinical_intent": "评估放松困难。",
+      "colloquial": "最近会不会一直松不下来，休息也不太能放空？",
+      "fallback_examples": ["哪怕坐下来，脑子和身体还是紧绷的。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["放松不下来", "紧绷", "休息不了"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "text": "由于坐立不安而难以保持安静。",
+      "clinical_intent": "评估焦虑性激越。",
+      "colloquial": "会不会烦躁到坐不住、停不下来？",
+      "fallback_examples": ["比如总想走来走去，或者必须做点什么才行。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["坐不住", "烦躁", "停不下来"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "text": "变得容易烦恼或易怒。",
+      "clinical_intent": "评估易激惹。",
+      "colloquial": "最近是不是更容易烦、容易急、容易发火？",
+      "fallback_examples": ["小事也会让情绪波动很大。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["易怒", "容易烦", "脾气大", "容易急"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "text": "感觉害怕，仿佛有可怕的事情会发生。",
+      "clinical_intent": "评估灾难化预期与预期性焦虑。",
+      "colloquial": "最近会不会老有一种不祥的预感，总怕出事？",
+      "fallback_examples": ["明知道没证据，还是会反复担心最坏结果。"],
+      "options": [
+        { "label": "完全没有", "score": 0, "aliases": ["没有", "从不", "完全没有"] },
+        { "label": "几天", "score": 1, "aliases": ["几天", "偶尔", "有时"] },
+        { "label": "一半以上天数", "score": 2, "aliases": ["一半以上", "经常", "不少天"] },
+        { "label": "几乎每天", "score": 3, "aliases": ["几乎每天", "每天", "总是"] }
+      ],
+      "analysisHints": {
+        "keywords": ["怕出事", "不祥预感", "害怕会发生可怕的事"],
+        "optionKeywords": [
+          { "score": 0, "keywords": ["没有", "还好"] },
+          { "score": 1, "keywords": ["偶尔", "几天"] },
+          { "score": 2, "keywords": ["经常", "一半以上"] },
+          { "score": 3, "keywords": ["每天", "几乎每天", "一直"] }
+        ]
+      }
+    }
+  ],
+  "scoring": {
+    "method": "sum",
+    "thresholds": [
+      {
+        "min": 0,
+        "max": 4,
+        "conclusion": "最小焦虑症状",
+        "description": "总分处于 GAD-7 的最小症状范围，可结合近期压力源继续自我观察。"
+      },
+      {
+        "min": 5,
+        "max": 9,
+        "conclusion": "轻度焦虑症状",
+        "description": "提示存在轻度焦虑表现，建议关注睡眠、压力管理和症状持续时间。"
+      },
+      {
+        "min": 10,
+        "max": 14,
+        "conclusion": "中度焦虑症状",
+        "description": "提示已达到需要重点关注的焦虑症状水平，建议结合专业评估进一步确认。"
+      },
+      {
+        "min": 15,
+        "max": 21,
+        "conclusion": "重度焦虑症状",
+        "description": "症状负担较重，建议尽快寻求专业支持，并评估对生活功能的影响。"
+      }
+    ]
+  }
+}

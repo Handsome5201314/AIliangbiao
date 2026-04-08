@@ -27,6 +27,8 @@ export async function updateUserContext(
   updates: Partial<UserTraits>
 ) {
   try {
+    const memberProfileModel = (prisma as any).memberProfile ?? (prisma as any).childProfile;
+
     // 查找用户
     const user = await prisma.user.findUnique({
       where: { deviceId },
@@ -65,7 +67,7 @@ export async function updateUserContext(
     };
 
     // 更新数据库
-    await prisma.childProfile.update({
+    await memberProfileModel.update({
       where: { id: profile.id },
       data: { traits: JSON.parse(JSON.stringify(updatedTraits)) }
     });

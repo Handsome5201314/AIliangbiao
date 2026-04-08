@@ -1,455 +1,420 @@
-/**
- * 问卷组件 - 处理量表答题逻辑
- * 
- * 重构：使用 MediaRecorder API + 后端语音识别服务
- * 替代 Web Speech API（在中国网络环境下有兼容性问题）
- */
-
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ScaleDefinition } from '@/lib/schemas/core/types';
-import { ChevronLeft, CheckCircle2, Mic, MicOff, Volume2, Loader2 } from 'lucide-react';
+import type {
+  LanguageCode,
+  ScaleDefinition,
+  ScaleScoreResult,
+  VoiceSessionMode,
+} from '@/lib/schemas/core/types';
+import {
+  resolveFallbackExamples,
+  resolveLocalizedText,
+  resolveQuestionColloquial,
+  resolveQuestionText,
+} from '@/lib/schemas/core/i18n';
+import { ChevronLeft, Mic, MicOff, Pause, Play, Volume2, Loader2, Sparkles, Wand2 } from 'lucide-react';
+
 import { useProfile } from '@/contexts/ProfileContext';
 import { useConversationHistory } from '@/contexts/ConversationHistoryContext';
+import { useSkillSession } from '@/contexts/SkillSessionContext';
+import { useVoiceSession } from '@/lib/services/useVoiceSession';
+
 import Avatar from './Avatar';
 import AssessmentResult from './AssessmentResult';
 
 interface QuestionnaireProps {
   scale: ScaleDefinition;
+  language?: LanguageCode;
 }
 
-export default function Questionnaire({ scale }: QuestionnaireProps) {
+type AnswerValue = number | null;
+
+interface ConversationAnalysisResponse {
+  coverage: {
+    answered: number;
+    total: number;
+    ratio: number;
+  };
+  llmUsed: boolean;
+  answers: AnswerValue[];
+}
+
+function createEmptyAnswers(questionCount: number): AnswerValue[] {
+  return Array.from({ length: questionCount }, () => null);
+}
+
+function isCompletedAnswers(answers: AnswerValue[]): answers is number[] {
+  return answers.every((answer) => answer !== null);
+}
+
+function updateAnswerAtIndex(
+  answers: AnswerValue[],
+  targetIndex: number,
+  score: number
+): AnswerValue[] {
+  return answers.map((answer, index) => (index === targetIndex ? score : answer));
+}
+
+function resolveScaleVoiceMode(scale: ScaleDefinition): VoiceSessionMode {
+  if (!scale.interactionMode || scale.interactionMode === 'manual_only') {
+    return 'manual';
+  }
+
+  return scale.interactionMode;
+}
+
+function getDefaultVoiceStatus(language: LanguageCode, mode: VoiceSessionMode): string {
+  if (language === 'en') {
+    switch (mode) {
+      case 'full_voice':
+        return 'Full voice mode is ready. You can answer by voice or click an option.';
+      case 'voice_guided':
+        return 'Voice-guided mode is ready. You can ask me to repeat, explain, or go back.';
+      case 'call_mode':
+        return 'Call mode is ready. Voice prompts will guide you through the questionnaire.';
+      default:
+        return 'Voice answering is available. You can also answer manually.';
+    }
+  }
+
+  switch (mode) {
+    case 'full_voice':
+      return '全语音模式已就绪，系统会自动播报题目，你也可以随时手动点选。';
+    case 'voice_guided':
+      return '语音引导模式已就绪，你可以直接回答，也可以说“重复一遍”“解释一下”“上一题”。';
+    case 'call_mode':
+      return '通话模式已就绪，系统会用语音一步步引导你完成量表。';
+    default:
+      return '语音答题助手已就绪，你也可以继续手动作答。';
+  }
+}
+
+export default function Questionnaire({ scale, language = 'zh' }: QuestionnaireProps) {
   const { profile, updateProfile, updateAvatar } = useProfile();
-  const { addMessage } = useConversationHistory();
+  const { messages, addMessage } = useConversationHistory();
+  const { token: skillToken, memberId: skillMemberId } = useSkillSession();
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<AnswerValue[]>(() => createEmptyAnswers(scale.questions.length));
   const [isComplete, setIsComplete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [result, setResult] = useState<{ 
-    totalScore: number; 
-    conclusion: string; 
-    details?: { 
-      description?: string; 
-      [key: string]: unknown;
-    }; 
-  } | null>(null);
-  
-  // 语音识别状态（重构后）
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState('点击麦克风开始语音答题');
+  const [result, setResult] = useState<ScaleScoreResult | null>(null);
   const [remainingQuota, setRemainingQuota] = useState<number | null>(null);
-  
-  // MediaRecorder 相关
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [isAnalyzingHistory, setIsAnalyzingHistory] = useState(false);
+  const [historyStatus, setHistoryStatus] = useState('');
+
+  const voiceTranscriptLoggedRef = useRef<string>('');
 
   const currentQuestion = scale.questions[currentIndex];
-  const progress = ((currentIndex + 1) / scale.questions.length) * 100;
+  const voiceMode = resolveScaleVoiceMode(scale);
+  const questionText = resolveQuestionText(currentQuestion, language);
+  const colloquialText = resolveQuestionColloquial(currentQuestion, language);
+  const fallbackExamples = resolveFallbackExamples(currentQuestion, language);
+  const answeredCount = answers.filter((answer) => answer !== null).length;
+  const progress = (answeredCount / scale.questions.length) * 100;
 
-  // 根据题目内容动态更新小人心情
   useEffect(() => {
-    if (!currentQuestion || isComplete) return;
+    setCurrentIndex(0);
+    setAnswers(createEmptyAnswers(scale.questions.length));
+    setIsComplete(false);
+    setIsSaving(false);
+    setResult(null);
+    setHistoryStatus('');
+    voiceTranscriptLoggedRef.current = '';
+  }, [scale.id, scale.questions.length]);
 
-    const questionText = currentQuestion.text.toLowerCase();
-    const colloquial = currentQuestion.colloquial.toLowerCase();
+  useEffect(() => {
+    if (!currentQuestion || isComplete) {
+      return;
+    }
 
-    // 根据关键词判断心情
-    if (questionText.includes('社交') || questionText.includes('退缩') || 
-        colloquial.includes('不理') || colloquial.includes('害怕') ||
-        questionText.includes('焦虑')) {
+    const normalizedQuestionText = questionText.toLowerCase();
+    const normalizedColloquialText = colloquialText.toLowerCase();
+
+    if (
+      normalizedQuestionText.includes('社交') ||
+      normalizedQuestionText.includes('退缩') ||
+      normalizedColloquialText.includes('不理') ||
+      normalizedColloquialText.includes('害怕') ||
+      normalizedQuestionText.includes('焦虑')
+    ) {
       updateAvatar({ mood: 'nervous' });
-    } else if (questionText.includes('兴趣') || questionText.includes('喜欢') ||
-               colloquial.includes('喜欢') || colloquial.includes('有趣')) {
+    } else if (
+      normalizedQuestionText.includes('兴趣') ||
+      normalizedQuestionText.includes('喜欢') ||
+      normalizedColloquialText.includes('喜欢') ||
+      normalizedColloquialText.includes('有趣')
+    ) {
       updateAvatar({ mood: 'curious' });
-    } else if (questionText.includes('快乐') || questionText.includes('开心') ||
-               colloquial.includes('开心') || colloquial.includes('笑')) {
+    } else if (
+      normalizedQuestionText.includes('快乐') ||
+      normalizedQuestionText.includes('开心') ||
+      normalizedColloquialText.includes('开心') ||
+      normalizedColloquialText.includes('笑')
+    ) {
       updateAvatar({ mood: 'happy' });
     } else {
       updateAvatar({ mood: 'normal' });
     }
-  }, [currentIndex, currentQuestion, isComplete, updateAvatar]);
+  }, [colloquialText, currentQuestion, isComplete, questionText, updateAvatar]);
 
-  // 初始化 MediaRecorder
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // 检查浏览器是否支持 MediaRecorder
-      if (!window.MediaRecorder) {
-        setIsSupported(false);
-        setVoiceStatus('浏览器不支持录音功能');
-        console.log('浏览器不支持 MediaRecorder');
+  const fetchQuota = useCallback(async () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      if (!skillToken) {
         return;
       }
 
-      // 检查是否支持音频格式
-      const mimeTypes = [
-        'audio/webm',
-        'audio/webm;codecs=opus',
-        'audio/mp4',
-        'audio/ogg',
-        'audio/wav',
-      ];
-
-      const supportedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
-      
-      if (!supportedType) {
-        setIsSupported(false);
-        setVoiceStatus('浏览器不支持音频格式');
-        console.log('浏览器不支持任何音频格式');
-        return;
-      }
-
-      setIsSupported(true);
-      console.log('MediaRecorder 支持，音频格式:', supportedType);
-    }
-
-    return () => {
-      // 清理：停止录音和释放麦克风
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  // 获取配额信息
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      fetchQuota();
-    }
-  }, []);
-
-  const fetchQuota = async () => {
-    try {
-      const deviceId = localStorage.getItem('device_id');
-      if (!deviceId) return;
-
-      const response = await fetch(`/api/speech/transcribe?deviceId=${deviceId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRemainingQuota(data.remaining);
-      }
-    } catch (error) {
-      console.error('Failed to fetch quota:', error);
-    }
-  };
-
-  const handleAnswer = useCallback(async (score: number) => {
-    const newAnswers = [...answers, score];
-    setAnswers(newAnswers);
-
-    if (currentIndex < scale.questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      setIsSaving(true);
-      
-      try {
-        // 计算评估结果
-        const result = scale.calculateScore(newAnswers);
-        
-        // 获取或生成 deviceId
-        let deviceId = localStorage.getItem('device_id');
-        if (!deviceId) {
-          deviceId = crypto.randomUUID();
-          localStorage.setItem('device_id', deviceId);
-        }
-
-        // 保存到数据库
-        const response = await fetch('/api/assessment/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deviceId,
-            scaleId: scale.id,
-            totalScore: result.totalScore,
-            conclusion: result.conclusion,
-            answers: newAnswers,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || '保存失败');
-        }
-
-        // 更新前端状态
-        setResult(result);
-        setIsComplete(true);
-        
-        // 更新已完成量表列表
-        if (!profile.completedScales.includes(scale.id)) {
-          updateProfile({
-            completedScales: [...profile.completedScales, scale.id]
-          });
-        }
-
-        // 完成奖励：戴上虎头帽，心情变开心
-        updateAvatar({ 
-          mood: 'happy',
-          headwear: 'hu_tou_mao'
-        });
-
-      } catch (error) {
-        console.error('Failed to save assessment:', error);
-        const errorMessage = error instanceof Error ? error.message : '评估结果保存失败，请检查网络连接';
-        alert(errorMessage);
-      } finally {
-        setIsSaving(false);
-      }
-    }
-  }, [answers, currentIndex, scale, updateProfile, updateAvatar, profile.completedScales]);
-
-  // 处理语音识别结果
-  const handleVoiceResult = useCallback((transcript: string) => {
-    const lowerTranscript = transcript.toLowerCase().trim();
-    
-    // 记录用户语音
-    addMessage({
-      role: 'user',
-      content: transcript,
-      scaleId: scale.id,
-      action: 'question'
-    });
-
-    // 匹配选项
-    const options = currentQuestion.options;
-    let matchedIndex = -1;
-
-    // 尝试匹配选项标签
-    for (let i = 0; i < options.length; i++) {
-      const optionLabel = options[i].label.toLowerCase();
-      if (lowerTranscript.includes(optionLabel) || 
-          lowerTranscript.includes(optionLabel.replace(/[是的没有不会从不很少]/g, ''))) {
-        matchedIndex = i;
-        break;
-      }
-    }
-
-    // 关键词匹配
-    if (matchedIndex === -1) {
-      if (lowerTranscript.includes('总是') || lowerTranscript.includes('经常') || 
-          lowerTranscript.includes('是的') || lowerTranscript.includes('对')) {
-        matchedIndex = 0;
-      } else if (lowerTranscript.includes('有时') || lowerTranscript.includes('偶尔')) {
-        matchedIndex = Math.min(1, options.length - 1);
-      } else if (lowerTranscript.includes('很少') || lowerTranscript.includes('几乎不')) {
-        matchedIndex = Math.min(2, options.length - 1);
-      } else if (lowerTranscript.includes('从不') || lowerTranscript.includes('没有') || 
-                 lowerTranscript.includes('不会')) {
-        matchedIndex = options.length - 1;
-      }
-    }
-
-    // 数字匹配
-    if (matchedIndex === -1) {
-      const numbers = ['一', '二', '三', '四', '五', '1', '2', '3', '4', '5'];
-      for (let i = 0; i < numbers.length; i++) {
-        if (lowerTranscript.includes(numbers[i])) {
-          matchedIndex = i % options.length;
-          break;
-        }
-      }
-    }
-
-    if (matchedIndex >= 0 && matchedIndex < options.length) {
-      setVoiceStatus(`识别成功："${options[matchedIndex].label}"`);
-      setTimeout(() => {
-        handleAnswer(options[matchedIndex].score);
-      }, 800);
-    } else {
-      setVoiceStatus(`未识别到有效选项，请重试`);
-    }
-  }, [currentQuestion, handleAnswer, addMessage, scale.id]);
-
-  // 开始录音
-  const startRecording = useCallback(async () => {
-    try {
-      // 请求麦克风权限
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        } 
+      const response = await fetch('/api/skill/v1/me/quota', {
+        headers: {
+          Authorization: `Bearer ${skillToken}`,
+        },
       });
-      
-      streamRef.current = stream;
-      audioChunksRef.current = [];
-
-      // 确定支持的音频格式
-      const mimeTypes = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4',
-        'audio/ogg',
-        'audio/wav',
-      ];
-
-      const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'audio/webm';
-
-      // 创建 MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: 128000,
-      });
-
-      mediaRecorderRef.current = mediaRecorder;
-
-      // 监听数据可用事件
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      // 监听录音停止事件
-      mediaRecorder.onstop = async () => {
-        // 停止麦克风
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-
-        // 合并音频数据
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        
-        // 上传音频进行转写
-        await uploadAndTranscribe(audioBlob);
-      };
-
-      // 开始录音
-      mediaRecorder.start();
-      setIsRecording(true);
-      setVoiceStatus('正在录音，请说出您的答案...');
-
-      // 自动停止录音（最多 60 秒）
-      setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          stopRecording();
-        }
-      }, 60000);
-
-    } catch (error: any) {
-      console.error('Failed to start recording:', error);
-      
-      let errorMessage = '录音启动失败';
-      if (error.name === 'NotAllowedError') {
-        errorMessage = '请允许麦克风权限后重试';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = '未检测到麦克风设备';
-      }
-      
-      setVoiceStatus(errorMessage);
-      setIsRecording(false);
-    }
-  }, []);
-
-  // 停止录音
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      setVoiceStatus('正在识别...');
-    }
-  }, []);
-
-  // 上传并转写音频
-  const uploadAndTranscribe = useCallback(async (audioBlob: Blob) => {
-    setIsTranscribing(true);
-
-    try {
-      // 获取 deviceId
-      let deviceId = localStorage.getItem('device_id');
-      if (!deviceId) {
-        deviceId = crypto.randomUUID();
-        localStorage.setItem('device_id', deviceId);
-      }
-
-      // 构建 FormData
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
-      formData.append('deviceId', deviceId);
-      formData.append('context', 'questionnaire');
-
-      // 发送到后端 API
-      const response = await fetch('/api/speech/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '语音识别失败');
+        return;
       }
 
       const data = await response.json();
+      setRemainingQuota(data.remaining);
+    } catch (error) {
+      console.error('Failed to fetch quota:', error);
+    }
+  }, [skillToken]);
 
-      if (data.success && data.text) {
-        // 更新配额
-        setRemainingQuota(data.remaining);
-        
-        // 处理转写结果
-        handleVoiceResult(data.text);
-      } else {
-        throw new Error('未识别到有效语音');
+  useEffect(() => {
+    void fetchQuota();
+  }, [fetchQuota]);
+
+  const finalizeAssessment = useCallback(async (finalAnswers: number[]) => {
+    setIsSaving(true);
+
+    try {
+      if (!skillToken) {
+        throw new Error(language === 'en' ? 'Skill session is not ready yet.' : 'Skill 会话尚未准备好，请稍后再试。');
       }
 
-    } catch (error: any) {
-      console.error('Transcription error:', error);
-      setVoiceStatus(error.message || '语音识别失败，请重试');
+      const evaluateResponse = await fetch(`/api/skill/v1/scales/${encodeURIComponent(scale.id)}/evaluate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${skillToken}`,
+        },
+        body: JSON.stringify({
+          memberId: skillMemberId || profile.id,
+          answers: finalAnswers,
+        }),
+      });
+
+      if (!evaluateResponse.ok) {
+        const errorData = await evaluateResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || '量表评分失败');
+      }
+
+      const evaluationData = await evaluateResponse.json();
+      const nextResult: ScaleScoreResult = evaluationData.result;
+
+      setResult(nextResult);
+      setIsComplete(true);
+
+      if (!profile.completedScales.includes(scale.id)) {
+        updateProfile({
+          completedScales: [...profile.completedScales, scale.id],
+        });
+      }
+
+      updateAvatar({
+        mood: 'happy',
+        headwear: 'hu_tou_mao',
+      });
+      return;
+
+      const deviceId = localStorage.getItem('device_id') ?? crypto.randomUUID();
+      localStorage.setItem('device_id', deviceId);
+
+      const saveResponse = await fetch(`/api/skill/v1/scales/${encodeURIComponent(scale.id)}/evaluate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${skillToken}`,
+        },
+        body: JSON.stringify({
+          memberId: skillMemberId || profile.id,
+          answers: finalAnswers,
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || '评估结果保存失败');
+      }
+
+      setResult(nextResult);
+      setIsComplete(true);
+
+      if (!profile.completedScales.includes(scale.id)) {
+        updateProfile({
+          completedScales: [...profile.completedScales, scale.id],
+        });
+      }
+
+      updateAvatar({
+        mood: 'happy',
+        headwear: 'hu_tou_mao',
+      });
+    } catch (error) {
+      console.error('Failed to finalize assessment:', error);
+      const errorMessage = error instanceof Error ? error.message : '评估处理失败，请稍后重试';
+      alert(errorMessage);
     } finally {
-      setIsTranscribing(false);
+      setIsSaving(false);
     }
-  }, [handleVoiceResult]);
+  }, [language, profile.completedScales, profile.id, scale.id, skillMemberId, skillToken, updateAvatar, updateProfile]);
 
-  // 切换录音状态
-  const toggleRecording = useCallback(() => {
-    if (isTranscribing) return; // 正在转写时不允许操作
+  const handleAnswer = useCallback(async (score: number) => {
+    const nextAnswers = updateAnswerAtIndex(answers, currentIndex, score);
+    setAnswers(nextAnswers);
 
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
+    if (isCompletedAnswers(nextAnswers)) {
+      await finalizeAssessment(nextAnswers);
+      return;
     }
-  }, [isRecording, isTranscribing, startRecording, stopRecording]);
 
-  // 播放题目（语音提示）
-  const speakQuestion = useCallback(() => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(currentQuestion.colloquial);
-      utterance.lang = 'zh-CN';
-      utterance.rate = 0.9;
-      speechSynthesis.speak(utterance);
+    if (currentIndex < scale.questions.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      return;
     }
-  }, [currentQuestion]);
+
+    const fallbackUnansweredIndex = nextAnswers.findIndex((answer) => answer === null);
+    if (fallbackUnansweredIndex !== -1) {
+      setCurrentIndex(fallbackUnansweredIndex);
+    }
+  }, [answers, currentIndex, finalizeAssessment, scale.questions.length]);
 
   const handlePrevious = useCallback(() => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
-      setAnswers(answers.slice(0, -1));
     }
-  }, [currentIndex, answers]);
+  }, [currentIndex]);
 
-  // 保存中状态
+  const {
+    session: voiceSession,
+    isSupported,
+    toggleRecording,
+    speakCurrentQuestion,
+    speakExplanation,
+    togglePause,
+    confirmPendingAnswer,
+  } = useVoiceSession({
+    scaleId: scale.id,
+    skillToken,
+    language,
+    mode: voiceMode,
+    requiresConfirmation: scale.requiresConfirmation ?? voiceMode === 'voice_guided',
+    question: currentQuestion,
+    questionIndex: currentIndex,
+    questionCount: scale.questions.length,
+    currentAnswer: answers[currentIndex],
+    onAnswer: handleAnswer,
+    onPrevious: handlePrevious,
+  });
+
+  useEffect(() => {
+    if (!voiceSession.lastUserTranscript || voiceSession.lastUserTranscript === voiceTranscriptLoggedRef.current) {
+      return;
+    }
+
+    addMessage({
+      role: 'user',
+      content: voiceSession.lastUserTranscript,
+      scaleId: scale.id,
+      action: 'question',
+    });
+    voiceTranscriptLoggedRef.current = voiceSession.lastUserTranscript;
+    void fetchQuota();
+  }, [addMessage, fetchQuota, scale.id, voiceSession.lastUserTranscript]);
+
+  const handleAnalyzeHistory = useCallback(async () => {
+    if (!messages.length) {
+      setHistoryStatus(language === 'en' ? 'No conversation history is available yet.' : '还没有可分析的聊天记录。');
+      return;
+    }
+
+    setIsAnalyzingHistory(true);
+    setHistoryStatus('');
+
+    try {
+      const response = await fetch(`/api/skill/v1/scales/${encodeURIComponent(scale.id)}/analyze-conversation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(skillToken ? { Authorization: `Bearer ${skillToken}` } : {}),
+        },
+        body: JSON.stringify({
+          messages: messages.slice(-20).map((message) => ({
+            role: message.role,
+            content: message.content,
+            timestamp: message.timestamp,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || (language === 'en' ? 'Conversation analysis failed.' : '聊天记录分析失败'));
+      }
+
+      const data: ConversationAnalysisResponse = await response.json();
+      const mergedAnswers = answers.map((answer, index) => answer ?? data.answers[index] ?? null);
+      setAnswers(mergedAnswers);
+
+      const firstUnansweredIndex = mergedAnswers.findIndex((answer) => answer === null);
+      setHistoryStatus(
+        language === 'en'
+          ? `Extracted answers for ${data.coverage.answered}/${data.coverage.total} items${data.llmUsed ? ' with LLM support.' : ' using rule-based parsing.'}`
+          : `已从聊天记录识别 ${data.coverage.answered}/${data.coverage.total} 题${data.llmUsed ? '，并结合了 LLM 提取。' : '，当前使用规则引擎兜底。'}`
+      );
+
+      if (firstUnansweredIndex === -1 && isCompletedAnswers(mergedAnswers)) {
+        await finalizeAssessment(mergedAnswers);
+        return;
+      }
+
+      if (firstUnansweredIndex !== -1) {
+        setCurrentIndex(firstUnansweredIndex);
+      }
+    } catch (error) {
+      console.error('Failed to analyze conversation history:', error);
+      setHistoryStatus(error instanceof Error ? error.message : (language === 'en' ? 'Conversation analysis failed.' : '聊天记录分析失败'));
+    } finally {
+      setIsAnalyzingHistory(false);
+    }
+  }, [answers, finalizeAssessment, language, messages, scale.id, skillToken]);
+
+  const voiceStatus = voiceSession.statusText || getDefaultVoiceStatus(language, voiceMode);
+
   if (isSaving) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">正在保存评估结果...</h2>
-          <p className="text-gray-600">请稍候，数据正在安全保存中</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {language === 'en' ? 'Generating assessment result...' : '正在生成评估结果...'}
+          </h2>
+          <p className="text-gray-600">
+            {language === 'en'
+              ? 'The final score is still calculated by the deterministic scoring engine. Please wait a moment.'
+              : '系统仍会交给确定性评分引擎完成最终计算，请稍候。'}
+          </p>
         </div>
       </div>
     );
   }
 
-  // 完成状态
   if (isComplete && result) {
-    // 获取 deviceId
     let deviceId = '';
     if (typeof window !== 'undefined') {
       deviceId = localStorage.getItem('device_id') || '';
@@ -460,21 +425,22 @@ export default function Questionnaire({ scale }: QuestionnaireProps) {
         result={result}
         scale={{
           id: scale.id,
-          name: scale.title,
-          questions: scale.questions
+          name: resolveLocalizedText(scale.title, language),
+          questions: scale.questions.map((question) => ({
+            text: resolveLocalizedText(question.text, language),
+            options: question.options,
+          })),
         }}
-        answers={answers}
+        answers={answers.filter((answer): answer is number => answer !== null)}
         deviceId={deviceId}
       />
     );
   }
 
-  // 答题状态
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 relative">
-      {/* 左上角小人 - 陪伴答题 */}
       <div className="fixed top-4 left-4 z-10 bg-white/90 backdrop-blur-sm rounded-2xl p-3 shadow-lg">
-        <Avatar 
+        <Avatar
           state={profile.avatarState}
           gender={profile.gender}
           className="w-16 h-16"
@@ -484,136 +450,228 @@ export default function Questionnaire({ scale }: QuestionnaireProps) {
         </div>
       </div>
 
-      {/* 进度条 */}
       <div className="mb-6">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
-          <span>题目 {currentIndex + 1} / {scale.questions.length}</span>
+          <span>
+            {language === 'en' ? 'Completed' : '已完成'} {answeredCount} / {scale.questions.length}
+          </span>
           <span>{Math.round(progress)}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
+          <div
             className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
-      {/* 题目卡片 */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          {currentQuestion.colloquial}
-        </h3>
+      {messages.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-lg p-4 mb-4 border border-indigo-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-indigo-700 font-semibold">
+                <Sparkles className="w-4 h-4" />
+                <span>{language === 'en' ? 'Generate draft answers from conversation' : '聊天记录自动生成建议答案'}</span>
+              </div>
+              <p className="text-sm text-slate-500 mt-1">
+                {language === 'en'
+                  ? 'The system extracts useful evidence from recent chat history and still hands the final scoring to the deterministic engine.'
+                  : '系统会先抽取聊天中的有效信息，再交给确定性评分引擎计算最终结果。'}
+              </p>
+            </div>
+            <button
+              onClick={() => void handleAnalyzeHistory()}
+              disabled={isAnalyzingHistory}
+              className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-400 transition-colors"
+            >
+              {isAnalyzingHistory
+                ? (language === 'en' ? 'Analyzing...' : '分析中...')
+                : (language === 'en' ? 'Analyze conversation' : '分析聊天记录')}
+            </button>
+          </div>
+          {historyStatus && (
+            <div className="mt-3 text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2">
+              {historyStatus}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div key={currentQuestion.id} className="bg-white rounded-2xl shadow-lg p-6 mb-4">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <div className="text-sm text-indigo-600 font-semibold mb-1">
+              {language === 'en' ? 'Question' : '第'} {currentIndex + 1} {language === 'en' ? '' : '题'}
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {colloquialText}
+            </h3>
+          </div>
+          {answers[currentIndex] !== null && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600">
+              {language === 'en' ? 'Answered' : '已有答案'}
+            </span>
+          )}
+        </div>
+
         <p className="text-sm text-gray-500 mb-6 italic">
-          原题：{currentQuestion.text}
+          {language === 'en' ? 'Original item:' : '原题：'} {questionText}
         </p>
 
-        {/* 选项 */}
         <div className="space-y-3">
-          {currentQuestion.options.map((option, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleAnswer(option.score)}
-              className="w-full text-left p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all"
-            >
-              <div className="font-medium text-gray-900">{option.label}</div>
-            </button>
-          ))}
+          {currentQuestion.options.map((option, idx) => {
+            const selected = answers[currentIndex] === option.score;
+
+            return (
+              <button
+                key={`${currentQuestion.id}-${idx}`}
+                onClick={() => void handleAnswer(option.score)}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                  selected
+                    ? 'border-indigo-500 bg-indigo-50'
+                    : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium text-gray-900">{option.label}</div>
+                  {selected && (
+                    <span className="text-xs text-indigo-600 font-semibold">
+                      {language === 'en' ? 'Selected' : '当前选择'}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* 语音交互区域 */}
       {isSupported && (
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 mb-4 border border-indigo-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
             <div className="flex items-center gap-2">
               <Volume2 className="w-5 h-5 text-indigo-600" />
-              <span className="text-sm font-medium text-gray-700">语音答题助手</span>
+              <span className="text-sm font-medium text-gray-700">
+                {voiceMode === 'full_voice'
+                  ? (language === 'en' ? 'Full voice mode' : '全语音模式')
+                  : voiceMode === 'voice_guided'
+                    ? (language === 'en' ? 'Voice-guided mode' : '语音引导模式')
+                    : voiceMode === 'call_mode'
+                      ? (language === 'en' ? 'Call mode' : '通话模式')
+                      : (language === 'en' ? 'Voice answer assistant' : '语音答题助手')}
+              </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={speakQuestion}
+                onClick={speakCurrentQuestion}
                 className="px-3 py-1.5 bg-white rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors text-sm text-indigo-700"
               >
-                🔊 播放题目
+                {language === 'en' ? 'Play prompt' : '播放题目'}
+              </button>
+              <button
+                onClick={speakExplanation}
+                className="px-3 py-1.5 bg-white rounded-lg border border-amber-200 hover:bg-amber-50 transition-colors text-sm text-amber-700 inline-flex items-center gap-1"
+              >
+                <Wand2 className="w-4 h-4" />
+                {language === 'en' ? 'Explain' : '解释题意'}
+              </button>
+              <button
+                onClick={togglePause}
+                className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-sm text-slate-700 inline-flex items-center gap-1"
+              >
+                {voiceSession.state === 'paused' ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                {voiceSession.state === 'paused'
+                  ? (language === 'en' ? 'Resume' : '继续')
+                  : (language === 'en' ? 'Pause' : '暂停')}
               </button>
               <button
                 onClick={toggleRecording}
-                disabled={isTranscribing}
+                disabled={voiceSession.isTranscribing}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  isTranscribing 
+                  voiceSession.isTranscribing
                     ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : isRecording 
-                      ? 'bg-red-500 text-white animate-pulse' 
+                    : voiceSession.isRecording
+                      ? 'bg-red-500 text-white animate-pulse'
                       : 'bg-indigo-600 text-white hover:bg-indigo-700'
                 }`}
               >
-                {isTranscribing ? (
+                {voiceSession.isTranscribing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    识别中
+                    {language === 'en' ? 'Parsing...' : '识别中'}
                   </>
-                ) : isRecording ? (
+                ) : voiceSession.isRecording ? (
                   <>
                     <MicOff className="w-4 h-4" />
-                    停止
+                    {language === 'en' ? 'Stop' : '停止'}
                   </>
                 ) : (
                   <>
                     <Mic className="w-4 h-4" />
-                    语音答题
+                    {language === 'en' ? 'Voice answer' : '语音答题'}
                   </>
                 )}
               </button>
             </div>
           </div>
-          
-          {/* 识别状态 */}
-          <div className={`text-sm text-center py-2 rounded-lg ${
-            voiceStatus.includes('识别成功') ? 'bg-green-100 text-green-700' :
-            voiceStatus.includes('未识别') || voiceStatus.includes('失败') ? 'bg-red-100 text-red-700' :
-            'bg-white text-gray-600'
-          }`}>
-            {(isRecording || isTranscribing) && (
-              <span className="inline-flex items-center gap-2">
-                <span className="animate-bounce">🎤</span>
-                <span className={isTranscribing ? '' : 'animate-pulse'}>{voiceStatus}</span>
-              </span>
-            )}
-            {!isRecording && !isTranscribing && voiceStatus !== '点击麦克风开始语音答题' && (
-              <span>{voiceStatus}</span>
-            )}
+
+          <div
+            className={`text-sm text-center py-3 px-3 rounded-lg ${
+              voiceSession.error || voiceSession.riskSignal
+                ? 'bg-red-100 text-red-700'
+                : voiceSession.pendingConfirmation
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-white text-gray-700'
+            }`}
+          >
+            {voiceStatus}
           </div>
 
-          {/* 配额显示 */}
-          {remainingQuota !== null && (
-            <div className="mt-2 text-xs text-gray-500 text-center">
-              今日剩余：{remainingQuota} 次
+          {voiceSession.pendingConfirmation && (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <button
+                onClick={() => void confirmPendingAnswer(true)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors"
+              >
+                {language === 'en' ? 'Yes, that is correct' : '对，就是这个选项'}
+              </button>
+              <button
+                onClick={() => void confirmPendingAnswer(false)}
+                className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors"
+              >
+                {language === 'en' ? 'No, ask again' : '不对，请再问一遍'}
+              </button>
             </div>
           )}
 
-          {/* 使用提示 */}
+          {remainingQuota !== null && (
+            <div className="mt-2 text-xs text-gray-500 text-center">
+              {language === 'en' ? 'Remaining today:' : '今日剩余：'} {remainingQuota}
+            </div>
+          )}
+
           <div className="mt-2 text-xs text-gray-500 text-center">
-            💡 提示：可以说"选项一"、"是的"、"从不"等关键词
+            {language === 'en'
+              ? 'You can say things like “repeat”, “explain”, “previous”, or answer directly with the option text.'
+              : '你可以说“重复一遍”“解释一下”“上一题”，也可以直接说选项内容。'}
           </div>
         </div>
       )}
 
-      {/* 追问提示 */}
-      {currentQuestion.fallback_examples.length > 0 && (
+      {fallbackExamples.length > 0 && (
         <div className="bg-amber-50 rounded-xl p-4 text-sm text-amber-800">
-          <p className="font-semibold mb-1">💡 追问提示：</p>
-          <p>{currentQuestion.fallback_examples[0]}</p>
+          <p className="font-semibold mb-1">{language === 'en' ? 'Follow-up hint' : '追问提示'}</p>
+          <p>{fallbackExamples[0]}</p>
         </div>
       )}
 
-      {/* 返回按钮 */}
       {currentIndex > 0 && (
         <button
           onClick={handlePrevious}
           className="mt-4 flex items-center text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ChevronLeft className="w-5 h-5 mr-1" />
-          上一题
+          {language === 'en' ? 'Previous question' : '上一题'}
         </button>
       )}
     </div>

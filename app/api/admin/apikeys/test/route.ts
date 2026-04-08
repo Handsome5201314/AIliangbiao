@@ -49,6 +49,13 @@ const PROVIDER_CONFIGS: Record<string, {
     speechModel: 'whisper-1',
     name: 'OpenAI'
   },
+  oneapi: {
+    textEndpoint: 'http://104.197.139.51:3000/v1/chat/completions',
+    speechEndpoint: '',
+    textModel: 'gemini-3-flash-preview',
+    speechModel: '',
+    name: 'OneAPI'
+  },
   custom: {
     textEndpoint: '',
     speechEndpoint: '',

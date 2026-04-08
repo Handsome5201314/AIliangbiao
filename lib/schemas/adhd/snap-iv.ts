@@ -1,4 +1,4 @@
-import type { ScaleDefinition, ScaleQuestion } from "../core/types";
+import type { ExecutableScaleDefinition, ScaleQuestion } from "../core/types";
 
 /**
  * 辅助函数：生成 SNAP-IV 专用的 0-3 分选项
@@ -201,11 +201,23 @@ const SNAP_QUESTIONS: ScaleQuestion[] = [
   }
 ];
 
-export const SNAP_Scale: ScaleDefinition = {
+export const SNAP_Scale: ExecutableScaleDefinition = {
+  source: "builtin",
   id: "SNAP-IV",
   version: "1.0",  // ✅ 新增版本号
-  title: "注意缺陷多动障碍筛查量表 (SNAP-IV-26)",
-  description: "用于评估儿童及青少年注意力缺陷、多动/冲动以及对立违抗行为的严重程度。分为三个独立维度计分。",
+  title: {
+    zh: "注意缺陷多动障碍筛查量表 (SNAP-IV-26)",
+    en: "SNAP-IV ADHD Rating Scale"
+  },
+  description: {
+    zh: "用于评估儿童及青少年注意力缺陷、多动/冲动以及对立违抗行为的严重程度。分为三个独立维度计分。",
+    en: "A scale for assessing attention deficit, hyperactivity/impulsivity, and oppositional symptoms."
+  },
+  category: "Child Development",
+  tags: ["儿童发育", "ADHD", "多动", "注意力"],
+  interactionMode: "voice_guided",
+  supportedLanguages: ["zh", "en"],
+  requiresConfirmation: true,
   questions: SNAP_QUESTIONS,
   
   calculateScore: (answers: number[]) => {
