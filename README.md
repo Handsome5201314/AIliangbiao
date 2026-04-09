@@ -4,14 +4,16 @@
 
 ## 项目简介
 
-这个项目是一个基于 Next.js 的多量表评测平台，当前聚焦于以下能力：
+这是一个基于 Next.js 的多量表评测平台，当前已经覆盖以下能力：
 
-- 多量表管理：内置量表与 `data/scales/*.json` 配置化量表并存
-- 家庭成员档案：支持多成员资料、历史评估与额度管理
-- 语音分诊：支持聊天式症状描述、量表推荐与语音转写
-- 确定性评分：服务端规则引擎负责评分，不依赖模型直接算分
-- AgentPit 接入：提供公开 `OpenAPI`、`/v1/scales*` 入口和 OAuth 在线体验链路
-- MCP 能力：保留内部 MCP 路由与技能接口，便于后续平台对接
+- 多量表评测：内置量表、结构化 JSON 量表、半配置化内容量表并存
+- 确定性评分：服务端规则引擎负责评分，不依赖大模型直接算分
+- 会话式问卷：量表支持 Assessment Session，会话状态、回退、完成与归档统一处理
+- 多成员画像：支持家庭成员档案、历史评估、额度管理与上下文隔离
+- 患者/医生/平台三端：支持患者注册、医生注册审核、主治绑定、医生时间线与科研授权
+- 隐私与合规：患者注册/升级时支持云端隐私风险知情同意留痕
+- 语音与分诊：支持聊天式症状描述、语音转写、量表推荐和语音答题辅助
+- AgentPit / MCP 接入：提供公开 `/v1/scales*`、OpenAPI、OAuth 在线体验，以及内部 MCP/skill 入口
 
 ## 技术栈
 
@@ -29,33 +31,74 @@
 app/                    Next.js App Router 页面与 API
 components/             前端组件
 contexts/               前端状态上下文
-data/scales/            配置化量表 JSON
+data/scales/            结构化量表 JSON（如 SSS）
+data/scale-content/     半配置化量表内容（题干、解释、fallback、选项文案）
 docs/                   运维与量表扩展文档
-lib/                    业务逻辑、鉴权、MCP、AgentPit 适配层
+lib/                    业务逻辑、鉴权、会话引擎、MCP、AgentPit 适配层
 packages/assessment-skill/
-                        抽离中的 skill 契约与服务层
+                        skill 契约与服务层
 prisma/                 数据模型
-scripts/                部署、排障、环境检查脚本
+scripts/                部署、排障、校验脚本
 types/                  类型补充
 ```
+
+## 当前量表形态
+
+### 1. 内置量表
+
+- 位于 `lib/schemas/**`
+- 评分逻辑保留在 TypeScript 中
+
+### 2. 结构化量表
+
+- 位于 `data/scales/*.json`
+- 当前已支持 `Description / Dimension / Data / Diagnosis` 结构
+- 例如：`data/scales/sss.json`
+
+### 3. 半配置化内容量表
+
+- 内容位于 `data/scale-content/*.content.json`
+- 逻辑位于对应的 `lib/schemas/**.ts`
+- 当前已接入：
+  - `SRS`
+  - `ABC`
+  - `SNAP-IV`
+  - `CARS`
+
+说明：
+
+- 题干、口语化提问、追问、选项解释优先改 `data/scale-content/*.content.json`
+- 分值映射、反向计分、阈值、结论逻辑仍在 TypeScript 中
+- 详细维护规则见 [data/scale-content/README.md](./data/scale-content/README.md)
 
 ## 核心能力
 
 ### 量表与评测
 
-- 内置量表位于 `lib/schemas/**`
-- 配置化量表位于 `data/scales/*.json`
-- 目前已覆盖儿童发育、成人心理、人格测试、职业测评等方向
-- 评分通过服务端确定性逻辑完成，评测结果可落库
+- 支持量表摘要列表与详情懒加载
+- 支持量表结果导出、历史归档、AI 建议生成
+- 支持带前置患者信息的结构化量表
+- 支持 `dimensionResults` 等扩展结果结构
 
-### 成员与额度
+### 会话式评估
 
-- 角色：`GUEST` / `REGISTERED` / `VIP`
-- 支持多成员资料切换
-- 游客与注册用户拥有不同每日评测额度
-- 评测、分诊、长期记忆都围绕当前成员进行隔离
+- Assessment Session 用于统一管理问卷会话
+- 支持：
+  - 创建会话
+  - 获取当前题
+  - 提交答案
+  - 返回上一题
+  - 取消会话
+  - 完成后写入 `AssessmentHistory`
 
-### AgentPit 接入
+### 成员、患者与医生
+
+- 成员画像与历史评估围绕 `MemberProfile` 隔离
+- 正式账号支持患者与医生两类业务身份
+- 医生需要审核通过后才能进入医生工作台
+- 支持成员级主治医生绑定、科研授权与导出审计
+
+### AgentPit 与 MCP
 
 公开接入入口：
 
@@ -72,11 +115,13 @@ types/                  类型补充
 
 - `/agent`
 
-公开 `/v1/*` 接口使用共享 Bearer 鉴权：
+内部能力还包括：
 
-```http
-Authorization: Bearer <AGENTPIT_SHARED_BEARER>
-```
+- `/api/mcp`
+- `/api/mcp/scale`
+- `/api/mcp/memory`
+- `/api/mcp/growth`
+- `/api/skill/v1/*`
 
 ## 本地开发
 
@@ -114,7 +159,7 @@ AGENTPIT_OAUTH_BASE_URL="https://api.agentpit.io"
 AGENTPIT_OAUTH_REDIRECT_URI="https://ailiangbiao.agentpit.io/api/agentpit/oauth/callback"
 ```
 
-如果要启用模型与语音相关能力，还需要补充 AI 服务商密钥，详见 [.env.example](./.env.example)。
+如需启用模型与语音相关能力，还需要补充 AI 服务商密钥，详见 [.env.example](./.env.example)。
 
 ### 常用命令
 
@@ -123,6 +168,7 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm run content:check
 npm run skill:build
 npm run skill:start
 ```
@@ -131,15 +177,65 @@ npm run skill:start
 
 - 首页：`http://localhost:3000`
 - Agent 工作台：`http://localhost:3000/agent`
+- 患者注册：`http://localhost:3000/auth/register`
+- 医生注册：`http://localhost:3000/doctor/register`
 - 管理后台：`http://localhost:3000/admin/login`
+
+## 关键接口
+
+### 应用侧接口
+
+- `GET /api/scales`
+- `GET /api/scales?view=summary`
+- `POST /api/scales/evaluate`
+- `POST /api/scales/analyze-conversation`
+- `POST /api/account/upgrade`
+- `POST /api/auth/register-patient`
+- `POST /api/auth/register-doctor`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `GET /api/legal/privacy-consent/current`
+- `POST /api/assessment/save`
+- `POST /api/assessment/generate-advice`
+- `GET|POST|DELETE /api/triage/session`
+- `POST /api/speech/transcribe`
+
+### 会话式量表接口
+
+- `POST /api/skill/v1/scales/{scaleId}/sessions`
+- `GET /api/skill/v1/scales/sessions/{sessionId}`
+- `POST /api/skill/v1/scales/sessions/{sessionId}/answer`
+- `POST /api/skill/v1/scales/sessions/{sessionId}/back`
+- `POST /api/skill/v1/scales/sessions/{sessionId}/cancel`
+
+### 医生与患者接口
+
+- `GET /api/doctors/search`
+- `GET|POST|DELETE /api/me/members/{memberId}/attending-doctor`
+- `GET|POST|DELETE /api/me/members/{memberId}/research-consent`
+- `GET /api/doctor/me/dashboard`
+- `GET /api/doctor/patients`
+- `GET /api/doctor/patients/{memberId}`
+- `GET /api/doctor/patients/{memberId}/timeline`
+- `POST /api/doctor/patients/{memberId}/notes`
+- `GET /api/doctor/patients/{memberId}/export`
+
+### 管理端接口
+
+- `GET /api/admin/doctors/pending`
+- `POST /api/admin/doctors/{doctorId}/approve`
+- `POST /api/admin/doctors/{doctorId}/reject`
+- `POST /api/admin/doctors/{doctorId}/suspend`
+- `GET /api/admin/research-export-logs`
 
 ## 运维与部署入口
 
-详细部署与机器相关流程不再写在首页，统一查看以下文档和脚本：
+详细部署与机器相关流程统一查看以下文档和脚本：
 
 - 通用部署说明：[DEPLOYMENT.md](./DEPLOYMENT.md)
 - 指定服务器重复部署说明：[docs/redeploy-agent1002.md](./docs/redeploy-agent1002.md)
-- 配置化量表清单格式：[docs/scale-manifest.md](./docs/scale-manifest.md)
+- 结构化量表格式说明：[docs/scale-manifest.md](./docs/scale-manifest.md)
 - Windows 重部署脚本：[scripts/redeploy-agent1002.ps1](./scripts/redeploy-agent1002.ps1)
 - 远端部署脚本：[scripts/remote-redeploy.sh](./scripts/remote-redeploy.sh)
 
@@ -149,32 +245,11 @@ npm run skill:start
 - `scripts/check*.mjs`
 - `scripts/fix*.mjs`
 - `scripts/diagnose*.mjs`
-
-## 关键接口
-
-### 应用侧接口
-
-- `GET /api/scales`
-- `POST /api/scales/evaluate`
-- `POST /api/scales/analyze-conversation`
-- `GET /api/profile/sync`
-- `POST /api/profile/sync`
-- `POST /api/account/upgrade`
-- `GET /api/quota/check`
-- `POST /api/assessment/save`
-- `POST /api/assessment/generate-advice`
-- `GET|POST|DELETE /api/triage/session`
-- `POST /api/speech/transcribe`
-
-### MCP 接口
-
-- `POST /api/mcp`
-- `GET|POST /api/mcp/scale`
-- `GET|POST /api/mcp/memory`
-- `GET|POST /api/mcp/growth`
+- `scripts/validate-scale-content.mjs`
 
 ## 相关文档
 
+- 量表内容维护说明：[data/scale-content/README.md](./data/scale-content/README.md)
 - 贡献说明：[CONTRIBUTING.md](./CONTRIBUTING.md)
 - 行为准则：[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 - 变更记录：[CHANGELOG.md](./CHANGELOG.md)
@@ -185,4 +260,4 @@ npm run skill:start
 - 根 README 只保留项目总览，机器、域名、服务器初始化等现场信息请查看运维文档。
 - 运行部署脚本前，请先检查其中的域名、主机、路径、密钥和数据库策略是否匹配当前环境。
 - `.env`、私钥、证书和真实数据库连接串不要提交到 Git。
-- 本系统仅用于筛查、教育、职业探索和自我了解参考，不替代医生、心理咨询师或职业规划师的正式结论。
+- 本系统用于筛查、教育、职业探索和自我了解参考，不替代医生、心理咨询师或职业规划师的正式结论。
