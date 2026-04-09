@@ -1,5 +1,16 @@
 import { prisma } from '@/lib/db/prisma';
-import { evaluateScaleAnswers, getScaleDefinitionById, listSerializableScales } from '@/lib/scales/catalog';
+import { QuotaManager } from '@/lib/auth/quotaManager';
+import {
+  evaluateScaleAnswers,
+  getScaleDefinitionById,
+  listSerializableScales,
+  normalizeScaleFormData,
+} from '@/lib/scales/catalog';
+import {
+  createAssessmentSession,
+  getAssessmentSession,
+  submitAssessmentSessionAnswer,
+} from '@/lib/assessment-skill/session-service';
 import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 
 async function getDefaultDailyLimit(): Promise<number> {
@@ -24,6 +35,30 @@ function estimateScaleTime(questionCount: number, estimatedMinutes?: number): st
   if (questionCount <= 40) return '8分钟';
   if (questionCount <= 60) return '12分钟';
   return '15分钟';
+}
+
+function serializeSessionForMcp(session: Awaited<ReturnType<typeof getAssessmentSession>>) {
+  return {
+    sessionId: session.sessionId,
+    scaleId: session.scaleId,
+    status: session.status,
+    channel: session.channel,
+    currentQuestionIndex: session.currentQuestionIndex,
+    answeredCount: session.answeredCount,
+    questionCount: session.questionCount,
+    currentQuestion: session.currentQuestion
+      ? {
+          id: session.currentQuestion.id,
+          externalId: session.currentQuestion.externalId,
+          text: resolveLocalizedText(session.currentQuestion.text, 'zh'),
+          colloquial: resolveLocalizedText(session.currentQuestion.colloquial, 'zh'),
+          options: session.currentQuestion.options,
+        }
+      : null,
+    formData: session.formData,
+    result: session.result,
+    assessmentId: session.assessmentId,
+  };
 }
 
 export const scaleTools = [
@@ -68,9 +103,101 @@ export const scaleTools = [
           type: 'array',
           items: { type: 'number' },
           description: '用户答案分数数组'
+        },
+        formData: {
+          type: 'object',
+          description: '结构化量表的前置表单数据（如患者信息）'
         }
       },
       required: ['deviceId', 'scaleId', 'answers']
+    }
+  },
+  {
+    name: 'start_assessment_session',
+    description: '创建量表评估会话，返回当前题目或待填写表单状态',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deviceId: {
+          type: 'string',
+          description: '设备 ID'
+        },
+        scaleId: {
+          type: 'string',
+          description: '量表 ID'
+        },
+        formData: {
+          type: 'object',
+          description: '量表前置表单数据（如果量表要求）'
+        }
+      },
+      required: ['deviceId', 'scaleId']
+    }
+  },
+  {
+    name: 'get_current_question',
+    description: '获取当前评估会话的状态和当前题目',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: '评估会话 ID'
+        },
+        deviceId: {
+          type: 'string',
+          description: '设备 ID'
+        }
+      },
+      required: ['sessionId', 'deviceId']
+    }
+  },
+  {
+    name: 'submit_answer',
+    description: '提交当前题答案并推进到下一题或返回结果',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: '评估会话 ID'
+        },
+        deviceId: {
+          type: 'string',
+          description: '设备 ID'
+        },
+        score: {
+          type: 'number',
+          description: '当前题得分'
+        },
+        questionId: {
+          type: 'number',
+          description: '当前题题号'
+        },
+        formData: {
+          type: 'object',
+          description: '当会话还处于基础信息阶段时，可提交表单数据'
+        }
+      },
+      required: ['sessionId', 'deviceId']
+    }
+  },
+  {
+    name: 'get_assessment_result',
+    description: '读取已完成评估会话的最终结果',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description: '评估会话 ID'
+        },
+        deviceId: {
+          type: 'string',
+          description: '设备 ID'
+        }
+      },
+      required: ['sessionId', 'deviceId']
     }
   }
 ];
@@ -119,7 +246,7 @@ export async function handleScaleToolCall(name: string, args: any) {
     }
 
     case 'submit_assessment': {
-      const { deviceId, scaleId, answers } = args;
+      const { deviceId, scaleId, answers, formData } = args;
 
       try {
         const scale = getScaleDefinitionById(scaleId);
@@ -184,7 +311,8 @@ export async function handleScaleToolCall(name: string, args: any) {
           };
         }
 
-        const result = evaluateScaleAnswers(scale.id, answers);
+        const normalizedFormData = normalizeScaleFormData(scale.id, formData);
+        const result = evaluateScaleAnswers(scale.id, answers, normalizedFormData);
 
         const assessment = await prisma.assessmentHistory.create({
           data: {
@@ -193,7 +321,9 @@ export async function handleScaleToolCall(name: string, args: any) {
             scaleVersion: scale.version || '1.0',
             totalScore: result.totalScore,
             conclusion: result.conclusion,
-            answers
+            answers,
+            formData: normalizedFormData ? JSON.parse(JSON.stringify(normalizedFormData)) : undefined,
+            resultDetails: result.details ? JSON.parse(JSON.stringify(result.details)) : undefined,
           }
         });
 
@@ -211,6 +341,103 @@ export async function handleScaleToolCall(name: string, args: any) {
         return {
           success: false,
           error: error instanceof Error ? error.message : '评估失败'
+        };
+      }
+    }
+
+    case 'start_assessment_session': {
+      const { deviceId, scaleId, formData } = args;
+
+      try {
+        const user = await QuotaManager.getOrCreateGuest(deviceId);
+        const session = await createAssessmentSession({
+          userId: user.id,
+          scaleId,
+          channel: 'mcp',
+          formData,
+          deviceId,
+        });
+
+        return {
+          success: true,
+          ...serializeSessionForMcp(session),
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '创建评估会话失败',
+        };
+      }
+    }
+
+    case 'get_current_question': {
+      const { sessionId, deviceId } = args;
+
+      try {
+        const user = await QuotaManager.getOrCreateGuest(deviceId);
+        const session = await getAssessmentSession(sessionId, user.id);
+
+        return {
+          success: true,
+          ...serializeSessionForMcp(session),
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '读取评估会话失败',
+        };
+      }
+    }
+
+    case 'submit_answer': {
+      const { sessionId, deviceId, score, questionId, formData } = args;
+
+      try {
+        const user = await QuotaManager.getOrCreateGuest(deviceId);
+        const session = await submitAssessmentSessionAnswer({
+          sessionId,
+          userId: user.id,
+          score,
+          questionId,
+          formData,
+        });
+
+        return {
+          success: true,
+          ...serializeSessionForMcp(session),
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '提交答案失败',
+        };
+      }
+    }
+
+    case 'get_assessment_result': {
+      const { sessionId, deviceId } = args;
+
+      try {
+        const user = await QuotaManager.getOrCreateGuest(deviceId);
+        const session = await getAssessmentSession(sessionId, user.id);
+        if (session.status !== 'completed' || !session.result) {
+          return {
+            success: false,
+            error: '评估尚未完成',
+          };
+        }
+
+        return {
+          success: true,
+          sessionId: session.sessionId,
+          scaleId: session.scaleId,
+          assessmentId: session.assessmentId,
+          result: session.result,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '读取评估结果失败',
         };
       }
     }

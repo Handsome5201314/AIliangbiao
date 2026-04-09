@@ -62,7 +62,28 @@ export type LocalizedTextValue = string | LocalizedText;
 export interface ScaleOption {
   label: string;
   score: number;
+  description?: string;
   aliases?: string[];
+}
+
+export type ScaleSource = "builtin" | "manifest" | "structured";
+
+export type PatientInfoFieldType = "string" | "number" | "date";
+
+export interface ScalePatientInfoField {
+  id: string;
+  label: string;
+  type: PatientInfoFieldType;
+  required?: boolean;
+}
+
+export interface ScaleDimensionResult {
+  id: string;
+  label: string;
+  score: number;
+  maxScore?: number;
+  displayValue?: string;
+  description?: string;
 }
 
 export interface AnswerMappingHints {
@@ -79,6 +100,8 @@ export interface AnswerMappingHints {
 export interface ScaleQuestion {
   /** 题目序号（从 1 开始） */
   id: number;
+  /** 外部量表原始题号，如 Q1 / Q21_Impact */
+  externalId?: string;
   /** 学术原版文本（直接引用量表手册） */
   text: LocalizedTextValue;
   /** 核心临床意图（一句话描述本题想探测什么） */
@@ -117,6 +140,7 @@ export interface ScaleScoreResult {
   conclusion: string;
   details?: {
     description?: string;
+    dimensionResults?: ScaleDimensionResult[];
     [key: string]: unknown;
   };
 }
@@ -127,16 +151,26 @@ export interface ScaleDefinition {
   id: string;
   /** 量表版本号 */
   version?: string;
+  /** 量表简称 */
+  shortName?: string;
   /** 量表名称 */
   title: LocalizedTextValue;
   /** 量表简介 */
   description: LocalizedTextValue;
+  /** 量表说明 */
+  instructions?: LocalizedTextValue;
+  /** 重要提示 */
+  importantNotice?: LocalizedTextValue;
+  /** 参考文献 */
+  reference?: LocalizedTextValue;
+  /** 患者/受测者信息字段 */
+  patientInfoFields?: ScalePatientInfoField[];
   /** 量表分类 */
   category?: ScaleCategory;
   /** 题目列表（有序） */
   questions: ScaleQuestion[];
   /** 来源标识，便于区分内置量表与配置化量表 */
-  source?: 'builtin' | 'manifest';
+  source?: ScaleSource;
   /** 分类标签 */
   tags?: string[];
   /** 预计耗时（分钟） */
@@ -150,6 +184,10 @@ export interface ScaleDefinition {
 }
 
 /** 服务端可执行量表定义 */
+export interface ScaleSummary extends Omit<ScaleDefinition, "questions"> {
+  questionCount: number;
+}
+
 export interface ExecutableScaleDefinition extends ScaleDefinition {
   /**
    * 计算评分
@@ -174,9 +212,9 @@ export interface ScaleManifestDimension {
 }
 
 export interface ScaleManifest extends ScaleDefinition {
-  source: 'manifest';
+  source: "manifest";
   scoring: {
-    method: 'sum';
+    method: "sum";
     thresholds: ScaleManifestThreshold[];
     dimensions?: ScaleManifestDimension[];
   };

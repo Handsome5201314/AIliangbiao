@@ -8,6 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 const navItems = [
   { name: '系统概览', icon: <LayoutDashboard className="w-5 h-5" />, href: '/admin' },
   { name: '用户与画像', icon: <Users className="w-5 h-5" />, href: '/admin/users' },
+  { name: '医生审核', icon: <Shield className="w-5 h-5" />, href: '/admin/doctors' },
   { name: 'MCP 开放平台', icon: <Activity className="w-5 h-5" />, href: '/admin/mcp' },
   { name: '量表API密钥', icon: <Key className="w-5 h-5" />, href: '/admin/mcpkeys' },
   { name: 'AI服务商密钥', icon: <Key className="w-5 h-5" />, href: '/admin/apikeys' },

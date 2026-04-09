@@ -1,0 +1,211 @@
+{
+  "version": "1.0",
+  "category": "General Health",
+  "tags": ["躯体化", "躯体症状", "SSS", "成人评估"],
+  "estimatedMinutes": 8,
+  "interactionMode": "manual_only",
+  "supportedLanguages": ["zh"],
+  "requiresConfirmation": false,
+  "Description": {
+    "scale_id": "SSS",
+    "title": "躯体化症状自评量表",
+    "short_name": "SSS",
+    "reference": "庄琦毛家亮 李春波等 躯体化症状自评量表的初步编制及信度和效度研究[J].中华行为医学与脑科学杂志,2010,19(09):847-849",
+    "important_notice": "此量表切勿遗失,每次就诊请务必携带此量表!以便于前后对比判断治疗效果。",
+    "instructions": "说明:您发病过程中可能存在下列各种症状,如果医生能确切了解您的这些症状,就能给您更多的帮助及正确的治疗。初诊请根据近半年情况、复诊请根据目前情况在症状上打√,症状可多选,并以选择出相关症状最重的作为严重程度分值;没有症状也要在没有一栏上选择打√。在发病时的症状上打√,可多选,每一栏都要选择",
+    "patient_info_fields": [
+      { "id": "name", "label": "姓名", "type": "string" },
+      { "id": "phone", "label": "电话", "type": "string" },
+      { "id": "education", "label": "教育程度", "type": "string" },
+      { "id": "occupation", "label": "职业", "type": "string" },
+      { "id": "gender", "label": "性别", "type": "string" },
+      { "id": "age", "label": "年龄", "type": "number" },
+      { "id": "disease_duration", "label": "病程", "type": "string" },
+      { "id": "diagnosis", "label": "诊断", "type": "string" },
+      { "id": "medication", "label": "所用药物", "type": "string" },
+      { "id": "assessment_date", "label": "评定日期", "type": "date" },
+      { "id": "assessment_count", "label": "第次", "type": "number" }
+    ]
+  },
+  "Dimension": [
+    {
+      "id": "total_score",
+      "name": "躯体化症状总分",
+      "description": "评估躯体化症状的总体严重程度"
+    },
+    {
+      "id": "functional_impact",
+      "name": "社会功能影响",
+      "description": "评估躯体化症状对日常社会功能的损害程度"
+    }
+  ],
+  "Data": {
+    "common_options": [
+      { "value": 1, "label": "没有", "description": "不存在" },
+      { "value": 2, "label": "轻度", "description": "偶有几天存在或尚能忍受" },
+      { "value": 3, "label": "中度", "description": "一半天数存在或希望缓解" },
+      { "value": 4, "label": "重度", "description": "几乎每天存在或较难忍受" }
+    ],
+    "questions": [
+      {
+        "id": "Q1",
+        "text": "头晕、头胀、头重、头痛、眩晕、晕厥或脑鸣",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q2",
+        "text": "睡眠问题(入睡困难、浅睡易醒、多梦、噩梦、早醒、失眠或睡眠过多)",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q3",
+        "text": "易疲劳乏力、行动困难、精力减退",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q4",
+        "text": "兴趣减退、情绪不佳、怕烦、缺乏耐心",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q5",
+        "text": "心血管症状(心慌、胸闷、胸痛、气短)",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q6",
+        "text": "易着急紧张、担忧害怕、甚至惊恐、濒死感或失控感",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q7",
+        "text": "习惯操心、多思多虑、易纠结、遇事总往坏处想",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q8",
+        "text": "注意力减退、思考能力下降、健忘甚至迟钝、恍惚",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q9",
+        "text": "胃肠症状(胀、痛、返酸、食欲差、便秘、便多、打嗝、口干苦、恶心、消瘦)",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q10",
+        "text": "疼痛(颈部、肩部、腰部、背部、腿部等)",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q11",
+        "text": "敏感、依赖、易悲伤或伤心哭泣",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q12",
+        "text": "手脚关节或身体某部位(麻木、僵硬、抽搐、颤抖、刺痛、怕冷)",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q13",
+        "text": "视物模糊、眼睛干涩或胀痛、短期内视力下降",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q14",
+        "text": "激动烦躁、生气易怒、对声音过敏、易受惊吓",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q15",
+        "text": "追求完美、洁癖、强迫感(强迫思维、强迫行为)",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q16",
+        "text": "皮肤过敏、瘙痒、皮疹、或潮红、潮热、多汗",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q17",
+        "text": "常关注健康问题、担心自己及家人生病",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q18",
+        "text": "憋闷或窒息感、喜大叹气、咳嗽或胁肋痛、呼吸困难",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q19",
+        "text": "咽部不适、梗阻感、鼻腔干涩、鼻塞、耳鸣、耳塞",
+        "dimension": "total_score"
+      },
+      {
+        "id": "Q20",
+        "text": "易尿频、尿急、尿痛、会阴部不适或性功能下降",
+        "dimension": "total_score"
+      }
+    ],
+    "additional_questions": [
+      {
+        "id": "Q21_Impact",
+        "text": "对工作、学习、家庭关系及人际交往等造成的困难",
+        "dimension": "functional_impact",
+        "options": [
+          { "value": 1, "label": "没有" },
+          { "value": 2, "label": "轻度" },
+          { "value": 3, "label": "中度" },
+          { "value": 4, "label": "重度" }
+        ]
+      }
+    ]
+  },
+  "Diagnosis": {
+    "scoring_rules": [
+      {
+        "dimension_target": "total_score",
+        "method": "sum",
+        "items": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4",
+          "Q5",
+          "Q6",
+          "Q7",
+          "Q8",
+          "Q9",
+          "Q10",
+          "Q11",
+          "Q12",
+          "Q13",
+          "Q14",
+          "Q15",
+          "Q16",
+          "Q17",
+          "Q18",
+          "Q19",
+          "Q20"
+        ],
+        "min_score": 20,
+        "max_score": 80
+      },
+      {
+        "dimension_target": "functional_impact",
+        "method": "single_item",
+        "items": ["Q21_Impact"],
+        "min_score": 1,
+        "max_score": 4
+      }
+    ],
+    "result_output": [
+      {
+        "id": "total_result",
+        "label": "总分",
+        "source": "total_score"
+      }
+    ]
+  }
+}

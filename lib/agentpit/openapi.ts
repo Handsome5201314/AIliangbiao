@@ -73,6 +73,13 @@ export function buildAgentPitOpenApiDocument() {
               type: "array",
               items: { type: "number" },
             },
+            formData: {
+              type: "object",
+              additionalProperties: {
+                anyOf: [{ type: "string" }, { type: "number" }, { type: "null" }],
+              },
+              description: "Optional patient info fields for structured scales",
+            },
           },
           required: ["answers"],
         },
@@ -206,4 +213,3 @@ export function buildAgentPitOpenApiDocument() {
     },
   };
 }
-

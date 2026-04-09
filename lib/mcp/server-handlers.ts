@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import { QuotaManager } from "@/lib/auth/quotaManager";
+import {
+  createAssessmentSession,
+  getAssessmentSession,
+  submitAssessmentSessionAnswer,
+} from "@/lib/assessment-skill/session-service";
 import { evaluateScaleAnswers, getScaleDefinitionById, listSerializableScales } from "@/lib/scales/catalog";
 import { resolveLocalizedText } from "@/lib/schemas/core/i18n";
 
@@ -10,6 +16,7 @@ const symptomKeywords: Record<string, string[]> = {
   "SNAP-IV": ["注意力", "多动", "坐不住", "冲动"],
   "PHQ-9": ["抑郁", "低落", "没兴趣", "绝望", "失眠"],
   "GAD-7": ["焦虑", "紧张", "担心", "坐立不安", "易怒"],
+  SSS: ["躯体化", "头晕", "心慌", "胃肠", "疼痛", "睡眠问题"],
 };
 
 export async function listTools() {
@@ -66,11 +73,90 @@ export async function listTools() {
               items: { type: "number" },
               description: "Answer scores in order",
             },
+            formData: {
+              type: "object",
+              description: "Optional patient info form data for scales that require it",
+            },
           },
           required: ["scaleId", "answers"],
         },
       },
+      {
+        name: "start_assessment_session",
+        description: "Start a step-by-step assessment session",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            deviceId: { type: "string", description: "Device ID" },
+            scaleId: { type: "string", description: "Scale ID" },
+            formData: { type: "object", description: "Optional patient info fields" },
+          },
+          required: ["deviceId", "scaleId"],
+        },
+      },
+      {
+        name: "get_current_question",
+        description: "Get current question for an existing assessment session",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            sessionId: { type: "string", description: "Assessment session ID" },
+            deviceId: { type: "string", description: "Device ID" },
+          },
+          required: ["sessionId", "deviceId"],
+        },
+      },
+      {
+        name: "submit_answer",
+        description: "Submit one answer to an assessment session",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            sessionId: { type: "string", description: "Assessment session ID" },
+            deviceId: { type: "string", description: "Device ID" },
+            score: { type: "number", description: "Answer score for the current question" },
+            questionId: { type: "number", description: "Current question ID" },
+            formData: { type: "object", description: "Optional form data when session is collecting form info" },
+          },
+          required: ["sessionId", "deviceId"],
+        },
+      },
+      {
+        name: "get_assessment_result",
+        description: "Get final result from a completed assessment session",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            sessionId: { type: "string", description: "Assessment session ID" },
+            deviceId: { type: "string", description: "Device ID" },
+          },
+          required: ["sessionId", "deviceId"],
+        },
+      },
     ],
+  };
+}
+
+async function serializeSessionForMcp(session: Awaited<ReturnType<typeof getAssessmentSession>>) {
+  return {
+    sessionId: session.sessionId,
+    scaleId: session.scaleId,
+    status: session.status,
+    currentQuestionIndex: session.currentQuestionIndex,
+    answeredCount: session.answeredCount,
+    questionCount: session.questionCount,
+    currentQuestion: session.currentQuestion
+      ? {
+          id: session.currentQuestion.id,
+          externalId: session.currentQuestion.externalId,
+          text: resolveLocalizedText(session.currentQuestion.text, "zh"),
+          colloquial: resolveLocalizedText(session.currentQuestion.colloquial, "zh"),
+          options: session.currentQuestion.options,
+        }
+      : null,
+    formData: session.formData,
+    result: session.result,
+    assessmentId: session.assessmentId,
   };
 }
 
@@ -160,6 +246,7 @@ export async function handleToolCall(params: {
         .object({
           scaleId: z.string(),
           answers: z.array(z.number()),
+          formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
         })
         .parse(args);
 
@@ -183,13 +270,129 @@ export async function handleToolCall(params: {
         };
       }
 
-      const result = evaluateScaleAnswers(scale.id, parsed.answers);
+      const result = evaluateScaleAnswers(scale.id, parsed.answers, parsed.formData);
 
       return {
         content: [
           {
             type: "text",
             text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }
+
+    case "start_assessment_session": {
+      const parsed = z
+        .object({
+          deviceId: z.string(),
+          scaleId: z.string(),
+          formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
+        })
+        .parse(args);
+
+      const user = await QuotaManager.getOrCreateGuest(parsed.deviceId);
+      const session = await createAssessmentSession({
+        userId: user.id,
+        scaleId: parsed.scaleId,
+        channel: "mcp",
+        formData: parsed.formData,
+        deviceId: parsed.deviceId,
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(await serializeSessionForMcp(session), null, 2),
+          },
+        ],
+      };
+    }
+
+    case "get_current_question": {
+      const parsed = z
+        .object({
+          sessionId: z.string(),
+          deviceId: z.string(),
+        })
+        .parse(args);
+
+      const user = await QuotaManager.getOrCreateGuest(parsed.deviceId);
+      const session = await getAssessmentSession(parsed.sessionId, user.id);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(await serializeSessionForMcp(session), null, 2),
+          },
+        ],
+      };
+    }
+
+    case "submit_answer": {
+      const parsed = z
+        .object({
+          sessionId: z.string(),
+          deviceId: z.string(),
+          score: z.number().optional(),
+          questionId: z.number().optional(),
+          formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
+        })
+        .parse(args);
+
+      const user = await QuotaManager.getOrCreateGuest(parsed.deviceId);
+      const session = await submitAssessmentSessionAnswer({
+        sessionId: parsed.sessionId,
+        userId: user.id,
+        score: parsed.score,
+        questionId: parsed.questionId,
+        formData: parsed.formData,
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(await serializeSessionForMcp(session), null, 2),
+          },
+        ],
+      };
+    }
+
+    case "get_assessment_result": {
+      const parsed = z
+        .object({
+          sessionId: z.string(),
+          deviceId: z.string(),
+        })
+        .parse(args);
+
+      const user = await QuotaManager.getOrCreateGuest(parsed.deviceId);
+      const session = await getAssessmentSession(parsed.sessionId, user.id);
+
+      if (session.status !== "completed" || !session.result) {
+        return {
+          content: [{ type: "text", text: "Assessment session is not completed yet." }],
+          isError: true,
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                sessionId: session.sessionId,
+                scaleId: session.scaleId,
+                assessmentId: session.assessmentId,
+                result: session.result,
+              },
+              null,
+              2
+            ),
           },
         ],
       };

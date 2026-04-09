@@ -5,6 +5,16 @@
 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import type { ScaleDimensionResult } from '@/lib/schemas/core/types';
+
+export interface AssessmentSubjectInfo {
+  title?: string;
+  name?: string;
+  rows: Array<{
+    label: string;
+    value: string;
+  }>;
+}
 
 export interface AssessmentExportData {
   scaleId: string;
@@ -21,6 +31,11 @@ export interface AssessmentExportData {
     gender: string;
     ageMonths?: number;
   };
+  subjectInfo?: AssessmentSubjectInfo;
+  dimensionResults?: ScaleDimensionResult[];
+  importantNotice?: string;
+  instructions?: string;
+  reference?: string;
   completedAt: string;
   advice?: string;
 }
@@ -51,8 +66,14 @@ export function exportToCSV(data: AssessmentExportData): void {
   rows.push(['评估日期', data.completedAt]);
   rows.push([]);
 
-  // 儿童信息
-  if (data.childProfile) {
+  // 受测者信息
+  if (data.subjectInfo?.rows.length) {
+    rows.push([data.subjectInfo.title || '受测者信息']);
+    data.subjectInfo.rows.forEach((row) => {
+      rows.push([row.label, row.value]);
+    });
+    rows.push([]);
+  } else if (data.childProfile) {
     rows.push(['儿童信息']);
     rows.push(['姓名', data.childProfile.nickname]);
     rows.push(['性别', data.childProfile.gender === 'boy' ? '男孩' : '女孩']);
@@ -75,7 +96,30 @@ export function exportToCSV(data: AssessmentExportData): void {
   if (totalScoreHint) {
     rows.push(['说明', totalScoreHint]);
   }
+  if (data.dimensionResults?.length) {
+    data.dimensionResults.forEach((dimension) => {
+      rows.push([dimension.label, dimension.displayValue || `${dimension.score}分`]);
+    });
+  }
   rows.push([]);
+
+  if (data.importantNotice) {
+    rows.push(['重要提示']);
+    rows.push([data.importantNotice]);
+    rows.push([]);
+  }
+
+  if (data.instructions) {
+    rows.push(['量表说明']);
+    rows.push([data.instructions]);
+    rows.push([]);
+  }
+
+  if (data.reference) {
+    rows.push(['参考文献']);
+    rows.push([data.reference]);
+    rows.push([]);
+  }
 
   // 答题明细
   rows.push(['答题明细']);
@@ -104,7 +148,10 @@ export function exportToCSV(data: AssessmentExportData): void {
   // 添加 BOM 以支持中文
   const BOM = '\uFEFF';
   const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-  downloadBlob(blob, `评估报告_${data.scaleName}_${data.childProfile?.nickname || '游客'}_${formatDate(new Date())}.csv`);
+  downloadBlob(
+    blob,
+    `评估报告_${data.scaleName}_${data.subjectInfo?.name || data.childProfile?.nickname || '游客'}_${formatDate(new Date())}.csv`
+  );
 }
 
 /**

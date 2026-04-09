@@ -290,10 +290,10 @@ export default function AgentWorkspace() {
               className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
             >
               {isGuest
-                ? '连接 AgentPit 账号'
+                ? 'agentpit 授权登陆'
                 : email
-                  ? `AgentPit 已连接: ${email}`
-                  : '刷新 AgentPit 授权'}
+                  ? `agentpit 已授权: ${email}`
+                  : '重新进行 agentpit 授权登陆'}
             </button>
             <button
               type="button"

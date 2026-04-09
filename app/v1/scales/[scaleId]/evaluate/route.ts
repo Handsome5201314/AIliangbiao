@@ -6,6 +6,7 @@ import { evaluateScaleAnswers, getScaleDefinitionById } from "@/lib/scales/catal
 
 const requestSchema = z.object({
   answers: z.array(z.number()),
+  formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export async function POST(
 
     return NextResponse.json({
       scaleId: scale.id,
-      result: evaluateScaleAnswers(scale.id, body.answers),
+      result: evaluateScaleAnswers(scale.id, body.answers, body.formData),
     });
   } catch (error) {
     const authResponse = buildAgentPitAuthErrorResponse(error);
@@ -60,4 +61,3 @@ export async function POST(
     );
   }
 }
-

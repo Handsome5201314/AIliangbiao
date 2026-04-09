@@ -16,6 +16,11 @@ enum UserRole {
   VIP
 }
 
+enum AccountType {
+  PATIENT
+  DOCTOR
+}
+
 enum MemberRelation {
   SELF
   CHILD
@@ -30,6 +35,37 @@ enum LanguagePreference {
   EN
 }
 
+enum DoctorVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum CareAssignmentStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum DoctorPatientNoteType {
+  CLINICAL
+  RESEARCH
+}
+
+enum ResearchConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+enum UserPrivacyConsentType {
+  CLOUD_DATA_PRIVACY_RISK
+}
+
+enum UserPrivacyConsentSource {
+  REGISTER
+  GUEST_UPGRADE
+}
+
 // ==================== 1. 用户与额度系统 ====================
 
 model User {
@@ -39,6 +75,8 @@ model User {
   deviceId      String?   @unique             // 浏览器指纹 UUID（游客依赖）
   phone         String?   @unique             // 手机号（注册用户依赖）
   email         String?   @unique             // 邮箱（注册用户依赖）
+  accountType   AccountType?                  // 业务身份：患者 / 医生
+  passwordHash  String?                       // 正式账号密码
   
   // 商业化额度字段
   dailyUsed     Int       @default(0)         // 今日已调用量表的次数
@@ -51,13 +89,19 @@ model User {
 
   // 关系映射
   profiles        MemberProfile[]
+  assessmentSessions AssessmentSession[]
   assessments     AssessmentHistory[]
   triageSessions  TriageSession[]
   mcpLogs         McpLog[]
   apiKeys         ApiKey[]
   speechUsages    SpeechUsage[]
+  doctorProfile   DoctorProfile?
+  privacyConsents UserPrivacyConsent[]
+  assignedMembers CareAssignment[] @relation("AssignedByPatient")
+  grantedResearchConsents ResearchConsent[] @relation("GrantedByUser")
 
   @@index([role])
+  @@index([accountType])
 }
 
 // ==================== 2. 千人千面：家庭成员画像 ====================
@@ -91,13 +135,146 @@ model MemberProfile {
   
   // 关系映射
   growthRecords GrowthRecord[]
+  assessmentSessions AssessmentSession[]
   assessments   AssessmentHistory[]
+  careAssignments CareAssignment[]
+  doctorNotes      DoctorPatientNote[]
+  researchConsent  ResearchConsent?
+  researchExportLogs ResearchExportLog[]
 
   @@index([userId, relation])
   @@map("ChildProfile")
 }
 
-// ==================== 3. 临床数据：量表评估历史 ====================
+model DoctorProfile {
+  id                 String                    @id @default(cuid())
+  userId             String                    @unique
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  realName           String
+  hospitalName       String
+  departmentName     String
+  title              String
+  licenseNo          String                    @unique
+  verificationStatus DoctorVerificationStatus  @default(PENDING)
+  reviewNotes        String?
+  approvedAt         DateTime?
+  approvedByAdminId  String?
+  approvedByAdmin    Admin?                    @relation("AdminApprovedDoctors", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  careAssignments    CareAssignment[]
+  notes              DoctorPatientNote[]
+  exportLogs         ResearchExportLog[]
+
+  @@index([verificationStatus, createdAt])
+  @@index([hospitalName, departmentName])
+}
+
+model CareAssignment {
+  id                      String               @id @default(cuid())
+  memberProfileId         String
+  memberProfile           MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId         String
+  doctorProfile           DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  status                  CareAssignmentStatus @default(ACTIVE)
+  assignedByPatientUserId String
+  assignedByPatientUser   User                 @relation("AssignedByPatient", fields: [assignedByPatientUserId], references: [id], onDelete: Cascade)
+  startedAt               DateTime             @default(now())
+  endedAt                 DateTime?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  @@index([memberProfileId, status, startedAt])
+  @@index([doctorProfileId, status, startedAt])
+}
+
+model DoctorPatientNote {
+  id                  String               @id @default(cuid())
+  memberProfileId     String
+  memberProfile       MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId     String
+  doctorProfile       DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory?   @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  noteType            DoctorPatientNoteType @default(CLINICAL)
+  content             String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([memberProfileId, createdAt])
+  @@index([doctorProfileId, createdAt])
+  @@index([assessmentHistoryId])
+}
+
+model ResearchConsent {
+  id              String                @id @default(cuid())
+  memberProfileId String                @unique
+  memberProfile   MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  grantedByUserId String
+  grantedByUser   User                  @relation("GrantedByUser", fields: [grantedByUserId], references: [id], onDelete: Cascade)
+  status          ResearchConsentStatus @default(GRANTED)
+  grantedAt       DateTime              @default(now())
+  revokedAt       DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+model ResearchExportLog {
+  id              String         @id @default(cuid())
+  doctorProfileId String
+  doctorProfile   DoctorProfile  @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  memberProfileId String
+  memberProfile   MemberProfile  @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  exportType      String
+  exportRange     String?
+  purpose         String?
+  createdAt       DateTime       @default(now())
+
+  @@index([doctorProfileId, createdAt])
+  @@index([memberProfileId, createdAt])
+}
+
+model UserPrivacyConsent {
+  id              String                  @id @default(cuid())
+  userId          String
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consentType     UserPrivacyConsentType
+  documentVersion String
+  acceptedAt      DateTime                @default(now())
+  ipAddress       String?
+  userAgent       String?
+  source          UserPrivacyConsentSource
+
+  @@index([userId, consentType, acceptedAt])
+}
+
+// ==================== 3. 临床数据：量表评估会话 ====================
+
+model AssessmentSession {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId           String?
+  profile             MemberProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+
+  scaleId             String
+  status              String    @default("draft") // draft / collecting_form / questioning / completed / cancelled
+  channel             String    @default("web")   // web / voice / agent / mcp
+  currentQuestionIndex Int?
+  answers             Json
+  formData            Json?
+  conversationState   Json?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId, status, updatedAt])
+  @@index([profileId, status, updatedAt])
+  @@index([scaleId, status])
+}
+
+// ==================== 4. 临床数据：量表评估历史 ====================
 
 model AssessmentHistory {
   id            String    @id @default(cuid())
@@ -111,15 +288,19 @@ model AssessmentHistory {
   totalScore    Float     // 总得分
   conclusion    String    // 临床结论 (如 "高度疑似")
   answers       Json      // 用户的选项明细 [1, 0, 3, 2...] 供医生回溯
+  formData      Json?     // 量表前置表单数据（如患者基础信息）
+  resultDetails Json?     // 结构化评分结果详情（维度结果、说明等）
   
   createdAt     DateTime  @default(now())
+
+  doctorNotes   DoctorPatientNote[]
   
   @@index([userId, createdAt])
   @@index([profileId, createdAt])
   @@index([scaleId, scaleVersion])
 }
 
-// ==================== 4. B端开放平台：MCP 调用流水 ====================
+// ==================== 5. B端开放平台：MCP 调用流水 ====================
 
 model McpLog {
   id            String    @id @default(cuid())
@@ -133,7 +314,7 @@ model McpLog {
   createdAt     DateTime  @default(now())
 }
 
-// ==================== 5. 新生儿生长曲线数据 ====================
+// ==================== 6. 新生儿生长曲线数据 ====================
 
 model GrowthRecord {
   id            String    @id @default(cuid())
@@ -164,7 +345,7 @@ model GrowthRecord {
   @@index([profileId, ageMonths])
 }
 
-// ==================== 6. 语音分诊会话表 ====================
+// ==================== 7. 语音分诊会话表 ====================
 
 model TriageSession {
   id                  String    @id @default(cuid())
@@ -183,7 +364,7 @@ model TriageSession {
   @@index([updatedAt])
 }
 
-// ==================== 7. 管理员账户系统 ====================
+// ==================== 8. 管理员账户系统 ====================
 
 model Admin {
   id            String    @id @default(cuid())
@@ -195,9 +376,11 @@ model Admin {
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  approvedDoctorProfiles DoctorProfile[] @relation("AdminApprovedDoctors")
 }
 
-// ==================== 7. API密钥管理 ====================
+// ==================== 9. API密钥管理 ====================
 
 model ApiKey {
   id            String    @id @default(cuid())
@@ -232,7 +415,7 @@ model ApiKey {
   @@index([serviceType, isActive])
 }
 
-// ==================== 8. 系统配置 ====================
+// ==================== 10. 系统配置 ====================
 
 model SystemConfig {
   id            String    @id @default(cuid())
@@ -244,7 +427,7 @@ model SystemConfig {
   updatedAt     DateTime  @updatedAt
 }
 
-// ==================== 9. 语音识别使用记录 ====================
+// ==================== 11. 语音识别使用记录 ====================
 
 model SpeechUsage {
   id            String    @id @default(cuid())

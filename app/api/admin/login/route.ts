@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import bcrypt from 'bcryptjs';
-
-// 简单的token生成（生产环境应使用JWT）
-function generateToken(): string {
-  return Buffer.from(Date.now().toString() + Math.random()).toString('base64');
-}
+import { issueAdminToken } from '@/lib/auth/admin-token';
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +35,10 @@ export async function POST(req: NextRequest) {
     });
 
     // 生成token
-    const token = generateToken();
+    const token = issueAdminToken({
+      adminId: admin.id,
+      username: admin.username,
+    });
 
     return NextResponse.json({
       success: true,

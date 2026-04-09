@@ -9,6 +9,7 @@ import { evaluateSkillScale } from '@/lib/assessment-skill/scale-service';
 const requestSchema = z.object({
   memberId: z.string().optional(),
   answers: z.array(z.number()),
+  formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
 });
 
 export async function POST(
@@ -36,6 +37,7 @@ export async function POST(
       profileId: memberId,
       scaleId,
       answers: body.answers,
+      formData: body.formData,
     });
 
     return NextResponse.json({
