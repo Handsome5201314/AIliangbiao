@@ -1,98 +1,102 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { ClipboardList, FlaskConical, LayoutDashboard, LogOut, Stethoscope, UserRound } from 'lucide-react';
 
-const doctorNav = [
-  { href: '/doctor', label: '工作台' },
-  { href: '/doctor/patients', label: '患者列表' },
-  { href: '/doctor/profile', label: '我的资料' },
-  { href: '/doctor/research', label: '科研导出' },
+import { useAuthSession } from '@/contexts/AuthSessionContext';
+
+const navItems = [
+  { name: '医生概览', href: '/doctor', icon: <LayoutDashboard className="w-5 h-5" /> },
+  { name: '患者管理', href: '/doctor/patients', icon: <ClipboardList className="w-5 h-5" /> },
+  { name: '科研导出', href: '/doctor/research', icon: <FlaskConical className="w-5 h-5" /> },
+  { name: '个人资料', href: '/doctor/profile', icon: <UserRound className="w-5 h-5" /> },
 ];
 
-export default function DoctorLayout({ children }: { children: ReactNode }) {
+export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [checking, setChecking] = useState(true);
-  const [statusMessage, setStatusMessage] = useState('');
-  const isAuthPage = pathname === '/doctor/login' || pathname === '/doctor/register';
+  const { user, loading, isAuthenticated, isDoctor, logout } = useAuthSession();
 
   useEffect(() => {
-    if (isAuthPage) {
-      setChecking(false);
+    if (pathname === '/doctor/login' || pathname === '/doctor/register') {
       return;
     }
 
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.user) {
-          router.push('/doctor/login');
-          return;
-        }
-        if (data.user.accountType !== 'DOCTOR') {
-          router.push('/auth/login');
-          return;
-        }
-        if (data.user.doctorProfile?.verificationStatus !== 'APPROVED') {
-          setStatusMessage('您的医生账号已登录，但尚未通过平台审核，当前仅可查看资料状态。');
-        }
-      })
-      .finally(() => setChecking(false));
-  }, [isAuthPage, router]);
+    if (!loading && (!isAuthenticated || !isDoctor)) {
+      router.push('/doctor/login');
+    }
+  }, [isAuthenticated, isDoctor, loading, pathname, router]);
 
-  if (isAuthPage) {
+  if (pathname === '/doctor/login' || pathname === '/doctor/register') {
     return <>{children}</>;
   }
 
-  if (checking) {
+  if (loading || !isAuthenticated || !isDoctor) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-sm text-slate-500">正在校验医生会话...</div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-cyan-300 border-t-transparent" />
+          <p>医生端加载中...</p>
+        </div>
       </div>
     );
   }
 
+  const doctorApproved = user?.doctorProfile?.verificationStatus === 'APPROVED';
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-8">
-        <aside className="w-56 shrink-0 rounded-3xl bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900">医生工作台</h2>
-          <div className="mt-4 space-y-2">
-            {doctorNav.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className={`block rounded-2xl px-4 py-3 text-sm font-medium ${
-                  pathname === item.href ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {item.label}
-              </a>
-            ))}
+    <div className="flex min-h-screen bg-slate-50">
+      <aside className="w-72 shrink-0 bg-slate-950 text-white">
+        <div className="border-b border-white/10 px-6 py-5">
+          <div className="inline-flex items-center gap-3">
+            <div className="rounded-2xl bg-cyan-500/15 p-3">
+              <Stethoscope className="h-6 w-6 text-cyan-300" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-200">Doctor</div>
+              <div className="text-lg font-bold">{user?.doctorProfile?.realName || user?.email}</div>
+            </div>
           </div>
+          <div className="mt-4 rounded-2xl bg-white/5 px-4 py-3 text-sm text-white/70">
+            审核状态：{user?.doctorProfile?.verificationStatus}
+            {!doctorApproved && <div className="mt-2 text-xs text-amber-200">审核通过前不能查看患者数据。</div>}
+          </div>
+        </div>
+
+        <nav className="space-y-1 px-3 py-4">
+          {navItems.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                pathname === item.href
+                  ? 'bg-cyan-500 text-slate-950'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {item.icon}
+              <span>{item.name}</span>
+            </a>
+          ))}
+        </nav>
+
+        <div className="mt-auto p-4">
           <button
             type="button"
-            onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
+            onClick={() => {
+              logout();
               router.push('/doctor/login');
-              router.refresh();
             }}
-            className="mt-6 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600 hover:bg-slate-100"
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-white/75 hover:bg-white/10 hover:text-white"
           >
-            退出登录
+            <LogOut className="h-5 w-5" />
+            <span>退出登录</span>
           </button>
-        </aside>
+        </div>
+      </aside>
 
-        <main className="flex-1">
-          {statusMessage && (
-            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              {statusMessage}
-            </div>
-          )}
-          {children}
-        </main>
-      </div>
+      <main className="flex-1 p-8">{children}</main>
     </div>
   );
 }

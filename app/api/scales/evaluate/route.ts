@@ -6,7 +6,6 @@ import { evaluateScaleAnswers, getScaleDefinitionById } from "@/lib/scales/catal
 const requestSchema = z.object({
   scaleId: z.string().min(1),
   answers: z.array(z.number()),
-  formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = evaluateScaleAnswers(body.scaleId, body.answers, body.formData);
+    const result = evaluateScaleAnswers(body.scaleId, body.answers);
 
     return NextResponse.json({
       scaleId: scale.id,

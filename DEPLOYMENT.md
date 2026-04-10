@@ -1,291 +1,134 @@
-# 🚀 AI 量表系统 - 生产部署指南
+# 腾讯云迁移与验证指南
 
-## 📋 部署前检查清单
+本文档对应当前项目的**独立新服务器迁移**流程，目标是把现有生产环境复制到腾讯云新机器，先独立验证，再决定是否切正式流量。
 
-### ✅ 已完成的优化
+当前约束：
+- 旧生产服务器：`136.110.9.74`
+- 腾讯云新服务器：`124.220.184.17`
+- 迁移策略：**保留现网数据，不覆盖旧机器**
+- 验证策略：**先在腾讯云独立验证**
+- HTTPS：只有在新域名或测试域名已解析到腾讯云时才直接申请正式证书
 
-- [x] 清理本地构建缓存与临时日志（如 `.next/`、`.tmp-*`）
-- [x] 删除一次性测试与分析产物（如 `test_agent_integration.mjs`、`tmp_*`）
-- [x] 删除历史备份组件与非必要生成物（如 `*.old.tsx`、`tsconfig.tsbuildinfo`）
-- [x] 保留部署脚本、运维文档与环境模板，便于重复交付
-- [x] 构建测试通过（无错误）
-- [x] TypeScript 类型检查通过
+## 当前推荐目录结构
 
-### 📦 项目文件结构
+- 应用目录：`/opt/ai-scale-system/current`
+- 发布目录：`/opt/ai-scale-system/releases/<timestamp>`
+- 共享环境：`/opt/ai-scale-system/shared/.env.production`
+- 日志目录：`/var/log/ai-scale-system`
+- PM2 进程名：`ai-scale-system`
 
-```
-AI量表系统/
-├── app/                    # Next.js 应用路由
-├── components/             # React 组件
-├── contexts/               # React Context
-├── lib/                    # 核心库文件
-├── prisma/                 # 数据库 Schema
-├── scripts/                # 部署脚本
-├── types/                  # TypeScript 类型定义
-├── .env.example            # 环境变量模板
-├── package.json            # 依赖配置
-├── next.config.js          # Next.js 配置
-├── tsconfig.json           # TypeScript 配置
-└── tailwind.config.ts      # Tailwind CSS 配置
-```
+## 迁移前检查
 
----
+开始前请确认：
 
-## 🌐 服务器部署步骤
+1. 腾讯云安全组已放行：
+   - `22/tcp`
+   - `80/tcp`
+   - `443/tcp`
+2. 腾讯云实例系统是 Ubuntu
+3. 可以使用 `root` 密码登录腾讯云
+4. 旧生产服务器仍然在线
+5. 本地机器可连接旧生产和腾讯云的 `22` 端口
 
-### 1️⃣ 上传代码到服务器
+如果腾讯云 `22` 端口未开放，迁移脚本会直接失败。
 
-在本地 PowerShell 执行：
+## 一键迁移脚本
+
+仓库内已提供新脚本：
+
+- 本地入口：`scripts/tencent-cloud-migrate.py`
+- 远端执行：`scripts/remote-migrate-preserve.sh`
+
+它们和旧的 `remote-redeploy.sh` 不同：
+
+- **不会重置旧生产**
+- **会从旧生产导出数据库**
+- **会在腾讯云恢复数据后再部署**
+- **支持 IP 验证或域名+SSL 验证**
+
+## 典型执行方式
+
+### 1. 先做 IP 验证
 
 ```powershell
-cd "C:\Users\lishuaishuai\Desktop\AI量表系统"
-
-# 清理服务器旧代码
-ssh root@136.110.9.74 "rm -rf ~/AIliangbiao"
-
-# 创建目录
-ssh root@136.110.9.74 "mkdir -p ~/AIliangbiao"
-
-# 上传所有文件（排除 node_modules 和 .next）
-scp -r * root@136.110.9.74:~/AIliangbiao/
-
-# 密码: kId8r69XoXM1i07TzWZ7
+python .\scripts\tencent-cloud-migrate.py `
+  --source-host 136.110.9.74 `
+  --source-user root `
+  --source-password "<旧生产 root 密码>" `
+  --target-host 124.220.184.17 `
+  --target-user ubuntu `
+  --target-password "<腾讯云 root 密码>" `
+  --validation-url "http://124.220.184.17"
 ```
 
----
+### 2. 有测试域名时直接带 SSL
 
-### 2️⃣ 服务器端配置
-
-SSH 登录服务器：
-
-```bash
-ssh root@136.110.9.74
-cd ~/AIliangbiao
+```powershell
+python .\scripts\tencent-cloud-migrate.py `
+  --source-host 136.110.9.74 `
+  --source-user root `
+  --source-password "<旧生产 root 密码>" `
+  --target-host 124.220.184.17 `
+  --target-user ubuntu `
+  --target-password "<腾讯云 root 密码>" `
+  --domain "verify-ailiangbiao.example.com" `
+  --validation-url "https://verify-ailiangbiao.example.com"
 ```
 
-#### 2.1 配置 `.env` 文件
+## 脚本做了什么
 
-```bash
-cat > .env << 'EOF'
-# ============================================
-# 数据库配置（服务器本地 PostgreSQL）
-# ============================================
-DATABASE_URL="postgresql://postgres@localhost:5432/ai_scale_db"
-DIRECT_URL="postgresql://postgres@localhost:5432/ai_scale_db"
+本地脚本会：
 
-# ============================================
-# 应用配置
-# ============================================
-NEXT_PUBLIC_APP_URL="http://ailiangbiao.agentpit.io"
-NEXT_PUBLIC_API_URL="http://ailiangbiao.agentpit.io"
-NEXT_PUBLIC_APP_NAME="AI 量表系统"
+1. 打包当前仓库代码
+2. SSH 到旧生产，读取现网 `.env.production`
+3. 在旧生产导出 PostgreSQL 数据库
+4. 把代码包、数据库 dump、远端部署脚本上传到腾讯云
+5. 在腾讯云上：
+   - 安装 `Node.js 20`、`PM2`、`Nginx`、`PostgreSQL`、`Certbot`
+   - 备份腾讯云当前现状
+   - 新建数据库并恢复旧生产数据
+   - 写入新的 `.env.production`
+   - 执行 `npm ci`、`npx prisma generate`、`npx prisma db push --accept-data-loss`、`npm run build`
+   - 启动 `pm2`
+   - 配置 `nginx`
+   - 如果提供域名，则申请 SSL
 
-# Session Secret（请修改为随机字符串）
-SESSION_SECRET="your-random-secret-key-change-me-in-production"
+## 迁移后验证
 
-# AgentPit 平台接入
-AGENTPIT_SHARED_BEARER="change-me-to-a-long-random-bearer"
-AGENTPIT_CLIENT_ID=""
-AGENTPIT_CLIENT_SECRET=""
-AGENTPIT_OAUTH_BASE_URL="https://api.agentpit.io"
-AGENTPIT_OAUTH_REDIRECT_URI="https://ailiangbiao.agentpit.io/api/agentpit/oauth/callback"
+至少验证以下入口：
 
-# ============================================
-# 管理员配置
-# ============================================
-ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="your-secure-password"
+- 首页
+- `/agent`
+- `/api/agent/session`
+- `/api/skill/v1/scales`
+- `/api/skill/v1/profile/sync`
+- 患者注册/登录
+- 医生注册/登录
+- 医生仪表盘
 
-# ============================================
-# AI 服务配置（可选）
-# ============================================
-DEEPSEEK_API_KEY=""
-TENCENT_SECRET_ID=""
-TENCENT_SECRET_KEY=""
-TENCENT_SPEECH_SECRET_ID=""
-TENCENT_SPEECH_SECRET_KEY=""
+如果只做 IP 验证，使用：
 
-# ============================================
-# 功能开关
-# ============================================
-ENABLE_VOICE_INTERACTION="true"
-ENABLE_MCP_SERVER="true"
+- `http://124.220.184.17`
 
-# ============================================
-# 性能/日志
-# ============================================
-CACHE_TTL="3600"
-MAX_CACHE_SIZE="1000"
-LOG_LEVEL="info"
-EOF
-```
+如果提供了测试域名，使用：
 
+- `https://<你的测试域名>`
 
-#### 2.2 运行部署脚本
+## 结果文件
 
-```bash
-chmod +x scripts/deploy-with-domain.sh
-./scripts/deploy-with-domain.sh
-```
+迁移脚本会在本地临时目录输出一个 JSON 结果文件，里面包含：
 
----
+- 目标 release 目录
+- 腾讯云备份目录
+- 实际验证 URL
+- 是否启用了 SSL
+- 管理员用户名
 
-### 3️⃣ 验证部署
+## 注意事项
 
-访问以下地址验证：
-
-- 🏠 **首页**: http://ailiangbiao.agentpit.io
-- 🔐 **管理后台**: http://ailiangbiao.agentpit.io/admin/login
-- 🏥 **健康检查**: http://ailiangbiao.agentpit.io/healthz
-- 📘 **OpenAPI**: http://ailiangbiao.agentpit.io/openapi.json
-- 🤖 **Agent 工作台**: http://ailiangbiao.agentpit.io/agent
-
----
-
-## ⚙️ 环境变量说明
-
-### 必需配置
-
-| 变量名 | 说明 | 示例 |
-|--------|------|------|
-| `DATABASE_URL` | 数据库连接字符串 | `postgresql://postgres@localhost:5432/ai_scale_db` |
-| `SESSION_SECRET` | 会话加密密钥 | 随机 32 位以上字符串 |
-| `ADMIN_USERNAME` | 管理员用户名 | `admin` |
-| `ADMIN_PASSWORD` | 管理员密码 | 强密码 |
-| `AGENTPIT_SHARED_BEARER` | AgentPit 调用公开量表 Agent 的共享 Bearer | 长随机字符串 |
-| `AGENTPIT_CLIENT_ID` | AgentPit OAuth Client ID | 控制台生成 |
-| `AGENTPIT_CLIENT_SECRET` | AgentPit OAuth Client Secret | 控制台生成 |
-
-### 可选配置
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `DEEPSEEK_API_KEY` | DeepSeek AI 密钥 | 空 |
-| `TENCENT_SECRET_ID` | 腾讯云 API ID | 空 |
-| `TENCENT_SECRET_KEY` | 腾讯云 API Key | 空 |
-| `ENABLE_VOICE_INTERACTION` | 启用语音交互 | `true` |
-| `ENABLE_MCP_SERVER` | 启用 MCP 服务器 | `true` |
-| `AGENTPIT_OAUTH_BASE_URL` | AgentPit OAuth 基础地址 | `https://api.agentpit.io` |
-| `AGENTPIT_OAUTH_REDIRECT_URI` | AgentPit OAuth 回调地址 | `https://ailiangbiao.agentpit.io/api/agentpit/oauth/callback` |
-
----
-
-## 🔒 安全建议
-
-### 1. 修改默认密码
-
-```bash
-# 修改 .env 中的管理员密码
-ADMIN_PASSWORD="Strong@Password#2026"
-```
-
-### 2. 设置 Session Secret
-
-```bash
-# 生成随机密钥
-openssl rand -base64 32
-
-# 更新 .env
-SESSION_SECRET="生成的随机密钥"
-```
-
-### 3. 启用 HTTPS（推荐）
-
-部署脚本会自动配置 Let's Encrypt SSL 证书。
-
-### 4. 配置防火墙
-
-```bash
-# 只开放必要端口
-ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP
-ufw allow 443/tcp   # HTTPS
-ufw allow 5432/tcp  # PostgreSQL（可选，本地访问不需要）
-ufw enable
-```
-
----
-
-## 📊 性能优化建议
-
-### 1. 启用 Redis 缓存（可选）
-
-```env
-REDIS_URL="redis://localhost:6379"
-```
-
-### 2. 配置 CDN（可选）
-
-将静态资源上传到 CDN 加速访问。
-
-### 3. 数据库优化
-
-```bash
-# 定期清理日志
-psql -d ai_scale_db -c "DELETE FROM \"ConversationHistory\" WHERE \"createdAt\" < NOW() - INTERVAL '30 days';"
-
-# 重建索引
-psql -d ai_scale_db -c "REINDEX DATABASE ai_scale_db;"
-```
-
----
-
-## 🛠️ 常见问题
-
-### Q1: 构建失败？
-
-```bash
-# 清理并重新构建
-rm -rf .next node_modules
-npm install
-npm run build
-```
-
-### Q2: 数据库连接失败？
-
-```bash
-# 检查 PostgreSQL 状态
-systemctl status postgresql
-
-# 测试连接
-psql -h localhost -U postgres -d ai_scale_db -c "SELECT 1;"
-```
-
-### Q3: 端口被占用？
-
-```bash
-# 查看端口占用
-netstat -tlnp | grep :3000
-
-# 杀死进程
-kill -9 <PID>
-```
-
-### Q4: Nginx 配置错误？
-
-```bash
-# 测试配置
-nginx -t
-
-# 重启 Nginx
-systemctl restart nginx
-```
-
----
-
-## 📞 技术支持
-
-- 📧 Email: support@example.com
-- 📖 文档: https://docs.example.com
-- 🐛 问题反馈: https://github.com/example/ai-scale/issues
-
----
-
-## 📅 更新日志
-
-### v1.0.0 (2026-04-06)
-- ✅ 完成生产环境部署优化
-- ✅ 修复所有 TypeScript 类型错误
-- ✅ 清理开发测试文件
-- ✅ 优化数据库连接配置
-- ✅ 增强安全性（密码管理）
+- 脚本**不会切换正式域名**
+- 脚本**不会删除旧生产数据**
+- 如果腾讯云当前已经有旧站点，脚本会先备份再替换
+- 如果没有测试域名，HTTPS 不会伪装为“已完成”
+- 数据库恢复后会执行当前仓库的 Prisma schema 同步，因此腾讯云会变成“现网数据 + 当前最新代码”的验证副本
+- 腾讯云 Ubuntu 镜像经常默认使用 `ubuntu` 用户而不是 `root`；如果 `root` 密码登录失败，优先改用 `--target-user ubuntu`

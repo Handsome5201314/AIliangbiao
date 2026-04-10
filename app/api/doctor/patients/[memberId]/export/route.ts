@@ -1,38 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { requireDoctorUser } from '@/lib/auth/user-session';
-import { exportDoctorPatientData } from '@/lib/domain/care-service';
+import { requireApprovedDoctorUser } from '@/lib/auth/require-app-session';
+import { exportDoctorPatientResearchData } from '@/lib/services/doctor-care';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ memberId: string }> }
 ) {
   try {
-    const { user } = await requireDoctorUser(request, { requireApproved: true });
-    const { searchParams } = new URL(request.url);
+    const { doctorProfile, user } = await requireApprovedDoctorUser(request);
     const { memberId } = await context.params;
-    const exportType = searchParams.get('type') || 'csv';
-    const purpose = searchParams.get('purpose') || undefined;
-    const exportRange = searchParams.get('range') || undefined;
+    const { searchParams } = new URL(request.url);
+    const format = (searchParams.get('format') || 'CSV').toUpperCase() as 'CSV' | 'JSON';
+    const purpose = searchParams.get('purpose') || 'research';
 
-    const exported = await exportDoctorPatientData({
-      doctorProfileId: user.doctorProfile!.id,
+    const exported = await exportDoctorPatientResearchData({
+      doctorProfileId: doctorProfile.id,
+      requestedByUserId: user.id,
       memberId,
-      exportType,
+      format,
       purpose,
-      exportRange,
     });
 
-    return new NextResponse(exported.csv, {
+    return new NextResponse(exported.content, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename=\"${exported.fileName}\"`,
+        'Content-Type': exported.mimeType,
+        'Content-Disposition': `attachment; filename=\"${exported.filename}\"`,
       },
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to export doctor patient data' },
+      { error: error instanceof Error ? error.message : 'Failed to export research data' },
       { status: 401 }
     );
   }

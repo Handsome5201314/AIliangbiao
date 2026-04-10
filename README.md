@@ -1,127 +1,390 @@
-# AI 量表系统
+# AI量表系统
 
-内部运维与持续交付仓库，用于维护 AI 量表系统的应用代码、量表数据、AgentPit 接入层，以及部署脚本与运维文档。
+全人群心理与健康评测平台。当前项目已经从“单一量表网站”演进为一套以本地确定性评估核心为主、以 MCP/HTTP 能力对外开放、并包含医生/患者协作流程的综合评测系统。
 
-## 项目简介
+当前线上地址：
 
-这是一个基于 Next.js 的多量表评测平台，当前已经覆盖以下能力：
+- 主站：`https://ailiangbiao.agentpit.io`
+- Agent 入口：`https://ailiangbiao.agentpit.io/agent`
 
-- 多量表评测：内置量表、结构化 JSON 量表、半配置化内容量表并存
-- 确定性评分：服务端规则引擎负责评分，不依赖大模型直接算分
-- 会话式问卷：量表支持 Assessment Session，会话状态、回退、完成与归档统一处理
-- 多成员画像：支持家庭成员档案、历史评估、额度管理与上下文隔离
-- 患者/医生/平台三端：支持患者注册、医生注册审核、主治绑定、医生时间线与科研授权
-- 隐私与合规：患者注册/升级时支持云端隐私风险知情同意留痕
-- 语音与分诊：支持聊天式症状描述、语音转写、量表推荐和语音答题辅助
-- AgentPit / MCP 接入：提供公开 `/v1/scales*`、OpenAPI、OAuth 在线体验，以及内部 MCP/skill 入口
+---
 
-## 技术栈
+## 项目定位
 
-- Next.js 16
-- React 19
-- TypeScript 6
-- Prisma 5
-- PostgreSQL
-- Tailwind CSS
-- `@modelcontextprotocol/sdk`
+当前系统可以理解为三层：
+
+1. Web/UI 层
+   - 首页大厅
+   - 量表问卷与结果页
+   - `/agent` 智能体前台入口
+   - 管理后台
+   - 医生工作台
+2. Assessment Core 层
+   - 量表目录与题目定义
+   - 确定性评分引擎
+   - assessment session 状态机
+   - Growth / 新生儿生长评估
+   - 语音分诊与最小成员档案读取
+3. Agent / MCP 层
+   - 标准 MCP SSE 入口
+   - MCP 兼容入口
+   - Skill-first HTTP facade
+   - 面向外部智能体的安全接入层
+
+---
+
+## 当前能力
+
+### 1. 量表系统
+
+当前同时支持：
+
+- 内置量表：`lib/schemas/**`
+- 配置化量表：`data/scales/*.json`
+
+已接入量表：
+
+| 分类 | 量表 | ID | 形态 |
+|---|---|---|---|
+| 儿童发育 | 孤独症行为评定量表 | `ABC` | 内置 |
+| 儿童发育 | 卡氏儿童孤独症评定量表 | `CARS` | 内置 |
+| 儿童发育 | 社交反应量表 | `SRS` | 内置 |
+| 儿童发育 | 注意缺陷多动障碍筛查量表 | `SNAP-IV` | 内置 |
+| 人格测试 | MBTI 职业性格测试 | `MBTI` | 内置 |
+| 职业测评 | 霍兰德职业倾向测验量表 | `HOLLAND` | 内置 |
+| 成人心理 | 抑郁量表 | `PHQ-9` | 配置化 |
+| 成人心理 | 焦虑量表 | `GAD-7` | 配置化 |
+
+### 2. 确定性评分
+
+最终评分始终由服务端规则引擎完成，不让大模型直接算分。
+
+核心位置：
+
+- `lib/scales/catalog.ts`
+- `lib/schemas/**`
+- `app/api/scales/evaluate`
+- `app/api/skill/v1/scales/[scaleId]/evaluate`
+
+### 3. 多成员档案与会话
+
+当前支持多成员档案：
+
+- 本人
+- 孩子
+- 父母
+- 配偶
+- 兄弟姐妹
+- 其他
+
+相关模型：
+
+- `User`
+- `MemberProfile`
+- `AssessmentHistory`
+- `AssessmentSession`
+
+说明：
+
+- `MemberProfile` 当前仍通过 `@@map("ChildProfile")` 映射历史表名
+- `AssessmentHistory` 与 `AssessmentSession` 都已支持 `profileId`
+- 当前用户可切换评测对象
+- 系统主干只保留评估所需的最小成员档案，不把“用户画像能力”作为核心产品概念
+
+### 4. 语音与智能交互
+
+当前已支持：
+
+- 语音转文本
+- `voice-intent` 服务端语义理解
+- 分诊推荐量表
+- 通话模式 UI
+- `No-Input / No-Match`
+- `repeat / explain / pause / resume` 元意图
+
+### 5. `/agent` 智能体入口
+
+`/agent` 页面是当前智能体交互入口。
+
+特点：
+
+- 不直接访问数据库
+- 先通过 `/api/agent/session` 获取受控 token
+- 通过 `/api/skill/v1/*` 访问当前用户/当前成员数据
+- 负责推荐、分诊、解释和导流
+- 正式答题仍回到现有问卷与 session 流程
+
+### 6. 医生 / 患者链路
+
+当前已经具备：
+
+- 患者注册与登录
+- 医生注册与登录
+- 医生资质审核后台
+- 医生仪表盘
+- 医生查看患者列表与详情
+- 医生查看患者时间线
+- 医生私有备注
+- 科研导出
+
+相关入口：
+
+- `POST /api/auth/register-patient`
+- `POST /api/auth/register-doctor`
+- `POST /api/auth/login`
+- `GET /api/doctor/me/dashboard`
+- `GET /api/doctor/patients`
+
+### 7. 管理后台
+
+后台已包含：
+
+- 真实系统概览
+- 医生审核
+- MCP 接口说明
+- MCP API 密钥管理
+- AI 服务商密钥管理
+- 系统设置
+
+系统概览现在显示真实数据，不再使用前端 mock 数据。核心聚合接口：
+
+- `GET /api/admin/dashboard`
+
+说明：
+
+- 系统概览已接入真实数据库统计与真实 MCP 日志
+- 医生审核、MCP 密钥、AI 服务商密钥与系统设置已接入服务端后台接口
+- `用户与成员`、`大模型与计费` 等部分后台页面仍处于过渡态
+
+---
+
+## MCP 与密钥体系
+
+### 1. canonical MCP 入口
+
+正式对外 MCP 入口：
+
+- `GET /api/mcp`
+- `POST /api/mcp`
+
+它采用旧版 HTTP + SSE 兼容协议，且现在要求强制鉴权。
+
+接入流程：
+
+1. 使用 `Authorization: Bearer <MCP Key>` 建立 `GET /api/mcp` SSE 会话
+2. 从响应头拿到 `X-Session-Id`
+3. 后续继续携带同一个 Bearer 凭证，通过 `POST /api/mcp` 发送 JSON-RPC 消息
+
+### 2. 兼容入口
+
+以下端点仍保留，用于历史接入或迁移：
+
+- `/api/mcp/scale`
+- `/api/mcp/growth`
+- `/api/mcp/memory`
+
+这些兼容入口也都要求 `MCP Key` 鉴权，但它们不再代表默认接入方式。
+
+### 3. MCP Key 与 AI Key 的区别
+
+这是当前项目里一个非常重要的边界：
+
+- `MCP API 密钥`
+  - 作用：授权外部智能体访问量表服务
+  - 使用位置：`/api/mcp` 与兼容 MCP 路由
+  - 不参与任何大模型调用
+- `AI 服务商密钥`
+  - 作用：调用 OpenAI / DeepSeek / SiliconFlow / Qwen / OneAPI 等模型服务
+  - 使用位置：文本生成、语音识别、建议生成等能力
+  - 不用于访问 MCP
+
+当前实现上，二者仍共用 `ApiKey` 表，但已经通过 `purpose` 字段强制区分：
+
+- `purpose = AI`
+- `purpose = MCP`
+
+相关模型：
+
+- `ApiKey`
+- `McpLog`
+
+说明：
+
+- AI 选路只读取 `purpose = AI`
+- MCP 鉴权只读取 `purpose = MCP`
+- 系统概览中的 MCP 调用次数只统计真实 `tools/call` 成功日志
+
+更多调用顺序说明见：
+
+- `packages/assessment-skill/README.md`
+
+---
+
+## 当前架构
+
+### Web/UI 层
+
+主要目录：
+
+- `app/`
+- `components/`
+- `contexts/`
+
+负责：
+
+- 首页大厅
+- 问卷交互
+- 结果展示
+- 管理后台
+- 医生工作台
+- `/agent`
+
+### Skill Facade 层
+
+当前统一对外 HTTP 能力位于：
+
+- `app/api/skill/v1/*`
+
+这层是当前 Web/UI 与未来独立 Skill 服务之间的稳定合同层。
+
+### Assessment Core Package
+
+当前已经抽出 package skeleton：
+
+- `packages/assessment-skill`
+
+作用：
+
+- 固化本地量表评估核心边界
+- 固化 OpenAPI / MCP manifest
+- 固化 auth / token / internal API 工具
+- 作为未来独立分仓的起点
+
+当前状态：
+
+- 已能单独 `build`
+- 仍依赖宿主应用中的 Prisma client 与本地量表 catalog
+- 包内 README 主要承担“外部智能体如何调用 MCP”的说明书角色
+
+### 管理与安全层
+
+当前后台管理接口已经补上服务端管理员校验：
+
+- 登录：`POST /api/admin/login`
+- 登出：`POST /api/admin/logout`
+- 管理员会话：`httpOnly` cookie
+
+管理员会话与普通应用会话分离：
+
+- 普通用户 / 医生会话：`APP_SESSION_SECRET || SESSION_SECRET`
+- 管理员后台会话：`ADMIN_SESSION_SECRET || SESSION_SECRET`
+
+---
+
+## App / Skill Compatibility API
+
+### Agent Session
+
+- `POST /api/agent/session`
+
+作用：
+
+- 用 `deviceId + 当前成员` 创建受控 agent session token
+
+### Scales
+
+- `GET /api/skill/v1/scales`
+- `GET /api/skill/v1/scales/:scaleId`
+- `POST /api/skill/v1/scales/:scaleId/evaluate`
+- `POST /api/skill/v1/scales/:scaleId/analyze-conversation`
+- `POST /api/skill/v1/scales/:scaleId/sessions`
+- `GET /api/skill/v1/scales/:scaleId/sessions/:sessionId`
+- `POST /api/skill/v1/scales/:scaleId/sessions/:sessionId/answer`
+- `GET /api/skill/v1/scales/:scaleId/sessions/:sessionId/result`
+
+### Voice / Triage
+
+- `POST /api/skill/v1/voice-intent`
+- `POST /api/skill/v1/speech/transcribe`
+- `GET /api/skill/v1/me/triage-session`
+- `POST /api/skill/v1/me/triage-session`
+
+### Member
+
+- `GET /api/skill/v1/me/members`
+- `GET /api/skill/v1/me/members/:memberId/context`
+- `GET /api/skill/v1/me/members/:memberId/assessment-summary`
+- `POST /api/skill/v1/me/members/:memberId/advice`
+- `GET /api/skill/v1/me/members/:memberId/memory-summary`
+- `POST /api/skill/v1/me/members/:memberId/memory-notes`
+
+### Profile / Account
+
+- `GET /api/skill/v1/profile/sync`
+- `POST /api/skill/v1/profile/sync`
+- `POST /api/skill/v1/account/upgrade`
+- `GET /api/skill/v1/me/quota`
+
+---
+
+## 用户隔离与成员档案
+
+系统当前设计原则：
+
+- 智能体不能直接读数据库
+- 只能通过受控 token 访问 skill facade
+- 只能读取“当前用户 + 当前成员”的数据
+
+这样做的目的：
+
+- 方便多设备登录
+- 支持多成员切换
+- 便于审计
+- 便于未来替换不同 agent runtime
+
+---
 
 ## 目录结构
 
 ```text
-app/                    Next.js App Router 页面与 API
-components/             前端组件
-contexts/               前端状态上下文
-data/scales/            结构化量表 JSON（如 SSS）
-data/scale-content/     半配置化量表内容（题干、解释、fallback、选项文案）
-docs/                   运维与量表扩展文档
-lib/                    业务逻辑、鉴权、会话引擎、MCP、AgentPit 适配层
-packages/assessment-skill/
-                        skill 契约与服务层
-prisma/                 数据模型
-scripts/                部署、排障、校验脚本
-types/                  类型补充
+app/
+  agent/                         # /agent 前台入口
+  admin/                         # 管理后台页面
+  doctor/                        # 医生工作台
+  auth/                          # 登录/注册页面
+  api/
+    admin/                       # 管理后台接口
+    auth/                        # 用户/医生注册登录接口
+    doctor/                      # 医生工作流接口
+    skill/v1/                    # Skill-first facade
+    mcp/                         # MCP 入口与兼容入口
+    scales/                      # 兼容层
+    voice-intent/                # 兼容层
+    triage/session/              # 兼容层
+  page.tsx
+
+components/
+contexts/
+lib/
+  assessment-skill/
+  auth/
+  db/
+  mcp/
+  scales/
+  schemas/
+  services/
+
+packages/
+  assessment-skill/
+
+data/
+  scales/
+
+prisma/
+  schema.prisma
 ```
 
-## 当前量表形态
-
-### 1. 内置量表
-
-- 位于 `lib/schemas/**`
-- 评分逻辑保留在 TypeScript 中
-
-### 2. 结构化量表
-
-- 位于 `data/scales/*.json`
-- 当前已支持 `Description / Dimension / Data / Diagnosis` 结构
-- 例如：`data/scales/sss.json`
-
-### 3. 半配置化内容量表
-
-- 内容位于 `data/scale-content/*.content.json`
-- 逻辑位于对应的 `lib/schemas/**.ts`
-- 当前已接入：
-  - `SRS`
-  - `ABC`
-  - `SNAP-IV`
-  - `CARS`
-
-说明：
-
-- 题干、口语化提问、追问、选项解释优先改 `data/scale-content/*.content.json`
-- 分值映射、反向计分、阈值、结论逻辑仍在 TypeScript 中
-- 详细维护规则见 [data/scale-content/README.md](./data/scale-content/README.md)
-
-## 核心能力
-
-### 量表与评测
-
-- 支持量表摘要列表与详情懒加载
-- 支持量表结果导出、历史归档、AI 建议生成
-- 支持带前置患者信息的结构化量表
-- 支持 `dimensionResults` 等扩展结果结构
-
-### 会话式评估
-
-- Assessment Session 用于统一管理问卷会话
-- 支持：
-  - 创建会话
-  - 获取当前题
-  - 提交答案
-  - 返回上一题
-  - 取消会话
-  - 完成后写入 `AssessmentHistory`
-
-### 成员、患者与医生
-
-- 成员画像与历史评估围绕 `MemberProfile` 隔离
-- 正式账号支持患者与医生两类业务身份
-- 医生需要审核通过后才能进入医生工作台
-- 支持成员级主治医生绑定、科研授权与导出审计
-
-### AgentPit 与 MCP
-
-公开接入入口：
-
-- `GET /openapi.json`
-- `GET /healthz`
-- `GET /v1/scales`
-- `GET /v1/scales/{scaleId}`
-- `POST /v1/scales/{scaleId}/evaluate`
-- `POST /v1/scales/{scaleId}/analyze-conversation`
-- `GET /api/agentpit/oauth/start`
-- `GET /api/agentpit/oauth/callback`
-
-在线体验入口：
-
-- `/agent`
-
-内部能力还包括：
-
-- `/api/mcp`
-- `/api/mcp/scale`
-- `/api/mcp/memory`
-- `/api/mcp/growth`
-- `/api/skill/v1/*`
+---
 
 ## 本地开发
 
@@ -137,9 +400,9 @@ types/                  类型补充
 npm install
 ```
 
-### 最小环境变量
+### 环境变量
 
-复制 `.env.example` 到 `.env` 后，至少配置以下内容：
+本地开发至少需要这些关键环境变量：
 
 ```env
 DATABASE_URL="postgresql://user:password@host:5432/dbname"
@@ -147,117 +410,145 @@ DIRECT_URL="postgresql://user:password@host:5432/dbname"
 
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 NEXT_PUBLIC_API_URL="http://localhost:3000"
-SESSION_SECRET="your-local-secret"
+
+SESSION_SECRET="your-random-secret"
+APP_SESSION_SECRET="optional-app-session-secret"
+ADMIN_SESSION_SECRET="optional-admin-session-secret"
 
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD="admin123456"
-
-AGENTPIT_SHARED_BEARER="your-agentpit-shared-bearer"
-AGENTPIT_CLIENT_ID="your-agentpit-client-id"
-AGENTPIT_CLIENT_SECRET="your-agentpit-client-secret"
-AGENTPIT_OAUTH_BASE_URL="https://api.agentpit.io"
-AGENTPIT_OAUTH_REDIRECT_URI="https://ailiangbiao.agentpit.io/api/agentpit/oauth/callback"
 ```
 
-如需启用模型与语音相关能力，还需要补充 AI 服务商密钥，详见 [.env.example](./.env.example)。
+说明：
 
-### 常用命令
+- `APP_SESSION_SECRET` 未设置时会回退到 `SESSION_SECRET`
+- `ADMIN_SESSION_SECRET` 未设置时也会回退到 `SESSION_SECRET`
+- 生产环境建议显式设置两个独立 secret
+
+### Prisma
+
+如果你修改了 `prisma/schema.prisma`：
+
+```bash
+npx prisma generate
+```
+
+开发库允许重建时可使用：
+
+```bash
+npx prisma db push --accept-data-loss
+```
+
+如果数据库里已有需要保留的历史字段或生产数据，请不要直接无脑执行 `--accept-data-loss`，应优先采用迁移或定向 SQL 变更。
+
+### 启动 Web/UI
 
 ```bash
 npm run dev
+```
+
+访问：
+
+- 主站：`http://localhost:3000`
+- Agent：`http://localhost:3000/agent`
+- 后台：`http://localhost:3000/admin/login`
+
+### 构建 Web/UI
+
+```bash
 npm run build
-npm run start
-npm run lint
-npm run content:check
+```
+
+### 构建 Skill Package Skeleton
+
+```bash
 npm run skill:build
+```
+
+### 启动 Skill Skeleton
+
+```bash
 npm run skill:start
 ```
 
-默认访问地址：
+默认地址：
 
-- 首页：`http://localhost:3000`
-- Agent 工作台：`http://localhost:3000/agent`
-- 患者注册：`http://localhost:3000/auth/register`
-- 医生注册：`http://localhost:3000/doctor/register`
-- 管理后台：`http://localhost:3000/admin/login`
+- `http://127.0.0.1:4318`
 
-## 关键接口
+当前 standalone skeleton 提供：
 
-### 应用侧接口
+- `/healthz`
+- `/readyz`
+- `/openapi.json`
+- `/mcp/manifest.json`
 
-- `GET /api/scales`
-- `GET /api/scales?view=summary`
-- `POST /api/scales/evaluate`
-- `POST /api/scales/analyze-conversation`
-- `POST /api/account/upgrade`
-- `POST /api/auth/register-patient`
-- `POST /api/auth/register-doctor`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/auth/me`
-- `GET /api/legal/privacy-consent/current`
-- `POST /api/assessment/save`
-- `POST /api/assessment/generate-advice`
-- `GET|POST|DELETE /api/triage/session`
-- `POST /api/speech/transcribe`
+---
 
-### 会话式量表接口
+## 部署
 
-- `POST /api/skill/v1/scales/{scaleId}/sessions`
-- `GET /api/skill/v1/scales/sessions/{sessionId}`
-- `POST /api/skill/v1/scales/sessions/{sessionId}/answer`
-- `POST /api/skill/v1/scales/sessions/{sessionId}/back`
-- `POST /api/skill/v1/scales/sessions/{sessionId}/cancel`
+当前线上环境：
 
-### 医生与患者接口
+- `https://ailiangbiao.agentpit.io`
 
-- `GET /api/doctors/search`
-- `GET|POST|DELETE /api/me/members/{memberId}/attending-doctor`
-- `GET|POST|DELETE /api/me/members/{memberId}/research-consent`
-- `GET /api/doctor/me/dashboard`
-- `GET /api/doctor/patients`
-- `GET /api/doctor/patients/{memberId}`
-- `GET /api/doctor/patients/{memberId}/timeline`
-- `POST /api/doctor/patients/{memberId}/notes`
-- `GET /api/doctor/patients/{memberId}/export`
+相关脚本：
 
-### 管理端接口
+- `scripts/redeploy-agent1002.ps1`
+- `scripts/remote-redeploy.sh`
+- `scripts/remote-migrate-preserve.sh`
+- `scripts/tencent-cloud-migrate.py`
 
-- `GET /api/admin/doctors/pending`
-- `POST /api/admin/doctors/{doctorId}/approve`
-- `POST /api/admin/doctors/{doctorId}/reject`
-- `POST /api/admin/doctors/{doctorId}/suspend`
-- `GET /api/admin/research-export-logs`
+如果服务器已经信任 SSH key，可使用：
 
-## 运维与部署入口
+```powershell
+pwsh -File .\scripts\redeploy-agent1002.ps1 -KeyPath C:\path\to\your\id_ed25519
+```
 
-详细部署与机器相关流程统一查看以下文档和脚本：
+更多说明见：
 
-- 通用部署说明：[DEPLOYMENT.md](./DEPLOYMENT.md)
-- 指定服务器重复部署说明：[docs/redeploy-agent1002.md](./docs/redeploy-agent1002.md)
-- 结构化量表格式说明：[docs/scale-manifest.md](./docs/scale-manifest.md)
-- Windows 重部署脚本：[scripts/redeploy-agent1002.ps1](./scripts/redeploy-agent1002.ps1)
-- 远端部署脚本：[scripts/remote-redeploy.sh](./scripts/remote-redeploy.sh)
+- `docs/redeploy-agent1002.md`
 
-常见运维脚本目录：
+---
 
-- `scripts/deploy*.sh`
-- `scripts/check*.mjs`
-- `scripts/fix*.mjs`
-- `scripts/diagnose*.mjs`
-- `scripts/validate-scale-content.mjs`
+## 现阶段取舍
 
-## 相关文档
+### 已完成
 
-- 量表内容维护说明：[data/scale-content/README.md](./data/scale-content/README.md)
-- 贡献说明：[CONTRIBUTING.md](./CONTRIBUTING.md)
-- 行为准则：[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
-- 变更记录：[CHANGELOG.md](./CHANGELOG.md)
-- 开源许可：[LICENSE](./LICENSE)
+- Skill-first 前端主链
+- `/agent` 智能体入口
+- 多成员档案与 assessment session
+- 服务端 `voice-intent`
+- 通话模式 UI
+- 医生 / 患者双注册与医生审核
+- 医生工作台、备注、时间线、科研导出
+- 管理后台真实系统概览
+- MCP Key 与 AI Key 服务端用途隔离
+- canonical MCP 强制鉴权
+- `packages/assessment-skill` skeleton
 
-## 注意事项
+### 仍在演进
 
-- 根 README 只保留项目总览，机器、域名、服务器初始化等现场信息请查看运维文档。
-- 运行部署脚本前，请先检查其中的域名、主机、路径、密钥和数据库策略是否匹配当前环境。
-- `.env`、私钥、证书和真实数据库连接串不要提交到 Git。
-- 本系统用于筛查、教育、职业探索和自我了解参考，不替代医生、心理咨询师或职业规划师的正式结论。
+- `packages/assessment-skill` 的 `server` 仍未完全 ports/adapters 解耦
+- 旧兼容层 `/api/scales`、`/api/voice-intent`、`/api/triage/session` 仍保留
+- 部分管理后台页面仍处于过渡态
+- 仍有一些历史表名与兼容字段需要逐步清理
+
+---
+
+## 免责声明
+
+本系统用于筛查、评估、教育、职业探索与辅助决策支持，不能替代正式医疗诊断或专业临床意见。
+
+如涉及：
+
+- 自伤 / 自杀风险
+- 严重精神困扰
+- 儿童安全风险
+- 明显功能退化
+
+请及时联系医生、心理专业人员或紧急支持资源。
+
+---
+
+## License
+
+[MIT](LICENSE)

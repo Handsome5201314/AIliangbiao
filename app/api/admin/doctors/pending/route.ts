@@ -1,31 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { prisma } from '@/lib/db/prisma';
-import { requireAdminToken } from '@/lib/auth/admin-token';
+import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { listPendingDoctors } from '@/lib/services/doctor-care';
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminToken(request);
-    const doctors = await prisma.doctorProfile.findMany({
-      where: {
-        verificationStatus: 'PENDING',
-      },
-      include: {
-        user: {
-          select: {
-            email: true,
-            createdAt: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    await requireAdminRequest(request);
 
+    const doctors = await listPendingDoctors();
     return NextResponse.json({ doctors });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to load pending doctors' },
-      { status: 401 }
+      { status: 500 }
     );
   }
 }

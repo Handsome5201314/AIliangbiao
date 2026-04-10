@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, profileId, scaleId, totalScore, conclusion, answers, formData, resultDetails } = body;
+    const { deviceId, profileId, scaleId, totalScore, conclusion, answers } = body;
 
     // 参数验证
     if (!deviceId || !scaleId || totalScore === undefined || !conclusion || !answers) {
@@ -53,8 +53,6 @@ export async function POST(request: NextRequest) {
         totalScore: parseFloat(totalScore.toFixed(2)),
         conclusion,
         answers: JSON.parse(JSON.stringify(answers)), // 确保是纯对象
-        formData: formData ? JSON.parse(JSON.stringify(formData)) : undefined,
-        resultDetails: resultDetails ? JSON.parse(JSON.stringify(resultDetails)) : undefined,
       },
     });
 

@@ -1,121 +1,157 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, StickyNote, UserRound } from 'lucide-react';
 
-export default function DoctorPatientDetailPage() {
-  const params = useParams<{ memberId: string }>();
-  const memberId = params?.memberId || '';
-  const [detail, setDetail] = useState<any>(null);
-  const [timeline, setTimeline] = useState<any[]>([]);
-  const [noteContent, setNoteContent] = useState('');
-  const [error, setError] = useState('');
+import { useAuthSession } from '@/contexts/AuthSessionContext';
+
+export default function DoctorPatientDetailPage({
+  params,
+}: {
+  params: Promise<{ memberId: string }>;
+}) {
+  const { authHeaders } = useAuthSession();
+  const [memberId, setMemberId] = useState('');
+  const [patient, setPatient] = useState<any>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const [note, setNote] = useState('');
+  const [noteType, setNoteType] = useState<'CLINICAL' | 'RESEARCH'>('CLINICAL');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
-    if (!memberId) {
-      return;
-    }
+    params.then((resolved) => setMemberId(resolved.memberId));
+  }, [params]);
 
-    Promise.all([
-      fetch(`/api/doctor/patients/${memberId}`).then((res) => res.json()),
-      fetch(`/api/doctor/patients/${memberId}/timeline`).then((res) => res.json()),
-    ])
-      .then(([detailData, timelineData]) => {
-        if (detailData.error) {
-          setError(detailData.error);
-          return;
-        }
-        setDetail(detailData);
-        setTimeline(timelineData.timeline || []);
-      })
-      .catch((fetchError) => {
-        setError(fetchError instanceof Error ? fetchError.message : '加载患者详情失败');
-      });
-  }, [memberId]);
+  useEffect(() => {
+    if (!memberId) return;
+    fetch(`/api/doctor/patients/${memberId}`, { headers: authHeaders })
+      .then((res) => res.json())
+      .then((data) => setPatient(data.patient))
+      .catch(console.error);
+    fetch(`/api/doctor/patients/${memberId}/timeline`, { headers: authHeaders })
+      .then((res) => res.json())
+      .then((data) => setEvents(data.events || []))
+      .catch(console.error);
+  }, [authHeaders, memberId]);
 
-  const submitNote = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!memberId || !noteContent.trim()) {
-      return;
-    }
+  const submitNote = async () => {
+    if (!note.trim()) return;
 
     const response = await fetch(`/api/doctor/patients/${memberId}/notes`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: noteContent, noteType: 'CLINICAL' }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify({
+        noteType,
+        content: note.trim(),
+      }),
     });
-    const data = await response.json().catch(() => ({}));
+
+    const data = await response.json();
     if (!response.ok) {
-      setError(data.error || '保存备注失败');
+      setStatus(data.error || '添加备注失败');
       return;
     }
 
-    setNoteContent('');
-    const refreshed = await fetch(`/api/doctor/patients/${memberId}/timeline`).then((res) => res.json());
-    setTimeline(refreshed.timeline || []);
+    setStatus('备注已保存');
+    setNote('');
+    const timeline = await fetch(`/api/doctor/patients/${memberId}/timeline`, { headers: authHeaders }).then((res) => res.json());
+    setEvents(timeline.events || []);
   };
+
+  const exportHref = useMemo(() => {
+    if (!memberId) return '#';
+    return `/api/doctor/patients/${memberId}/export?format=CSV&purpose=research`;
+  }, [memberId]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">患者详情</h1>
-        <p className="mt-1 text-sm text-slate-500">查看成员画像、测评时间线、科研授权和医生私有备注。</p>
+        <h1 className="text-3xl font-bold text-slate-900">患者时间线</h1>
+        <p className="mt-2 text-sm text-slate-500">查看测评记录、添加私有备注、下载科研导出。</p>
       </div>
 
-      {error && <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>}
-
-      {detail?.member && (
-        <div className="rounded-3xl bg-white p-6 shadow-sm">
-          <div className="text-xl font-semibold text-slate-900">{detail.member.nickname}</div>
-          <div className="mt-2 text-sm text-slate-500">
-            {String(detail.member.relation || '').toLowerCase()} · {detail.member.gender} · {detail.member.ageMonths ?? '未知'} 月
+      {patient && (
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex gap-3">
+              <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
+                <UserRound className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">{patient.memberProfile.nickname}</h2>
+                <p className="text-sm text-slate-500">
+                  {patient.memberProfile.relation} · {patient.memberProfile.gender} · {patient.memberProfile.ageMonths ?? '未知'} 月
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  科研授权：{patient.memberProfile.researchConsent?.status || '未授权'}
+                </p>
+              </div>
+            </div>
+            <a
+              href={exportHref}
+              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600"
+            >
+              <Download className="h-4 w-4" />
+              <span>科研导出 CSV</span>
+            </a>
           </div>
-          <div className="mt-3 text-sm text-slate-600">
-            主治绑定开始：{detail.careAssignment ? new Date(detail.careAssignment.startedAt).toLocaleString() : '未绑定'}
-          </div>
-          <div className="mt-1 text-sm text-slate-600">
-            科研授权状态：{detail.researchConsent?.status || 'REVOKED'}
-          </div>
-          <div className="mt-1 text-sm text-slate-600">患者邮箱：{detail.member.user?.email || '未提供'}</div>
-        </div>
+        </section>
       )}
 
-      <form onSubmit={submitNote} className="rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-900">新增医生备注</h2>
-        <textarea
-          value={noteContent}
-          onChange={(e) => setNoteContent(e.target.value)}
-          placeholder="输入本次随访或科研备注..."
-          className="mt-4 min-h-[120px] w-full rounded-2xl border border-slate-200 px-4 py-3"
-        />
-        <button type="submit" className="mt-4 rounded-2xl bg-slate-900 px-4 py-3 text-white font-semibold">
-          保存备注
-        </button>
-      </form>
-
-      <div className="rounded-3xl bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">时间线</h2>
-          {memberId && (
-            <a
-              href={`/api/doctor/patients/${memberId}/export?type=csv&purpose=${encodeURIComponent('doctor-research')}`}
-              className="rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">医生备注</h2>
+        <div className="mt-4 flex flex-col gap-3">
+          <select
+            value={noteType}
+            onChange={(event) => setNoteType(event.target.value as 'CLINICAL' | 'RESEARCH')}
+            className="max-w-xs rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+          >
+            <option value="CLINICAL">临床备注</option>
+            <option value="RESEARCH">科研备注</option>
+          </select>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="添加备注，默认仅医生端和平台管理员可见。"
+            className="min-h-[120px] rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-cyan-300"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void submitNote()}
+              className="inline-flex items-center gap-2 rounded-full bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
             >
-              下载科研 CSV
-            </a>
-          )}
+              <StickyNote className="h-4 w-4" />
+              <span>保存备注</span>
+            </button>
+            {status && <span className="text-sm text-slate-500">{status}</span>}
+          </div>
         </div>
-        <div className="mt-4 space-y-3">
-          {timeline.map((item, index) => (
-            <div key={`${item.type}-${index}`} className="rounded-2xl border border-slate-200 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-indigo-600">{item.type}</div>
-              <div className="mt-2 text-sm text-slate-500">{new Date(item.createdAt).toLocaleString()}</div>
-              <pre className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{JSON.stringify(item.payload, null, 2)}</pre>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">时间线</h2>
+        <div className="mt-4 space-y-4">
+          {events.length ? events.map((event) => (
+            <div key={`${event.type}-${event.id}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-slate-900">
+                  {event.type === 'ASSESSMENT' ? event.scaleId : `${event.noteType} 备注`}
+                </div>
+                <div className="text-xs text-slate-500">{new Date(event.createdAt).toLocaleString()}</div>
+              </div>
+              <div className="mt-2 text-sm text-slate-600">
+                {event.type === 'ASSESSMENT'
+                  ? `${event.conclusion} · ${event.totalScore}`
+                  : event.content}
+              </div>
             </div>
-          ))}
-          {!timeline.length && <div className="text-sm text-slate-500">暂无时间线事件</div>}
+          )) : <div className="text-sm text-slate-400">暂无时间线事件</div>}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

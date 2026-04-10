@@ -2,24 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { LanguageCode } from '@/lib/schemas/core/types';
-import {
-  AlertCircle,
-  ArrowRight,
-  FileUp,
-  Loader2,
-  MessageCircle,
-  Mic,
-  MicOff,
-  Pause,
-  Play,
-  Volume2,
-  X,
-} from 'lucide-react';
+import { AlertCircle, ArrowRight, Loader2, MessageCircle, Mic, MicOff, Pause, Play, Volume2 } from 'lucide-react';
 
 import { useProfile, useConversationHistory } from '@/contexts';
 import { useSkillSession } from '@/contexts/SkillSessionContext';
 import { MAX_FALLBACKS, MAX_REPROMPTS, NO_INPUT_TIMEOUT_MS } from '@/lib/services/voiceRules';
-import Avatar from '@/components/Avatar';
 import {
   TriageAIResponse,
   TriageContext,
@@ -33,13 +20,11 @@ import {
   recommendScaleFromSymptoms,
   TRIAGE_SYSTEM_PROMPT,
 } from '@/lib/services/triageFlow';
-import { useSpeechPlayback } from '@/lib/services/useSpeechPlayback';
 
 interface TriageVoiceRecorderProps {
   onStartScale: (scaleId: string) => void;
   language?: LanguageCode;
   mode?: 'dock' | 'call';
-  onClose?: () => void;
 }
 
 function buildTriageContextLabel(state: TriageState, language: LanguageCode) {
@@ -122,7 +107,6 @@ export default function TriageVoiceRecorder({
   onStartScale,
   language = 'zh',
   mode = 'dock',
-  onClose,
 }: TriageVoiceRecorderProps) {
   const { profile } = useProfile();
   const { addMessage } = useConversationHistory();
@@ -146,30 +130,19 @@ export default function TriageVoiceRecorder({
   const lastAssistantPromptRef = useRef('');
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const welcomedRef = useRef(false);
-  const speechPlayback = useSpeechPlayback(language, {
-    onError: (message) => {
-      setError((current) => current || message);
-    },
-  });
 
-  const speakText = useCallback(
-    async (text: string, source: 'auto' | 'manual' = 'auto') => {
-      if (!text) {
-        return;
-      }
+  const speakText = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text) {
+      return;
+    }
 
-      lastAssistantPromptRef.current = text;
-      const result = await speechPlayback.speakText(text, {
-        queueIfLocked: source === 'auto',
-        fromUserGesture: source === 'manual',
-      });
-
-      if (result.queued && mode === 'call') {
-        setError(null);
-      }
-    },
-    [mode, speechPlayback]
-  );
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language === 'en' ? 'en-US' : 'zh-CN';
+    utterance.rate = 0.92;
+    lastAssistantPromptRef.current = text;
+    window.speechSynthesis.speak(utterance);
+  }, [language]);
 
   const fetchQuota = useCallback(async () => {
     try {
@@ -354,9 +327,11 @@ export default function TriageVoiceRecorder({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
-      speechPlayback.stopPlayback();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     };
-  }, [fetchQuota, initTriage, language, loadSession, speechPlayback]);
+  }, [fetchQuota, initTriage, language, loadSession]);
 
   useEffect(() => {
     if (mode !== 'call' || welcomedRef.current) {
@@ -375,7 +350,7 @@ export default function TriageVoiceRecorder({
     };
 
     setAssistantReply(introReply);
-    void speakText(introText, 'auto');
+    speakText(introText);
     welcomedRef.current = true;
   }, [language, mode, profile.nickname, speakText]);
 
@@ -417,7 +392,7 @@ export default function TriageVoiceRecorder({
           state: 'paused',
           pausedFromState: prev.state === 'paused' ? prev.pausedFromState : prev.state,
         }));
-        void speakText(pauseText, 'auto');
+        speakText(pauseText);
         return;
       }
 
@@ -433,7 +408,7 @@ export default function TriageVoiceRecorder({
         confidence: 0.92,
         meta: { reason: 'timeout reprompt' },
       });
-      void speakText(repromptText, 'auto');
+      speakText(repromptText);
     }, NO_INPUT_TIMEOUT_MS);
 
     return () => {
@@ -445,12 +420,12 @@ export default function TriageVoiceRecorder({
 
   const startRecording = useCallback(async () => {
     try {
-      speechPlayback.stopPlayback();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-
-      speechPlayback.primePlayback();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -506,7 +481,7 @@ export default function TriageVoiceRecorder({
       setError(errorMessage);
       setIsRecording(false);
     }
-  }, [language, speechPlayback]);
+  }, [language]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
@@ -706,7 +681,7 @@ export default function TriageVoiceRecorder({
       action: parsed.action,
     });
 
-    void speakText(replyText, 'auto');
+    speakText(replyText);
 
     if (parsed.action === 'start_scale' && parsed.scaleId) {
       await saveSession(nextContext, 'COMPLETED');
@@ -843,265 +818,13 @@ export default function TriageVoiceRecorder({
     void handleUserMessage(prompt);
   }, [handleUserMessage, language, triageContext.state]);
 
-  const handleReplayAssistant = useCallback(() => {
-    const playbackSource =
-      speechPlayback.pendingText ||
-      lastAssistantPromptRef.current ||
-      assistantReply?.text ||
-      buildTriageContextLabel(triageContext.state, language);
-
-    void speakText(playbackSource, 'manual');
-  }, [assistantReply?.text, language, speakText, speechPlayback.pendingText, triageContext.state]);
-
-  const handleUploadPlaceholder = useCallback(() => {
-    const uploadHint =
-      language === 'en'
-        ? 'File upload is coming soon. You can directly describe the recent symptoms for now.'
-        : '资料上传功能即将开放。你现在也可以直接口述最近的症状与困扰。';
-
-    const uploadReply: TriageAIResponse = {
-      text: uploadHint,
-      action: 'acknowledge',
-      confidence: 1,
-      meta: {
-        reason: 'upload_placeholder',
-      },
-    };
-
-    setAssistantReply(uploadReply);
-    lastAssistantPromptRef.current = uploadHint;
-    setError(null);
-    void speakText(uploadHint, 'manual');
-  }, [language, speakText]);
-
-  const callAssistantText =
-    assistantReply?.text ||
-    lastAssistantPromptRef.current ||
-    (language === 'en'
-      ? `Hello, I am your assessment assistant. Start with the most important recent change for ${profile.nickname || 'this family member'}.`
-      : `你好，我是你的评测助手。你可以先从${profile.nickname || '当前家庭成员'}最近最困扰的情况开始说起。`);
-
-  const callStatusText = isRecording
-    ? (language === 'en' ? 'Listening...' : '正在听…')
-    : isTranscribing
-      ? (language === 'en' ? 'Transcribing...' : '正在识别…')
-      : isProcessing
-        ? (language === 'en' ? 'Analyzing...' : '正在分析…')
-        : speechPlayback.isSpeaking
-          ? (language === 'en' ? 'Speaking...' : '正在播报…')
-          : triageContext.state === 'paused'
-            ? (language === 'en' ? 'Paused' : '已暂停')
-            : (language === 'en' ? 'Ready to listen' : '准备聆听');
-
-  const callHintText = error ||
-    speechPlayback.lastError ||
-    (speechPlayback.pendingText && !speechPlayback.isUnlocked
-      ? (language === 'en'
-          ? 'Tap the play button once to start the voice guidance.'
-          : '先点一次播放按钮，开启语音引导。')
-      : language === 'en'
-        ? 'You can talk naturally, or say repeat, explain, pause, and continue.'
-        : '你可以自然描述情况，也可以直接说“重复一遍”“解释一下”“暂停”“继续”。');
-
-  const canCloseCall = typeof onClose === 'function';
-
-  if (mode === 'call') {
-    return (
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.12),transparent_28%),radial-gradient(circle_at_center,rgba(236,72,153,0.10),transparent_24%),linear-gradient(180deg,#040404_0%,#08090f_52%,#020202_100%)]" />
-        <div className="absolute inset-x-0 top-[12vh] mx-auto h-[42vw] w-[42vw] max-h-64 max-w-64 rounded-full bg-fuchsia-500/10 blur-[120px]" />
-        <div className="absolute bottom-[18vh] left-1/2 h-[38vw] w-[38vw] max-h-56 max-w-56 -translate-x-1/2 rounded-full bg-cyan-400/10 blur-[120px]" />
-
-        <div className="relative flex min-h-0 flex-1 flex-col px-2 pt-3 sm:px-6">
-          <div className="mx-auto flex min-h-0 w-full max-w-[min(100%,46rem)] flex-1 flex-col">
-            <div className="flex-1 overflow-y-auto pb-4">
-              <div className="space-y-4 sm:space-y-5">
-                <div className="flex items-center justify-center">
-                  <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-white/10 bg-white/8 px-3 py-2 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-4 sm:py-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/15 text-xl sm:h-10 sm:w-10">
-                      <span role="img" aria-label="briefcase">💼</span>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-base font-semibold text-white sm:text-2xl">
-                        {language === 'en' ? 'Voice Intake' : '模拟通话'}
-                      </div>
-                      <div className="truncate text-[10px] uppercase tracking-[0.24em] text-white/40 sm:text-[11px]">
-                        {language === 'en' ? 'AI Assessment Assistant' : 'AI 语音评测助手'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-center text-[10px] uppercase tracking-[0.38em] text-white/35 sm:text-xs sm:tracking-[0.42em]">
-                  {triageContext.state === 'consent'
-                    ? (language === 'en' ? 'Recommended scale ready' : '推荐量表已就绪')
-                    : triageContext.state === 'paused'
-                      ? (language === 'en' ? 'Session paused' : '会话已暂停')
-                      : (language === 'en' ? 'Live triage call' : '实时语音分诊')}
-                </div>
-
-                <div className="mx-auto max-h-[clamp(8rem,24vh,14rem)] max-w-[min(100%,21rem)] overflow-y-auto px-2 text-center text-[clamp(1.9rem,6.4vw,3rem)] font-medium leading-[1.34] text-white/92 sm:max-h-none sm:max-w-3xl sm:text-[clamp(2.4rem,4vw,3.5rem)] sm:leading-[1.42]">
-                  {callAssistantText}
-                </div>
-
-                <div className="flex justify-center py-2 sm:py-6">
-                  <div className="relative flex h-[min(72vw,18.5rem)] w-[min(72vw,18.5rem)] items-center justify-center sm:h-[min(46vw,24rem)] sm:w-[min(46vw,24rem)]">
-                    <div
-                      className={`absolute inset-0 rounded-full border border-white/8 bg-white/[0.03] transition-all ${
-                        speechPlayback.isSpeaking || isRecording ? 'scale-[1.03] shadow-[0_0_70px_rgba(99,102,241,0.24)]' : 'scale-100'
-                      }`}
-                    />
-                    <div
-                      className={`absolute inset-[11%] rounded-full border transition-all ${
-                        isRecording
-                          ? 'border-emerald-300/35 animate-pulse'
-                          : speechPlayback.isSpeaking
-                            ? 'border-cyan-300/35 animate-pulse'
-                            : 'border-white/10'
-                      }`}
-                    />
-                    <div
-                      className={`absolute inset-[23%] rounded-full blur-3xl transition-all ${
-                        isRecording
-                          ? 'bg-emerald-400/20'
-                          : speechPlayback.isSpeaking
-                            ? 'bg-fuchsia-400/16'
-                            : 'bg-indigo-400/12'
-                      }`}
-                    />
-
-                    <div className="relative flex h-[58%] w-[58%] items-center justify-center rounded-full border border-white/10 bg-[#12131a]/85 shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                      <Avatar
-                        state={{
-                          ...profile.avatarState,
-                          mood: isRecording ? 'curious' : speechPlayback.isSpeaking ? 'happy' : profile.avatarState.mood,
-                        }}
-                        gender={profile.gender}
-                        className="h-[66%] w-[66%]"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-center justify-center gap-2">
-                    {[0, 1, 2].map((dot) => (
-                      <span
-                        key={dot}
-                        className={`h-3 w-3 rounded-full transition-all ${
-                          isRecording || isProcessing || isTranscribing || speechPlayback.isSpeaking
-                            ? 'animate-bounce bg-white'
-                            : 'bg-white/25'
-                        }`}
-                        style={{ animationDelay: `${dot * 120}ms` }}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="text-center text-[clamp(1.7rem,6vw,2.4rem)] font-medium tracking-tight text-white">
-                    {callStatusText}
-                  </div>
-
-                  <div className="mx-auto max-w-[min(100%,20rem)] text-center text-sm leading-6 text-white/60 sm:max-w-2xl sm:text-base">
-                    {callHintText}
-                  </div>
-
-                  {remainingQuota !== null && (
-                    <div className="text-center text-[11px] uppercase tracking-[0.24em] text-white/35 sm:text-xs sm:tracking-[0.28em]">
-                      {language === 'en' ? 'Remaining today' : '今日剩余'} · {remainingQuota}
-                    </div>
-                  )}
-
-                  {triageContext.state === 'consent' && triageContext.recommendedScale && (
-                    <div className="flex justify-center">
-                      <button
-                        onClick={() => onStartScale(triageContext.recommendedScale!)}
-                        className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_20px_50px_rgba(16,185,129,0.25)] transition-transform hover:scale-[1.02] hover:bg-emerald-400"
-                      >
-                        <span>
-                          {language === 'en'
-                            ? `Start ${triageContext.recommendedScale}`
-                            : `开始 ${triageContext.recommendedScale} 评估`}
-                        </span>
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="shrink-0 border-t border-white/6 pt-4 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-              <div className="mx-auto flex w-full max-w-[22.5rem] items-end justify-between gap-3 sm:max-w-[26rem] sm:gap-4">
-                <button
-                  type="button"
-                  onClick={toggleRecording}
-                  disabled={isTranscribing || isProcessing}
-                  className={`group flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-full transition-all sm:h-24 sm:w-24 ${
-                    isTranscribing || isProcessing
-                      ? 'cursor-not-allowed bg-white/10 text-white/40'
-                      : isRecording
-                        ? 'bg-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.35)]'
-                        : 'bg-white/10 text-white hover:bg-white/16'
-                  }`}
-                  aria-label={language === 'en' ? 'Toggle microphone' : '切换麦克风'}
-                >
-                  {isTranscribing || isProcessing ? (
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                  ) : isRecording ? (
-                    <MicOff className="h-8 w-8" />
-                  ) : (
-                    <Mic className="h-8 w-8" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleUploadPlaceholder}
-                  className="flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full bg-white/8 text-white/80 transition-colors hover:bg-white/14 sm:h-[4.5rem] sm:w-[4.5rem]"
-                  aria-label={language === 'en' ? 'Upload supporting material' : '上传补充资料'}
-                >
-                  <FileUp className="h-6 w-6 sm:h-7 sm:w-7" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={speechPlayback.isSpeaking ? speechPlayback.stopPlayback : handleReplayAssistant}
-                  disabled={!speechPlayback.pendingText && !lastAssistantPromptRef.current && !assistantReply?.text}
-                  className="flex h-[3.75rem] w-[3.75rem] items-center justify-center rounded-full bg-white/8 text-white/80 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-40 sm:h-[4.5rem] sm:w-[4.5rem]"
-                  aria-label={language === 'en' ? 'Play or stop assistant voice' : '播放或停止语音播报'}
-                >
-                  {speechPlayback.isSpeaking ? <Pause className="h-6 w-6 sm:h-7 sm:w-7" /> : <Volume2 className="h-6 w-6 sm:h-7 sm:w-7" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onClose?.()}
-                  disabled={!canCloseCall}
-                  className="flex h-[4.75rem] w-[4.75rem] items-center justify-center rounded-full bg-[#19191d] text-rose-500 transition-colors hover:bg-[#232329] hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-35 sm:h-24 sm:w-24"
-                  aria-label={language === 'en' ? 'Close call mode' : '关闭通话模式'}
-                >
-                  <X className="h-9 w-9 sm:h-10 sm:w-10" />
-                </button>
-              </div>
-
-              <div className="mt-5 text-center text-xs text-white/24">
-                {language === 'en' ? 'AI-generated guidance' : '内容由 AI 生成'}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center">
+    <div className={`flex flex-col items-center ${mode === 'call' ? 'mx-auto max-w-3xl' : 'mx-auto max-w-md'}`}>
       {assistantReply?.text && !isProcessing && (
-        <div className={getTriageCardClasses('dock')}>
+        <div className={getTriageCardClasses(mode)}>
           <div className="flex items-start gap-2">
-            <MessageCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
-            <p className="text-sm leading-relaxed text-gray-700">{assistantReply.text}</p>
+            <MessageCircle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${mode === 'call' ? 'text-cyan-300' : 'text-blue-600'}`} />
+            <p className={`text-sm leading-relaxed ${mode === 'call' ? 'text-white/90' : 'text-gray-700'}`}>{assistantReply.text}</p>
           </div>
         </div>
       )}
@@ -1116,7 +839,7 @@ export default function TriageVoiceRecorder({
       {(isTranscribing || isProcessing) && (
         <div className="mb-2 flex items-center gap-2 text-indigo-600">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-xs font-medium">
+          <span className={`text-xs font-medium ${mode === 'call' ? 'text-cyan-200' : ''}`}>
             {isTranscribing
               ? (language === 'en' ? 'Transcribing...' : '正在识别语音...')
               : (language === 'en' ? 'Analyzing...' : '正在分析分诊内容...')}
@@ -1125,18 +848,18 @@ export default function TriageVoiceRecorder({
       )}
 
       {transcript && !isProcessing && (
-        <div className="mb-2 max-w-xs text-center text-xs text-gray-600">
+        <div className={`mb-2 max-w-xs text-center text-xs ${mode === 'call' ? 'text-white/60' : 'text-gray-600'}`}>
           {language === 'en' ? 'You said:' : '您刚刚说：'} "{transcript}"
         </div>
       )}
 
       {remainingQuota !== null && !isRecording && !isTranscribing && !isProcessing && (
-        <div className="mb-2 text-xs text-gray-500">
+        <div className={`mb-2 text-xs ${mode === 'call' ? 'text-white/55' : 'text-gray-500'}`}>
           {language === 'en' ? 'Remaining today:' : '今日剩余：'} {remainingQuota}
         </div>
       )}
 
-      <div className="mb-3 text-center text-xs text-gray-500">
+      <div className={`mb-3 text-center text-xs ${mode === 'call' ? 'text-white/60' : 'text-gray-500'}`}>
         {buildTriageContextLabel(triageContext.state, language)}
       </div>
 
@@ -1154,7 +877,7 @@ export default function TriageVoiceRecorder({
         </button>
       )}
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className={`mt-3 flex items-center gap-2 ${mode === 'call' ? 'rounded-full border border-white/10 bg-white/5 px-4 py-3' : ''}`}>
         <button
           onClick={toggleRecording}
           disabled={isTranscribing || isProcessing}
@@ -1182,26 +905,31 @@ export default function TriageVoiceRecorder({
         <button
           onClick={handlePauseToggle}
           disabled={isRecording || isTranscribing || isProcessing}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 disabled:opacity-50 hover:bg-slate-50"
+          className={`flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-50 ${
+            mode === 'call'
+              ? 'border border-white/10 bg-white/10 text-white hover:bg-white/15'
+              : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
           aria-label={triageContext.state === 'paused' ? 'Resume triage' : 'Pause triage'}
         >
           {triageContext.state === 'paused' ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
         </button>
 
         <button
-          onClick={() => void speakText(
-            lastAssistantPromptRef.current || assistantReply?.text || buildTriageContextLabel(triageContext.state, language),
-            'manual'
-          )}
+          onClick={() => speakText(lastAssistantPromptRef.current || assistantReply?.text || buildTriageContextLabel(triageContext.state, language))}
           disabled={isRecording || isTranscribing}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 disabled:opacity-50 hover:bg-slate-50"
+          className={`flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-50 ${
+            mode === 'call'
+              ? 'border border-white/10 bg-white/10 text-white hover:bg-white/15'
+              : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
           aria-label={language === 'en' ? 'Repeat assistant reply' : '重复播报'}
         >
           <Volume2 className="h-4 w-4" />
         </button>
       </div>
 
-      <p className="mt-2 text-center text-xs font-medium text-slate-500">
+      <p className={`mt-2 text-center text-xs font-medium ${mode === 'call' ? 'text-white/55' : 'text-slate-500'}`}>
         {isTranscribing || isProcessing
           ? (language === 'en' ? 'Processing...' : '处理中...')
           : isRecording
@@ -1211,6 +939,34 @@ export default function TriageVoiceRecorder({
               : '点击开始说话。你也可以直接说“重复一遍”“解释一下”“暂停”“继续”。')}
       </p>
 
+      {mode === 'call' && (
+        <div className="mt-6 grid w-full gap-3 text-left text-sm text-white/70 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">No-Input</div>
+            <p>
+              {language === 'en'
+                ? `If you stay silent for ${NO_INPUT_TIMEOUT_MS / 1000} seconds, I will gently reprompt and eventually pause.`
+                : `如果 ${NO_INPUT_TIMEOUT_MS / 1000} 秒内没有回应，我会轻柔重问，并在多次无回应后自动暂停。`}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">No-Match</div>
+            <p>
+              {language === 'en'
+                ? `If I still cannot understand after ${MAX_FALLBACKS} fallback tries, I will switch to simpler prompts.`
+                : `如果连续 ${MAX_FALLBACKS} 次都没理解，我会自动切换成更简单的话术来引导。`}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">Meta Intents</div>
+            <p>
+              {language === 'en'
+                ? 'You can interrupt anytime and say repeat, explain, pause, continue, or start now.'
+                : '你可以随时打断并直接说“重复一遍”“解释一下”“暂停”“继续”或“现在开始”。'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

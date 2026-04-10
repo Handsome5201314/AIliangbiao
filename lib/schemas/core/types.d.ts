@@ -127,6 +127,9 @@ export interface ScaleManifest extends ScaleDefinition {
         method: 'sum';
         thresholds: ScaleManifestThreshold[];
         dimensions?: ScaleManifestDimension[];
+        scoreQuestionIds?: number[];
+        totalScoreLabel?: string;
+        totalScoreHint?: string;
     };
 }
 export interface VoiceAnswer {

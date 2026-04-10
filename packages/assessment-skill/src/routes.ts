@@ -11,11 +11,13 @@ export const skillRoutes = {
   triageSession: `${SKILL_ROUTE_PREFIX}/me/triage-session`,
   scaleDetail: (scaleId: string) => `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}`,
   scaleEvaluate: (scaleId: string) => `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/evaluate`,
-  scaleSessionCreate: (scaleId: string) => `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/sessions`,
-  scaleSessionDetail: (sessionId: string) => `${SKILL_ROUTE_PREFIX}/scales/sessions/${encodeURIComponent(sessionId)}`,
-  scaleSessionAnswer: (sessionId: string) => `${SKILL_ROUTE_PREFIX}/scales/sessions/${encodeURIComponent(sessionId)}/answer`,
-  scaleSessionBack: (sessionId: string) => `${SKILL_ROUTE_PREFIX}/scales/sessions/${encodeURIComponent(sessionId)}/back`,
-  scaleSessionCancel: (sessionId: string) => `${SKILL_ROUTE_PREFIX}/scales/sessions/${encodeURIComponent(sessionId)}/cancel`,
+  scaleSessions: (scaleId: string) => `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/sessions`,
+  scaleSession: (scaleId: string, sessionId: string) =>
+    `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/sessions/${encodeURIComponent(sessionId)}`,
+  scaleSessionAnswer: (scaleId: string, sessionId: string) =>
+    `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/sessions/${encodeURIComponent(sessionId)}/answer`,
+  scaleSessionResult: (scaleId: string, sessionId: string) =>
+    `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/sessions/${encodeURIComponent(sessionId)}/result`,
   scaleAnalyzeConversation: (scaleId: string) =>
     `${SKILL_ROUTE_PREFIX}/scales/${encodeURIComponent(scaleId)}/analyze-conversation`,
   members: `${SKILL_ROUTE_PREFIX}/me/members`,

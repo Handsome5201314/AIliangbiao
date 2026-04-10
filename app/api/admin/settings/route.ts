@@ -7,9 +7,13 @@
 import { prisma } from '@/lib/db/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+
 // 获取所有系统设置
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    await requireAdminRequest(request);
+
     const configs = await prisma.systemConfig.findMany();
     
     // 转换为对象格式
@@ -20,6 +24,10 @@ export async function GET() {
 
     return NextResponse.json({ settings });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     console.error('[Get Settings Error]:', error);
     return NextResponse.json(
       { error: '获取设置失败' },
@@ -31,6 +39,8 @@ export async function GET() {
 // 保存系统设置
 export async function POST(request: NextRequest) {
   try {
+    await requireAdminRequest(request);
+
     const body = await request.json();
     const { settings } = body;
 
@@ -57,6 +67,10 @@ export async function POST(request: NextRequest) {
       message: '设置已保存'
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     console.error('[Save Settings Error]:', error);
     return NextResponse.json(
       { error: '保存设置失败' },

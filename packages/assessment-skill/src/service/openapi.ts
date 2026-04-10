@@ -21,7 +21,7 @@ export function buildOpenApiDocument(config: AssessmentSkillServiceConfig) {
     info: {
       title: config.serviceName,
       version: config.version,
-      description: 'Standalone assessment skill service skeleton for scales, voice intent, member context, and OpenClaw integration.',
+      description: 'Local deterministic assessment service skeleton with MCP-ready session routes and compatibility adapters.',
     },
     servers: [
       {

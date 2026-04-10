@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requirePatientUser } from '@/lib/auth/require-app-session';
+import { upsertResearchConsent } from '@/lib/services/doctor-care';
 import { prisma } from '@/lib/db/prisma';
-import { requirePatientUser } from '@/lib/auth/user-session';
-import { setResearchConsent } from '@/lib/domain/care-service';
 
 export async function GET(
   request: NextRequest,
@@ -11,16 +11,26 @@ export async function GET(
   try {
     const { user } = await requirePatientUser(request);
     const { memberId } = await context.params;
-    const consent = await prisma.researchConsent.findFirst({
+    const member = await prisma.memberProfile.findFirst({
       where: {
-        memberProfileId: memberId,
-        grantedByUserId: user.id,
+        id: memberId,
+        userId: user.id,
+      },
+      include: {
+        researchConsent: true,
       },
     });
-    return NextResponse.json({ consent });
+
+    if (!member) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      consent: member.researchConsent,
+    });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to load research consent' },
+      { error: error instanceof Error ? error.message : 'Unauthorized' },
       { status: 401 }
     );
   }
@@ -33,12 +43,17 @@ export async function POST(
   try {
     const { user } = await requirePatientUser(request);
     const { memberId } = await context.params;
-    const consent = await setResearchConsent({
-      patientUserId: user.id,
+
+    const consent = await upsertResearchConsent({
       memberId,
-      granted: true,
+      grantedByUserId: user.id,
+      status: 'GRANTED',
     });
-    return NextResponse.json({ success: true, consent });
+
+    return NextResponse.json({
+      success: true,
+      consent,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to grant research consent' },
@@ -54,12 +69,17 @@ export async function DELETE(
   try {
     const { user } = await requirePatientUser(request);
     const { memberId } = await context.params;
-    const consent = await setResearchConsent({
-      patientUserId: user.id,
+
+    const consent = await upsertResearchConsent({
       memberId,
-      granted: false,
+      grantedByUserId: user.id,
+      status: 'REVOKED',
     });
-    return NextResponse.json({ success: true, consent });
+
+    return NextResponse.json({
+      success: true,
+      consent,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to revoke research consent' },

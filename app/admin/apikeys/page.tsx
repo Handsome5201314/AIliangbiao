@@ -270,7 +270,7 @@ export default function ApiKeysPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">API 密钥管理</h2>
-          <p className="text-sm text-slate-500 mt-1">管理系统级API密钥，支持自定义接口和测速功能</p>
+          <p className="text-sm text-slate-500 mt-1">仅管理 AI 服务商密钥，用于文本模型与语音识别调用，不包含 MCP 服务凭证。</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}

@@ -1,39 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
-import { registerPatientAccount } from '@/lib/auth/account-service';
-import { attachUserSessionCookie } from '@/lib/auth/user-session';
+import { issueAppSessionToken } from '@/lib/auth/app-session';
+import { createPatientAccount } from '@/lib/services/doctor-care';
 
 const requestSchema = z.object({
-  deviceId: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
-  consentAccepted: z.literal(true),
-  consentVersion: z.string().min(1),
-  profile: z
-    .object({
-      relation: z.string().optional(),
-      languagePreference: z.string().optional(),
-      nickname: z.string().optional(),
-      gender: z.string().optional(),
-      ageMonths: z.number().nullable().optional(),
-      interests: z.array(z.string()).optional(),
-      fears: z.array(z.string()).optional(),
-      avatarState: z.any().optional(),
-    })
-    .optional(),
+  phone: z.string().optional(),
+  deviceId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = requestSchema.parse(await request.json());
-    const user = await registerPatientAccount({
-      ...body,
-      request,
+    const passwordHash = await bcrypt.hash(body.password, 10);
+
+    const user = await createPatientAccount({
+      email: body.email,
+      phone: body.phone,
+      passwordHash,
+      deviceId: body.deviceId,
     });
 
-    const response = NextResponse.json({
+    const session = issueAppSessionToken({
+      userId: user.id,
+      accountType: 'PATIENT',
+      role: user.role,
+      email: user.email || undefined,
+    });
+
+    return NextResponse.json({
       success: true,
+      token: session.token,
       user: {
         id: user.id,
         email: user.email,
@@ -41,15 +41,10 @@ export async function POST(request: NextRequest) {
         role: user.role,
       },
     });
-    attachUserSessionCookie(response, {
-      userId: user.id,
-      accountType: 'PATIENT',
-    });
-    return response;
   } catch (error) {
     const status = error instanceof z.ZodError ? 400 : 500;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : '患者注册失败' },
+      { error: error instanceof Error ? error.message : 'Failed to register patient' },
       { status }
     );
   }

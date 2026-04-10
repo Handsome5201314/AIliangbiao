@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 import {
+  resolveLocalizedText,
   resolveQuestionConfirmationPrompt,
   resolveQuestionSimpleExplain,
   resolveQuestionVoicePrompt,
@@ -26,7 +27,6 @@ import {
   createVoiceSessionState,
   voiceSessionReducer,
 } from "@/lib/services/voiceSession";
-import { useSpeechPlayback } from "@/lib/services/useSpeechPlayback";
 
 interface UseVoiceSessionOptions {
   scaleId: string;
@@ -106,6 +106,30 @@ function buildCandidateTexts(option: ScaleOption, index: number, optionCount: nu
   }
 
   return [...new Set(baseCandidates)];
+}
+
+function buildOptionVoiceCopy(option: ScaleOption, language: LanguageCode): string {
+  const description = resolveLocalizedText(option.description, language);
+  if (!description) {
+    return option.label;
+  }
+
+  return language === "en"
+    ? `${option.label}: ${description}`
+    : `${option.label}：${description}`;
+}
+
+function buildQuestionVoiceCopy(question: ScaleQuestion, language: LanguageCode): string {
+  const prompt = resolveQuestionVoicePrompt(question, language);
+  const optionCopies = question.options.map((option) => buildOptionVoiceCopy(option, language)).filter(Boolean);
+
+  if (!optionCopies.length) {
+    return prompt;
+  }
+
+  return language === "en"
+    ? `${prompt} Options: ${optionCopies.join("; ")}`
+    : `${prompt}。可选答案有：${optionCopies.join("；")}`;
 }
 
 function detectAnswerIntent(question: ScaleQuestion, transcript: string): VoiceIntentResult {
@@ -352,61 +376,68 @@ export function useVoiceSession({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const speechPlayback = useSpeechPlayback(language, {
-    onStart: (text) => {
-      dispatch({ type: "START_SPEAKING", payload: { prompt: text } });
-    },
-    onEnd: () => {
-      dispatch({ type: "STOP_SPEAKING" });
-    },
-    onError: (message) => {
-      dispatch({
-        type: "SET_ERROR",
-        payload: {
-          error: message,
-          statusText: message,
-        },
-      });
-    },
-  });
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const isSupported =
-    typeof window !== "undefined" &&
-    Boolean(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
+  const isSupported = useMemo(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
 
-  const playSpeech = useCallback(
-    async (text: string, source: "auto" | "manual") => {
-      const result = await speechPlayback.speakText(text, {
-        queueIfLocked: source === "auto",
-        fromUserGesture: source === "manual",
-      });
+    return Boolean(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
+  }, []);
 
-      if (result.queued) {
+  const cancelSpeaking = useCallback(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    dispatch({ type: "STOP_SPEAKING" });
+  }, []);
+
+  const speakText = useCallback(
+    (text: string) => {
+      if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) {
+        return;
+      }
+
+      cancelSpeaking();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = language === "en" ? "en-US" : "zh-CN";
+      utterance.rate = 0.92;
+      utterance.onend = () => {
+        dispatch({ type: "STOP_SPEAKING" });
+      };
+      utterance.onerror = () => {
         dispatch({
-          type: "SET_STATUS",
+          type: "SET_ERROR",
           payload: {
-            statusText:
-              language === "en"
-                ? "Tap play prompt to start voice guidance."
-                : "点击“播放题目”开始语音引导。",
+            error: "Voice playback failed.",
+            statusText: language === "en" ? "Voice playback failed." : "语音播报失败，请稍后重试。",
           },
         });
-      }
+      };
+
+      utteranceRef.current = utterance;
+      dispatch({ type: "START_SPEAKING", payload: { prompt: text } });
+      window.speechSynthesis.speak(utterance);
     },
-    [language, speechPlayback]
+    [cancelSpeaking, language]
   );
 
   const repeatQuestion = useCallback(() => {
-    void playSpeech(resolveQuestionVoicePrompt(question, language), "manual");
-  }, [language, playSpeech, question]);
+    speakText(buildQuestionVoiceCopy(question, language));
+  }, [language, question, speakText]);
 
   const speakCurrentQuestion = useCallback(() => {
     repeatQuestion();
   }, [repeatQuestion]);
 
   const speakExplanation = useCallback(() => {
-    void playSpeech(resolveQuestionSimpleExplain(question, language), "manual");
-  }, [language, playSpeech, question]);
+    speakText(resolveQuestionSimpleExplain(question, language));
+  }, [language, question, speakText]);
 
   const goPrevious = useCallback(() => {
     onPrevious();
@@ -514,11 +545,10 @@ export function useVoiceSession({
                   : "检测到高风险表达，请优先寻求家人、医生或紧急支持帮助。",
             },
           });
-          void playSpeech(
+          speakText(
             language === "en"
               ? "I heard something safety-related. Please contact a trusted person or emergency support right away."
-              : "我听到了一些涉及安全风险的内容。请尽快联系可信赖的家人、医生或紧急支持资源。",
-            "auto"
+              : "我听到了一些涉及安全风险的内容。请尽快联系可信赖的家人、医生或紧急支持资源。"
           );
           return;
         case "answer":
@@ -542,13 +572,12 @@ export function useVoiceSession({
                     : `请确认：您的意思是选择“${intentResult.answer.label ?? "这个选项"}”吗？`,
               },
             });
-            void playSpeech(
+            speakText(
               `${resolveQuestionConfirmationPrompt(question, language)} ${
                 language === "en"
                   ? `Should I choose ${intentResult.answer.label ?? "this option"}?`
                   : `我理解为“${intentResult.answer.label ?? "这个选项"}”，对吗？`
-              }`,
-              "auto"
+              }`
             );
             return;
           }
@@ -578,11 +607,10 @@ export function useVoiceSession({
                   : "我还没有识别到明确选项，您可以直接说选项内容，或者让我重复一遍。",
             },
           });
-          void playSpeech(
+          speakText(
             language === "en"
               ? "I didn't catch the option. Please answer with the option text, or say repeat."
-              : "我还没有听清您的选项。您可以直接说选项内容，或者说“重复一遍”。",
-            "auto"
+              : "我还没有听清您的选项。您可以直接说选项内容，或者说“重复一遍”。"
           );
           return;
       }
@@ -600,7 +628,7 @@ export function useVoiceSession({
       session.pendingConfirmation,
       speakCurrentQuestion,
       speakExplanation,
-      playSpeech,
+      speakText,
     ]
   );
 
@@ -670,11 +698,9 @@ export function useVoiceSession({
 
     try {
       if (session.isSpeaking) {
-        speechPlayback.stopPlayback();
+        cancelSpeaking();
         dispatch({ type: "REGISTER_BARGE_IN" });
       }
-
-      speechPlayback.primePlayback();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -738,7 +764,7 @@ export function useVoiceSession({
         },
       });
     }
-  }, [isSupported, language, session.isSpeaking, speechPlayback, uploadAndTranscribe]);
+  }, [cancelSpeaking, isSupported, language, session.isSpeaking, uploadAndTranscribe]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
@@ -778,14 +804,14 @@ export function useVoiceSession({
       return;
     }
 
-    speechPlayback.stopPlayback();
+    cancelSpeaking();
     dispatch({
       type: "PAUSE_SESSION",
       payload: {
         statusText: language === "en" ? "Voice session paused." : "语音问答已暂停。",
       },
     });
-  }, [language, session.state, speakCurrentQuestion, speechPlayback]);
+  }, [cancelSpeaking, language, session.state, speakCurrentQuestion]);
 
   useEffect(() => {
     dispatch({
@@ -816,12 +842,12 @@ export function useVoiceSession({
     }
 
     const prompt = resolveQuestionVoicePrompt(question, language);
-    void playSpeech(prompt, "auto");
-  }, [language, mode, playSpeech, question, question.id, questionIndex]);
+    speakText(prompt);
+  }, [language, mode, question.id, questionIndex, speakText]);
 
   useEffect(() => {
     return () => {
-      speechPlayback.stopPlayback();
+      cancelSpeaking();
       if (mediaRecorderRef.current?.state === "recording") {
         mediaRecorderRef.current.stop();
       }
@@ -829,7 +855,7 @@ export function useVoiceSession({
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [speechPlayback]);
+  }, [cancelSpeaking]);
 
   return {
     session,

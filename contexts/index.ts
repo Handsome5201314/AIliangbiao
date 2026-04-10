@@ -7,6 +7,7 @@ export { ProfileProvider, useProfile } from './ProfileContext';
 export type { UserProfile, AvatarState } from './ProfileContext';
 export { ConversationHistoryProvider, useConversationHistory } from './ConversationHistoryContext';
 export { SkillSessionProvider, useSkillSession } from './SkillSessionContext';
+export { AuthSessionProvider, useAuthSession } from './AuthSessionContext';
 
 
 

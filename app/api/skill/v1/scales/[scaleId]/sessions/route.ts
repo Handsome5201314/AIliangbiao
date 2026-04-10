@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { authenticateSkillRequest } from '@/lib/assessment-skill/request-auth';
-import { assertAccessibleMember } from '@/lib/assessment-skill/member-service';
-import { createAssessmentSession } from '@/lib/assessment-skill/session-service';
+import { createAssessmentSession } from '@/lib/assessment-skill/scale-service';
+import type { LanguageCode } from '@/lib/schemas/core/types';
 
 const requestSchema = z.object({
   memberId: z.string().optional(),
-  formData: z.record(z.string(), z.union([z.string(), z.number(), z.null()])).optional(),
-  channel: z.enum(['web', 'voice', 'agent', 'mcp']).optional(),
+  language: z.enum(['zh', 'en']).optional(),
 });
 
 export async function POST(
@@ -17,19 +16,14 @@ export async function POST(
 ) {
   try {
     const session = authenticateSkillRequest(request, 'skill:scales:evaluate');
-    const body = requestSchema.parse(await request.json());
+    const body = requestSchema.parse(await request.json().catch(() => ({})));
     const { scaleId } = await context.params;
-    const memberId = body.memberId || session.member_id;
-
-    await assertAccessibleMember(session.sub, memberId);
 
     const assessmentSession = await createAssessmentSession({
       userId: session.sub,
-      profileId: memberId,
+      profileId: body.memberId || session.member_id,
       scaleId,
-      channel: body.channel || 'web',
-      formData: body.formData,
-      deviceId: session.device_id,
+      language: body.language as LanguageCode | undefined,
     });
 
     return NextResponse.json({
@@ -37,10 +31,24 @@ export async function POST(
       session: assessmentSession,
     });
   } catch (error) {
-    const status = error instanceof z.ZodError ? 400 : 401;
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.flatten() }, { status: 400 });
+    }
+
+    if (error instanceof Error && 'statusCode' in error) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: (error as { code?: string }).code,
+          data: (error as { data?: unknown }).data,
+        },
+        { status: (error as { statusCode: number }).statusCode }
+      );
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create assessment session' },
-      { status }
+      { status: 500 }
     );
   }
 }

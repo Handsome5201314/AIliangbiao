@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 
-import { prisma } from '@/lib/db/prisma';
-import { requireAdminToken } from '@/lib/auth/admin-token';
-
-const requestSchema = z.object({
-  reviewNotes: z.string().optional(),
-});
+import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { updateDoctorVerification } from '@/lib/services/doctor-care';
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ doctorId: string }> }
 ) {
   try {
-    await requireAdminToken(request);
-    const body = requestSchema.parse(await request.json());
+    const { admin } = await requireAdminRequest(request);
     const { doctorId } = await context.params;
-    const profile = await prisma.doctorProfile.update({
-      where: { id: doctorId },
-      data: {
-        verificationStatus: 'REJECTED',
-        reviewNotes: body.reviewNotes || null,
-      },
+    const body = await request.json().catch(() => ({}));
+    const doctor = await updateDoctorVerification({
+      doctorProfileId: doctorId,
+      status: 'REJECTED',
+      adminId: admin.id,
+      reviewNotes: body.reviewNotes,
     });
 
-    return NextResponse.json({ success: true, profile });
+    return NextResponse.json({ success: true, doctor });
   } catch (error) {
-    const status = error instanceof z.ZodError ? 400 : 401;
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to reject doctor' },
-      { status }
+      { status: 500 }
     );
   }
 }

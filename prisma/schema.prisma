@@ -1,12 +1,9 @@
-// 运行命令生成客户端：npx prisma generate
-// 运行命令推送到数据库：npx prisma db push
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // 完美适配腾讯云 PostgreSQL
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -57,93 +54,120 @@ enum ResearchConsentStatus {
   REVOKED
 }
 
-enum UserPrivacyConsentType {
-  CLOUD_DATA_PRIVACY_RISK
+enum ResearchExportFormat {
+  CSV
+  PDF
+  JSON
 }
 
-enum UserPrivacyConsentSource {
-  REGISTER
-  GUEST_UPGRADE
+enum ApiKeyPurpose {
+  AI
+  MCP
 }
-
-// ==================== 1. 用户与额度系统 ====================
 
 model User {
-  id            String    @id @default(cuid())
-  role          UserRole  @default(GUEST)     // GUEST / REGISTERED / VIP
-  isGuest       Boolean   @default(true)      // 兼容旧逻辑，后续可逐步移除
-  deviceId      String?   @unique             // 浏览器指纹 UUID（游客依赖）
-  phone         String?   @unique             // 手机号（注册用户依赖）
-  email         String?   @unique             // 邮箱（注册用户依赖）
-  accountType   AccountType?                  // 业务身份：患者 / 医生
-  passwordHash  String?                       // 正式账号密码
-  
-  // 商业化额度字段
-  dailyUsed     Int       @default(0)         // 今日已调用量表的次数
-  dailyLimit    Int       @default(5)         // 每日限制（游客默认5，注册默认10）
-  totalTokens   Int       @default(0)         // 高级资产：充值的 Token 额度
-  lastResetAt   DateTime  @default(now())     // 每日额度重置的标记时间
+  id                      String               @id @default(cuid())
+  role                    UserRole             @default(GUEST)
+  accountType             AccountType          @default(PATIENT)
+  isGuest                 Boolean              @default(true)
+  deviceId                String?              @unique
+  phone                   String?              @unique
+  email                   String?              @unique
+  passwordHash            String?
+  dailyUsed               Int                  @default(0)
+  dailyLimit              Int                  @default(5)
+  totalTokens             Int                  @default(0)
+  lastResetAt             DateTime             @default(now())
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // 关系映射
-  profiles        MemberProfile[]
-  assessmentSessions AssessmentSession[]
-  assessments     AssessmentHistory[]
-  triageSessions  TriageSession[]
-  mcpLogs         McpLog[]
-  apiKeys         ApiKey[]
-  speechUsages    SpeechUsage[]
-  doctorProfile   DoctorProfile?
-  privacyConsents UserPrivacyConsent[]
-  assignedMembers CareAssignment[] @relation("AssignedByPatient")
-  grantedResearchConsents ResearchConsent[] @relation("GrantedByUser")
+  profiles                MemberProfile[]
+  assessments             AssessmentHistory[]
+  assessmentSessions      AssessmentSession[]
+  triageSessions          TriageSession[]
+  mcpLogs                 McpLog[]
+  apiKeys                 ApiKey[]
+  speechUsages            SpeechUsage[]
+  doctorProfile           DoctorProfile?
+  assignedCareAssignments CareAssignment[]     @relation("CareAssignmentAssignedByPatient")
+  researchConsentsGranted ResearchConsent[]    @relation("ResearchConsentGrantedByPatient")
+  researchExportsRequested ResearchExportLog[] @relation("ResearchExportRequestedByUser")
 
   @@index([role])
   @@index([accountType])
 }
 
-// ==================== 2. 千人千面：家庭成员画像 ====================
-
 model MemberProfile {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String               @id @default(cuid())
+  userId             String
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relation           MemberRelation       @default(SELF)
+  languagePreference LanguagePreference   @default(ZH)
+  nickname           String
+  gender             String
+  ageMonths          Int?
+  traits             Json
+  avatarConfig       Json
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
-  relation      MemberRelation    @default(SELF) // self / child / parent / spouse / sibling / other
-  languagePreference LanguagePreference @default(ZH)
-  nickname      String    // 成员显示名（本人/家人都适用）
-  gender        String    // boy / girl / male / female / other
-  ageMonths     Int?      // 保留月龄，兼容儿童场景
-  
-  // 扩展的上下文记忆字段
-  traits        Json      // 行为特征和记忆上下文
-                        // {
-                        //   "interests": ["恐龙", "汽车"],
-                        //   "fears": ["打针"],
-                        //   "behaviors": ["喜欢看旋转的东西"],
-                        //   "medicalHistory": ["早产", "过敏史"],
-                        //   "lastConversation": "2024-01-15",
-                        //   "conversationCount": 5,
-                        //   "recentTopics": ["体检", "社交问题"]
-                        // }
-  avatarConfig  Json      // 国风小人换装 {"base": "tiger", "clothes": "hanfu"}
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // 关系映射
-  growthRecords GrowthRecord[]
+  growthRecords      GrowthRecord[]
+  assessments        AssessmentHistory[]
   assessmentSessions AssessmentSession[]
-  assessments   AssessmentHistory[]
-  careAssignments CareAssignment[]
-  doctorNotes      DoctorPatientNote[]
-  researchConsent  ResearchConsent?
-  researchExportLogs ResearchExportLog[]
+  careAssignments    CareAssignment[]
+  doctorNotes        DoctorPatientNote[]
+  researchConsent    ResearchConsent?
+  researchExports    ResearchExportLog[]
 
   @@index([userId, relation])
   @@map("ChildProfile")
+}
+
+model AssessmentHistory {
+  id                  String               @id @default(cuid())
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId           String?
+  profile             MemberProfile?       @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  scaleId             String
+  scaleVersion        String               @default("1.0")
+  totalScore          Float
+  conclusion          String
+  answers             Json
+  createdAt           DateTime             @default(now())
+
+  doctorNotes         DoctorPatientNote[]
+  assessmentSessions  AssessmentSession[]
+
+  @@index([userId, createdAt])
+  @@index([profileId, createdAt])
+  @@index([scaleId, scaleVersion])
+}
+
+model AssessmentSession {
+  id                  String                  @id @default(cuid())
+  userId              String
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId           String?
+  profile             MemberProfile?          @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  scaleId             String
+  scaleVersion        String                  @default("1.0")
+  language            String                  @default("ZH")
+  status              String                  @default("ONGOING")
+  answers             Json
+  currentQuestionIndex Int?                   @default(0)
+  totalScore          Float?
+  conclusion          String?
+  resultDetails       Json?
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory?      @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  completedAt         DateTime?
+
+  @@index([userId, status, updatedAt])
+  @@index([profileId, status, updatedAt])
+  @@index([scaleId, scaleVersion])
 }
 
 model DoctorProfile {
@@ -159,48 +183,49 @@ model DoctorProfile {
   reviewNotes        String?
   approvedAt         DateTime?
   approvedByAdminId  String?
-  approvedByAdmin    Admin?                    @relation("AdminApprovedDoctors", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
+  approvedByAdmin    Admin?                    @relation("DoctorApprovedByAdmin", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
 
   careAssignments    CareAssignment[]
-  notes              DoctorPatientNote[]
-  exportLogs         ResearchExportLog[]
+  patientNotes       DoctorPatientNote[]
+  researchExports    ResearchExportLog[]
 
-  @@index([verificationStatus, createdAt])
+  @@index([verificationStatus])
+  @@index([realName])
   @@index([hospitalName, departmentName])
 }
 
 model CareAssignment {
-  id                      String               @id @default(cuid())
-  memberProfileId         String
-  memberProfile           MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
-  doctorProfileId         String
-  doctorProfile           DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  status                  CareAssignmentStatus @default(ACTIVE)
+  id                    String               @id @default(cuid())
+  memberProfileId       String
+  memberProfile         MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId       String
+  doctorProfile         DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
   assignedByPatientUserId String
-  assignedByPatientUser   User                 @relation("AssignedByPatient", fields: [assignedByPatientUserId], references: [id], onDelete: Cascade)
-  startedAt               DateTime             @default(now())
-  endedAt                 DateTime?
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
+  assignedByPatientUser User                 @relation("CareAssignmentAssignedByPatient", fields: [assignedByPatientUserId], references: [id], onDelete: Cascade)
+  status                CareAssignmentStatus @default(ACTIVE)
+  startedAt             DateTime             @default(now())
+  endedAt               DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
-  @@index([memberProfileId, status, startedAt])
-  @@index([doctorProfileId, status, startedAt])
+  @@index([memberProfileId, status])
+  @@index([doctorProfileId, status])
 }
 
 model DoctorPatientNote {
-  id                  String               @id @default(cuid())
-  memberProfileId     String
-  memberProfile       MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
-  doctorProfileId     String
-  doctorProfile       DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  assessmentHistoryId String?
-  assessmentHistory   AssessmentHistory?   @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
-  noteType            DoctorPatientNoteType @default(CLINICAL)
-  content             String
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id                   String                @id @default(cuid())
+  memberProfileId      String
+  memberProfile        MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId      String
+  doctorProfile        DoctorProfile         @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  assessmentHistoryId  String?
+  assessmentHistory    AssessmentHistory?    @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  noteType             DoctorPatientNoteType @default(CLINICAL)
+  content              String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([memberProfileId, createdAt])
   @@index([doctorProfileId, createdAt])
@@ -208,251 +233,145 @@ model DoctorPatientNote {
 }
 
 model ResearchConsent {
-  id              String                @id @default(cuid())
-  memberProfileId String                @unique
-  memberProfile   MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
-  grantedByUserId String
-  grantedByUser   User                  @relation("GrantedByUser", fields: [grantedByUserId], references: [id], onDelete: Cascade)
-  status          ResearchConsentStatus @default(GRANTED)
-  grantedAt       DateTime              @default(now())
-  revokedAt       DateTime?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id                String                @id @default(cuid())
+  memberProfileId   String                @unique
+  memberProfile     MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  grantedByUserId   String
+  grantedByUser     User                  @relation("ResearchConsentGrantedByPatient", fields: [grantedByUserId], references: [id], onDelete: Cascade)
+  status            ResearchConsentStatus @default(GRANTED)
+  grantedAt         DateTime              @default(now())
+  revokedAt         DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 }
 
 model ResearchExportLog {
-  id              String         @id @default(cuid())
-  doctorProfileId String
-  doctorProfile   DoctorProfile  @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  memberProfileId String
-  memberProfile   MemberProfile  @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
-  exportType      String
-  exportRange     String?
-  purpose         String?
-  createdAt       DateTime       @default(now())
+  id                String               @id @default(cuid())
+  memberProfileId   String
+  memberProfile     MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId   String
+  doctorProfile     DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  requestedByUserId String
+  requestedByUser   User                 @relation("ResearchExportRequestedByUser", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  format            ResearchExportFormat @default(CSV)
+  purpose           String
+  exportedFields    Json
+  createdAt         DateTime             @default(now())
 
-  @@index([doctorProfileId, createdAt])
   @@index([memberProfileId, createdAt])
+  @@index([doctorProfileId, createdAt])
 }
-
-model UserPrivacyConsent {
-  id              String                  @id @default(cuid())
-  userId          String
-  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  consentType     UserPrivacyConsentType
-  documentVersion String
-  acceptedAt      DateTime                @default(now())
-  ipAddress       String?
-  userAgent       String?
-  source          UserPrivacyConsentSource
-
-  @@index([userId, consentType, acceptedAt])
-}
-
-// ==================== 3. 临床数据：量表评估会话 ====================
-
-model AssessmentSession {
-  id                  String    @id @default(cuid())
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profileId           String?
-  profile             MemberProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
-
-  scaleId             String
-  status              String    @default("draft") // draft / collecting_form / questioning / completed / cancelled
-  channel             String    @default("web")   // web / voice / agent / mcp
-  currentQuestionIndex Int?
-  answers             Json
-  formData            Json?
-  conversationState   Json?
-  completedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  @@index([userId, status, updatedAt])
-  @@index([profileId, status, updatedAt])
-  @@index([scaleId, status])
-}
-
-// ==================== 4. 临床数据：量表评估历史 ====================
-
-model AssessmentHistory {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profileId     String?
-  profile       MemberProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  
-  scaleId       String    // 量表标识 (如 "ABC", "CARS", "SNAP-IV")
-  scaleVersion  String    @default("1.0") // ✅ 题目版本号，防止未来改版导致历史数据无法解读
-  totalScore    Float     // 总得分
-  conclusion    String    // 临床结论 (如 "高度疑似")
-  answers       Json      // 用户的选项明细 [1, 0, 3, 2...] 供医生回溯
-  formData      Json?     // 量表前置表单数据（如患者基础信息）
-  resultDetails Json?     // 结构化评分结果详情（维度结果、说明等）
-  
-  createdAt     DateTime  @default(now())
-
-  doctorNotes   DoctorPatientNote[]
-  
-  @@index([userId, createdAt])
-  @@index([profileId, createdAt])
-  @@index([scaleId, scaleVersion])
-}
-
-// ==================== 5. B端开放平台：MCP 调用流水 ====================
 
 model McpLog {
   id            String    @id @default(cuid())
-  userId        String?   // 关联调用该 MCP 接口的账号（如果有）
+  userId        String?
   user          User?     @relation(fields: [userId], references: [id])
-  
-  clientId      String    // 外部 Agent 的标识 (如 "hospital-agent-01")
-  action        String    // 调用的 Tool (recommend_scale / get_scale_questions / submit_and_evaluate)
-  scaleId       String?   // 涉及的具体量表
-  
+  clientId      String
+  action        String
+  scaleId       String?
+  entrypoint    String    @default("legacy")
   createdAt     DateTime  @default(now())
-}
 
-// ==================== 6. 新生儿生长曲线数据 ====================
+  @@index([entrypoint, createdAt])
+}
 
 model GrowthRecord {
-  id            String    @id @default(cuid())
-  profileId     String
-  profile       MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  
-  ageMonths     Int       // 月龄（0-60个月）
-  
-  // 生长指标
-  weight        Float?    // 体重（kg）
-  height        Float?    // 身高/身长（cm）
-  headCircumference Float? // 头围（cm）
-  
-  // WHO标准评估结果
-  weightPercentile Float? // 体重百分位
-  heightPercentile Float? // 身高百分位
-  headPercentile  Float?  // 头围百分位
-  
-  weightStatus    String? // 体重评估：正常/偏轻/偏重
-  heightStatus    String? // 身高评估：正常/偏矮/偏高
-  headStatus      String? // 头围评估：正常/偏小/偏大
-  
-  notes         String?   // 医生备注
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
+  id                  String         @id @default(cuid())
+  profileId           String
+  profile             MemberProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  ageMonths           Int
+  weight              Float?
+  height              Float?
+  headCircumference   Float?
+  weightPercentile    Float?
+  heightPercentile    Float?
+  headPercentile      Float?
+  weightStatus        String?
+  heightStatus        String?
+  headStatus          String?
+  notes               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
   @@index([profileId, ageMonths])
 }
-
-// ==================== 7. 语音分诊会话表 ====================
 
 model TriageSession {
   id                  String    @id @default(cuid())
   userId              String
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  status              String    @default("ONGOING") // ONGOING(进行中), CONSENT(已同意), COMPLETED(已完成)
-  symptoms            Json      // 数组：AI 提取的症状 ["不和人交流", "喜欢转圈"]
-  conversationHistory Json      // 数组：对话历史，保证刷新不失忆
-  recommendedScale    String?   // 推荐的量表 ID
-  
+  status              String    @default("ONGOING")
+  symptoms            Json
+  conversationHistory Json
+  recommendedScale    String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-  
+
   @@index([userId, status])
   @@index([updatedAt])
 }
 
-// ==================== 8. 管理员账户系统 ====================
-
 model Admin {
-  id            String    @id @default(cuid())
-  username      String    @unique
-  passwordHash  String    // bcrypt加密后的密码
-  email         String?   @unique
-  role          String    @default("admin") // admin, superadmin
-  
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  approvedDoctorProfiles DoctorProfile[] @relation("AdminApprovedDoctors")
+  id              String          @id @default(cuid())
+  username        String          @unique
+  passwordHash    String
+  email           String?         @unique
+  role            String          @default("admin")
+  lastLoginAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  reviewedDoctors DoctorProfile[] @relation("DoctorApprovedByAdmin")
 }
 
-// ==================== 9. API密钥管理 ====================
-
 model ApiKey {
-  id            String    @id @default(cuid())
-  userId        String?   // 关联的用户（可选，系统级密钥为null）
-  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String?
+  user             User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose          ApiKeyPurpose @default(AI)
+  provider         String
+  keyName          String
+  keyValue         String
+  serviceType      String    @default("text")
+  customEndpoint   String?
+  customModel      String?
+  connectionStatus String?   @default("unknown")
+  lastTestedAt     DateTime?
+  responseTime     Int?
+  isActive         Boolean   @default(true)
+  lastUsedAt       DateTime?
+  usageCount       Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  provider      String    // siliconflow, sophon, openai等
-  keyName       String    // 密钥名称/备注
-  keyValue      String    // 加密后的API密钥
-  
-  // 服务类型：text（文本对话）、speech（语音识别）
-  serviceType   String    @default("text") // text, speech
-
-  // 自定义配置
-  customEndpoint String?  // 自定义API端点URL（可选）
-  customModel    String?  // 自定义模型名称（可选）
-
-  // 连接状态
-  connectionStatus String? @default("unknown") // online, offline, unknown
-  lastTestedAt   DateTime? // 最后测试时间
-  responseTime   Int?      // 响应时间（毫秒）
-
-  isActive      Boolean   @default(true)
-
-  lastUsedAt    DateTime?
-  usageCount    Int       @default(0)
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
+  @@index([purpose, isActive])
   @@index([provider, isActive])
   @@index([serviceType, isActive])
 }
 
-// ==================== 10. 系统配置 ====================
-
 model SystemConfig {
-  id            String    @id @default(cuid())
-  configKey     String    @unique   // 配置键名
-  configValue   String              // 配置值（JSON字符串或简单值）
-  description   String?             // 配置说明
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  configKey   String   @unique
+  configValue String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
-// ==================== 11. 语音识别使用记录 ====================
-
 model SpeechUsage {
-  id            String    @id @default(cuid())
-  userId        String?   // 关联用户（可选）
-  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // 语音识别详情
-  audioDuration Float?    // 音频时长（秒）
-  audioSize     Int?      // 音频大小（字节）
-  provider      String    // 服务商：siliconflow, openai, custom
-  model         String    // 使用的模型
-  
-  // 转写结果
-  transcriptText  String? // 转写文本
-  confidence      Float?  // 置信度（0-1）
-  
-  // 上下文信息
-  context       String?   // 使用场景：triage, questionnaire, command
-  success       Boolean   @default(true) // 是否成功
-  
-  // 成本信息
-  costTokens    Int       @default(0) // 消耗的 Token
-  
-  createdAt     DateTime  @default(now())
-  
+  id             String    @id @default(cuid())
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audioDuration  Float?
+  audioSize      Int?
+  provider       String
+  model          String
+  transcriptText String?
+  confidence     Float?
+  context        String?
+  success        Boolean   @default(true)
+  costTokens     Int       @default(0)
+  createdAt      DateTime  @default(now())
+
   @@index([userId, createdAt])
   @@index([provider, createdAt])
 }

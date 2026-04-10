@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+
 // 各服务商的 API 端点配置
 const PROVIDER_ENDPOINTS: Record<string, { base: string; models: string }> = {
   siliconflow: {
@@ -91,6 +93,8 @@ const SPEECH_MODELS: Record<string, Array<{ id: string; name: string; descriptio
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAdminRequest(request);
+
     const body = await request.json();
     const { provider, endpoint, apiKey, serviceType } = body;
 
@@ -199,6 +203,10 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     console.error('[Get Models Error]:', error);
     return NextResponse.json(
       { error: '获取模型列表失败' },

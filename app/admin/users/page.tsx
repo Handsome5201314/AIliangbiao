@@ -76,8 +76,8 @@ export default function UsersPage() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">用户与画像管理</h2>
-        <p className="text-sm text-slate-500 mt-1">查看和管理系统用户及其画像信息</p>
+        <h2 className="text-2xl font-bold text-slate-900">用户与成员管理</h2>
+        <p className="text-sm text-slate-500 mt-1">查看和管理系统用户及其最小成员档案信息</p>
       </div>
 
       {/* 搜索和筛选 */}

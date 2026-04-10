@@ -1,171 +1,154 @@
 'use client';
 
-import { useState } from 'react';
-import { Activity, Database, Zap, Code, ExternalLink, Copy, CheckCircle } from 'lucide-react';
+import { Activity, CheckCircle2, Code, Layers3, PlugZap } from 'lucide-react';
 
-interface MCPSkill {
-  name: string;
-  description: string;
-  status: 'active' | 'development' | 'planned';
-  endpoint: string;
-  tools: string[];
-  calls: number;
-}
+const canonicalTools = [
+  'recommend_assessment',
+  'recommend_scale',
+  'get_scale_questions',
+  'create_assessment_session',
+  'get_current_question',
+  'submit_answer',
+  'get_assessment_result',
+  'pause_assessment_session',
+  'resume_assessment_session',
+  'cancel_assessment_session',
+  'submit_and_evaluate',
+  'add_growth_record',
+  'get_growth_history',
+  'evaluate_growth',
+];
+
+const compatibilityEndpoints = [
+  '/api/mcp/scale',
+  '/api/mcp/growth',
+  '/api/mcp/memory',
+];
 
 export default function MCPPage() {
-  const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
-
-  const skills: MCPSkill[] = [
-    {
-      name: 'Memory Skill',
-      description: '用户画像管理、对话记忆持久化、千人千面基础',
-      status: 'active',
-      endpoint: '/api/mcp/memory',
-      tools: ['get_user_memory', 'save_user_memory'],
-      calls: 892
-    },
-    {
-      name: 'Growth Curve Skill',
-      description: 'WHO标准新生儿生长曲线评估、发育监测',
-      status: 'active',
-      endpoint: '/api/mcp/growth',
-      tools: ['add_growth_record', 'get_growth_history', 'evaluate_growth'],
-      calls: 234
-    },
-    {
-      name: 'Recommendation Skill',
-      description: '智能量表推荐、个性化建议',
-      status: 'development',
-      endpoint: '/api/mcp/recommend',
-      tools: ['recommend_scale', 'get_recommendations'],
-      calls: 0
-    }
-  ];
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedEndpoint(text);
-    setTimeout(() => setCopiedEndpoint(null), 2000);
-  };
-
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">MCP 开放平台</h2>
-        <p className="text-sm text-slate-500 mt-1">管理和监控 MCP 微服务，提供开放 API 接入能力</p>
+        <h2 className="text-2xl font-bold text-slate-900">Assessment Core · MCP 接口</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          平台对外的正式能力层是统一的 MCP 入口。量表评估、生长曲线评估和会话式题目推进都归属同一个
+          Assessment Core。
+        </p>
       </div>
 
-      {/* 概览统计 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-6 text-white">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-indigo-100 text-sm">活跃服务</p>
-              <p className="text-3xl font-bold mt-1">2</p>
+              <p className="text-sm text-indigo-100">正式入口</p>
+              <p className="mt-1 text-3xl font-bold">1</p>
             </div>
-            <Activity className="w-10 h-10 opacity-50" />
+            <Layers3 className="h-10 w-10 opacity-60" />
           </div>
         </div>
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-6 text-white">
+        <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-emerald-100 text-sm">今日调用</p>
-              <p className="text-3xl font-bold mt-1">1,126</p>
+              <p className="text-sm text-emerald-100">核心工具</p>
+              <p className="mt-1 text-3xl font-bold">{canonicalTools.length}</p>
             </div>
-            <Zap className="w-10 h-10 opacity-50" />
+            <Code className="h-10 w-10 opacity-60" />
           </div>
         </div>
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-6 text-white">
+        <div className="rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-amber-100 text-sm">可用工具</p>
-              <p className="text-3xl font-bold mt-1">5</p>
+              <p className="text-sm text-amber-100">兼容入口</p>
+              <p className="mt-1 text-3xl font-bold">{compatibilityEndpoints.length}</p>
             </div>
-            <Code className="w-10 h-10 opacity-50" />
+            <PlugZap className="h-10 w-10 opacity-60" />
           </div>
         </div>
       </div>
 
-      {/* MCP 服务列表 */}
-      <div className="space-y-4">
-        {skills.map((skill, index) => (
-          <div key={index} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-slate-900">{skill.name}</h3>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      skill.status === 'active' 
-                        ? 'bg-emerald-100 text-emerald-800' 
-                        : skill.status === 'development'
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-slate-100 text-slate-800'
-                    }`}>
-                      {skill.status === 'active' ? '运行中' : skill.status === 'development' ? '开发中' : '计划中'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-600 mb-4">{skill.description}</p>
-                  
-                  {/* Endpoint */}
-                  <div className="flex items-center gap-2 mb-4">
-                    <code className="flex-1 bg-slate-50 px-4 py-2 rounded-lg text-sm font-mono text-slate-700 border border-slate-200">
-                      {skill.endpoint}
-                    </code>
-                    <button
-                      onClick={() => copyToClipboard(skill.endpoint)}
-                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="复制"
-                    >
-                      {copiedEndpoint === skill.endpoint ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-5 h-5 text-slate-400" />
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Tools */}
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-2 uppercase">可用工具</p>
-                    <div className="flex flex-wrap gap-2">
-                      {skill.tools.map((tool, i) => (
-                        <span key={i} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
-                          {tool}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="ml-6 text-right">
-                  <p className="text-sm text-slate-500">调用次数</p>
-                  <p className="text-2xl font-bold text-slate-900">{skill.calls.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="rounded-lg bg-indigo-50 p-3 text-indigo-600">
+            <Activity className="h-5 w-5" />
           </div>
-        ))}
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Canonical MCP 入口</h3>
+            <p className="text-sm text-slate-500">外部智能体应优先接入这个统一入口，并使用 MCP Key 建立带鉴权的 SSE 会话。</p>
+          </div>
+        </div>
+
+        <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-sm text-slate-700">
+          /api/mcp
+        </div>
+
+        <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          canonical 入口要求 `Authorization: Bearer &lt;MCP Key&gt;`，并在建立 SSE 会话后继续使用同一凭证。
+        </div>
+
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">核心工具</p>
+          <div className="flex flex-wrap gap-2">
+            {canonicalTools.map((tool) => (
+              <span
+                key={tool}
+                className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700"
+              >
+                {tool}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* API 文档链接 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">快速接入</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <h4 className="font-medium text-slate-900 mb-2">Memory Skill 接入指南</h4>
-            <p className="text-sm text-slate-600 mb-3">了解如何接入记忆中枢服务</p>
-            <a href="#" className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-              查看文档 <ExternalLink className="w-4 h-4" />
-            </a>
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="mb-4 text-lg font-semibold text-slate-900">兼容入口说明</h3>
+        <div className="space-y-3 text-sm text-slate-600">
+          <p>
+            下面这些端点仍然保留，用于兼容历史接入方或过渡迁移，但它们不再代表目标架构的默认接入方式。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {compatibilityEndpoints.map((endpoint) => (
+              <code
+                key={endpoint}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+              >
+                {endpoint}
+              </code>
+            ))}
           </div>
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <h4 className="font-medium text-slate-900 mb-2">Growth Curve Skill 接入指南</h4>
-            <p className="text-sm text-slate-600 mb-3">了解如何接入生长曲线服务</p>
-            <a href="#" className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-              查看文档 <ExternalLink className="w-4 h-4" />
-            </a>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-6">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 text-blue-600" />
+          <div className="space-y-2 text-sm text-blue-900">
+            <p className="font-semibold">当前架构约束</p>
+            <p>1. Growth 已并入 Assessment Core，不再作为独立产品概念宣传。</p>
+            <p>2. Recommendation 只是分诊/编排流程中的一个动作，不再单列为独立 Skill。</p>
+            <p>3. 用户画像不是目标架构主干能力，评估只保留最小成员档案。</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="mb-4 text-lg font-semibold text-slate-900">接入说明</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <h4 className="mb-2 font-medium text-slate-900">MCP 调用说明书</h4>
+            <p className="mb-3 text-sm text-slate-600">
+              外部智能体的调用顺序和约束，统一写在 assessment-skill 的 README 中。
+            </p>
+            <code className="rounded bg-white px-2 py-1 text-xs text-slate-700">
+              packages/assessment-skill/README.md
+            </code>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <h4 className="mb-2 font-medium text-slate-900">调用原则</h4>
+            <p className="text-sm text-slate-600">
+              原题是唯一评估依据；模型不能算分；每轮只处理一题；会话中断后必须继续使用同一个
+              `sessionId` 恢复。
+            </p>
           </div>
         </div>
       </div>

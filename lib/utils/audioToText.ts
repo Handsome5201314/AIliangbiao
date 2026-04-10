@@ -47,9 +47,11 @@ export async function getSpeechApiKey(preferredProvider?: string): Promise<{
     // ✅ 修复：查询活跃的语音识别服务 API Key（必须指定 serviceType）
     const apiKeyRecord = await prisma.apiKey.findFirst({
       where: {
+        purpose: 'AI',
         provider: preferredProvider || 'siliconflow',
         serviceType: 'speech', // ✅ 关键：只查询语音识别服务的 API Key
         isActive: true,
+        NOT: { provider: 'mcp' },
       },
       orderBy: {
         lastUsedAt: 'asc', // 轮询使用

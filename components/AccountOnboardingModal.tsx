@@ -1,8 +1,7 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ShieldCheck, Sparkles, UserRound, Users } from 'lucide-react';
-
+import { FormEvent, useMemo, useState } from 'react';
+import { ArrowRight, Sparkles, UserRound, Users, ShieldCheck } from 'lucide-react';
 import { useProfile, type MemberRelation, type UserProfile } from '@/contexts/ProfileContext';
 
 type ModalReason = 'quota' | 'history' | 'member' | 'manual';
@@ -16,20 +15,20 @@ interface AccountOnboardingModalProps {
 const REASON_COPY: Record<ModalReason, { title: string; description: string }> = {
   quota: {
     title: '免费额度已用完',
-    description: '注册患者账号后，每日免费评测额度提升到 10 次，并可保留当前设备历史记录。',
+    description: '注册或登录后，每日免费评测额度提升到 10 次，并可保留当前设备历史记录。'
   },
   history: {
     title: '解锁历史记录与家庭树',
-    description: '注册后可以管理多个家庭成员档案，并把评测结果安全保存到云端做长期追踪。',
+    description: '注册后可以管理多个家庭成员档案，并逐步开放历史曲线与长期追踪能力。'
   },
   member: {
     title: '新增家庭成员档案',
-    description: '为自己、孩子、父母或配偶建立独立评测档案，后续分诊与量表结果将按成员隔离。',
+    description: '为自己、孩子、父母或配偶建立独立评测档案，后续分诊与量表结果将按成员隔离。'
   },
   manual: {
-    title: '注册患者账号并建立档案',
-    description: '注册后可把当前游客数据升级为正式患者账号，并把成员资料和评测记录保存到云端。',
-  },
+    title: '注册 / 登录并建立档案',
+    description: '绑定手机号或邮箱后，可把当前游客数据升级为正式账号，并建立首个家庭成员档案。'
+  }
 };
 
 function createDefaultProfile(relation: MemberRelation): Partial<UserProfile> {
@@ -51,39 +50,18 @@ export default function AccountOnboardingModal({
 }: AccountOnboardingModalProps) {
   const { isGuest, upgradeAccount, createProfile } = useProfile();
   const copy = REASON_COPY[reason];
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [profileDraft, setProfileDraft] = useState<Partial<UserProfile>>(
-    createDefaultProfile(reason === 'member' ? 'child' : 'self')
-  );
+  const [contactType, setContactType] = useState<'phone' | 'email'>('phone');
+  const [contactValue, setContactValue] = useState('');
+  const [profileDraft, setProfileDraft] = useState<Partial<UserProfile>>(createDefaultProfile(reason === 'member' ? 'child' : 'self'));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [consentChecked, setConsentChecked] = useState(false);
-  const [consentVersion, setConsentVersion] = useState('');
-  const [consentTitle, setConsentTitle] = useState('用户隐私风险知情同意书');
-  const [consentContent, setConsentContent] = useState('');
 
-  const actionLabel = isGuest ? '注册患者账号并建立档案' : '新增家庭成员';
+  const actionLabel = isGuest ? '注册 / 登录并建立档案' : '新增家庭成员';
+  const showContactFields = isGuest;
+
   const ageHint = useMemo(() => {
     return profileDraft.relation === 'child' ? '儿童建议填月龄，如 36 代表 3 岁。' : '成人/老人可先保留默认值，后续再细化。';
   }, [profileDraft.relation]);
-
-  useEffect(() => {
-    if (!open || !isGuest) {
-      return;
-    }
-
-    fetch('/api/legal/privacy-consent/current')
-      .then((response) => response.json())
-      .then((payload) => {
-        setConsentVersion(payload.version || '');
-        setConsentTitle(payload.title || '用户隐私风险知情同意书');
-        setConsentContent(payload.content || '');
-      })
-      .catch((loadError) => {
-        console.error('Failed to load privacy consent:', loadError);
-      });
-  }, [isGuest, open]);
 
   if (!open) {
     return null;
@@ -98,18 +76,8 @@ export default function AccountOnboardingModal({
       return;
     }
 
-    if (isGuest && !email.trim()) {
-      setError('请填写邮箱');
-      return;
-    }
-
-    if (isGuest && password.trim().length < 8) {
-      setError('密码至少需要 8 位');
-      return;
-    }
-
-    if (isGuest && !consentChecked) {
-      setError('请先勾选隐私风险知情同意书');
+    if (showContactFields && !contactValue.trim()) {
+      setError('请填写手机号或邮箱');
       return;
     }
 
@@ -118,19 +86,15 @@ export default function AccountOnboardingModal({
     try {
       if (isGuest) {
         await upgradeAccount({
-          email: email.trim(),
-          password: password.trim(),
-          consentAccepted: consentChecked,
-          consentVersion,
+          phone: contactType === 'phone' ? contactValue.trim() : undefined,
+          email: contactType === 'email' ? contactValue.trim() : undefined,
           profile: profileDraft,
         });
       } else {
         await createProfile(profileDraft);
       }
 
-      setEmail('');
-      setPassword('');
-      setConsentChecked(false);
+      setContactValue('');
       setProfileDraft(createDefaultProfile(reason === 'member' ? 'child' : 'self'));
       onClose();
     } catch (submitError) {
@@ -157,43 +121,38 @@ export default function AccountOnboardingModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
-          {isGuest && (
+          {showContactFields && (
             <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <Sparkles className="h-4 w-4 text-indigo-500" />
-                患者账号注册
+                账号绑定
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setContactType('phone')}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    contactType === 'phone' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'
+                  }`}
+                >
+                  手机号
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContactType('email')}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    contactType === 'email' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'
+                  }`}
+                >
+                  邮箱
+                </button>
               </div>
               <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="请输入邮箱"
+                value={contactValue}
+                onChange={(event) => setContactValue(event.target.value)}
+                placeholder={contactType === 'phone' ? '请输入手机号' : '请输入邮箱'}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-indigo-400"
               />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="请设置密码（至少8位）"
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-indigo-400"
-              />
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p className="font-semibold mb-2">{consentTitle}</p>
-                <div className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-amber-800">
-                  {consentContent || '正在加载知情同意书...'}
-                </div>
-                <label className="mt-3 flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={consentChecked}
-                    onChange={(event) => setConsentChecked(event.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-amber-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-xs leading-5">
-                    我已阅读并知悉：注册后账号资料、成员档案与测评结果会保存到云端；我同意当前版本
-                    {consentVersion ? `（${consentVersion}）` : ''}的隐私风险知情说明。
-                  </span>
-                </label>
-              </div>
             </div>
           )}
 
@@ -206,12 +165,10 @@ export default function AccountOnboardingModal({
             <div className="grid grid-cols-2 gap-3">
               <select
                 value={profileDraft.relation}
-                onChange={(event) =>
-                  setProfileDraft((prev) => ({
-                    ...prev,
-                    relation: event.target.value as MemberRelation,
-                  }))
-                }
+                onChange={(event) => setProfileDraft((prev) => ({
+                  ...prev,
+                  relation: event.target.value as MemberRelation,
+                }))}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-indigo-400"
               >
                 <option value="self">本人</option>
@@ -224,12 +181,10 @@ export default function AccountOnboardingModal({
 
               <select
                 value={profileDraft.languagePreference}
-                onChange={(event) =>
-                  setProfileDraft((prev) => ({
-                    ...prev,
-                    languagePreference: event.target.value as UserProfile['languagePreference'],
-                  }))
-                }
+                onChange={(event) => setProfileDraft((prev) => ({
+                  ...prev,
+                  languagePreference: event.target.value as UserProfile['languagePreference'],
+                }))}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-indigo-400"
               >
                 <option value="zh">中文</option>
@@ -247,12 +202,10 @@ export default function AccountOnboardingModal({
             <div className="grid grid-cols-2 gap-3">
               <select
                 value={profileDraft.gender}
-                onChange={(event) =>
-                  setProfileDraft((prev) => ({
-                    ...prev,
-                    gender: event.target.value as UserProfile['gender'],
-                  }))
-                }
+                onChange={(event) => setProfileDraft((prev) => ({
+                  ...prev,
+                  gender: event.target.value as UserProfile['gender'],
+                }))}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-indigo-400"
               >
                 <option value="boy">男</option>
@@ -263,12 +216,10 @@ export default function AccountOnboardingModal({
                 type="number"
                 min="0"
                 value={profileDraft.ageMonths ?? ''}
-                onChange={(event) =>
-                  setProfileDraft((prev) => ({
-                    ...prev,
-                    ageMonths: Number.parseInt(event.target.value, 10) || 0,
-                  }))
-                }
+                onChange={(event) => setProfileDraft((prev) => ({
+                  ...prev,
+                  ageMonths: Number.parseInt(event.target.value, 10) || 0,
+                }))}
                 placeholder="月龄"
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-indigo-400"
               />

@@ -1,210 +1,337 @@
 {
+  "id": "SSS",
   "version": "1.0",
+  "title": {
+    "zh": "SSS躯体化症状自评量表",
+    "en": "Somatic Symptom Scale"
+  },
+  "description": {
+    "zh": "用于评估近半年或当前阶段的躯体化症状严重程度，共20个症状条目和1个社会功能影响条目。",
+    "en": "A scale for assessing somatic symptom severity with 20 symptom items and 1 functional impact item."
+  },
+  "source": "manifest",
   "category": "General Health",
   "tags": ["躯体化", "躯体症状", "SSS", "成人评估"],
   "estimatedMinutes": 8,
   "interactionMode": "manual_only",
   "supportedLanguages": ["zh"],
   "requiresConfirmation": false,
-  "Description": {
-    "scale_id": "SSS",
-    "title": "躯体化症状自评量表",
-    "short_name": "SSS",
-    "reference": "庄琦毛家亮 李春波等 躯体化症状自评量表的初步编制及信度和效度研究[J].中华行为医学与脑科学杂志,2010,19(09):847-849",
-    "important_notice": "此量表切勿遗失,每次就诊请务必携带此量表!以便于前后对比判断治疗效果。",
-    "instructions": "说明:您发病过程中可能存在下列各种症状,如果医生能确切了解您的这些症状,就能给您更多的帮助及正确的治疗。初诊请根据近半年情况、复诊请根据目前情况在症状上打√,症状可多选,并以选择出相关症状最重的作为严重程度分值;没有症状也要在没有一栏上选择打√。在发病时的症状上打√,可多选,每一栏都要选择",
-    "patient_info_fields": [
-      { "id": "name", "label": "姓名", "type": "string" },
-      { "id": "phone", "label": "电话", "type": "string" },
-      { "id": "education", "label": "教育程度", "type": "string" },
-      { "id": "occupation", "label": "职业", "type": "string" },
-      { "id": "gender", "label": "性别", "type": "string" },
-      { "id": "age", "label": "年龄", "type": "number" },
-      { "id": "disease_duration", "label": "病程", "type": "string" },
-      { "id": "diagnosis", "label": "诊断", "type": "string" },
-      { "id": "medication", "label": "所用药物", "type": "string" },
-      { "id": "assessment_date", "label": "评定日期", "type": "date" },
-      { "id": "assessment_count", "label": "第次", "type": "number" }
-    ]
-  },
-  "Dimension": [
+  "questions": [
     {
-      "id": "total_score",
-      "name": "躯体化症状总分",
-      "description": "评估躯体化症状的总体严重程度"
+      "id": 1,
+      "text": "头晕、头胀、头重、头痛、眩晕、晕厥或脑鸣",
+      "clinical_intent": "评估头部不适与眩晕相关症状。",
+      "colloquial": "最近是否有头晕、头胀、头痛或眩晕这类不适？",
+      "fallback_examples": ["如果几种症状都有，请按最严重时的程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
     },
     {
-      "id": "functional_impact",
-      "name": "社会功能影响",
-      "description": "评估躯体化症状对日常社会功能的损害程度"
+      "id": 2,
+      "text": "睡眠问题（入睡困难、浅睡易醒、多梦、噩梦、早醒、失眠或睡眠过多）",
+      "clinical_intent": "评估睡眠质量与睡眠节律问题。",
+      "colloquial": "最近睡眠怎么样，是否有失眠、多梦、早醒或睡太多的情况？",
+      "fallback_examples": ["请按近半年或当前阶段最符合的严重程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 3,
+      "text": "易疲劳乏力、行动困难、精力减退",
+      "clinical_intent": "评估疲劳感与体力下降。",
+      "colloquial": "最近是否经常觉得乏力、很累，做事提不起劲？",
+      "fallback_examples": ["如果拿不准，可以按症状最明显的时候判断。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 4,
+      "text": "兴趣减退、情绪不佳、怕烦、缺乏耐心",
+      "clinical_intent": "评估兴趣下降与情绪烦躁表现。",
+      "colloquial": "最近是否容易烦、没兴趣、情绪不太好或缺乏耐心？",
+      "fallback_examples": ["请按这类情况总体最严重时的程度作答。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 5,
+      "text": "心血管症状（心慌、胸闷、胸痛、气短）",
+      "clinical_intent": "评估心慌、胸闷与气短等心血管不适。",
+      "colloquial": "最近是否有心慌、胸闷、胸痛或气短的情况？",
+      "fallback_examples": ["如多种症状并存，请按最重时选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 6,
+      "text": "易着急紧张、担忧害怕、甚至惊恐、濒死感或失控感",
+      "clinical_intent": "评估紧张、惊恐与失控感。",
+      "colloquial": "最近是否容易紧张害怕，甚至有惊恐、濒死感或失控感？",
+      "fallback_examples": ["请结合近半年或复诊当前情况作答。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 7,
+      "text": "习惯操心、多思多虑、易纠结、遇事总往坏处想",
+      "clinical_intent": "评估过度担忧与消极预期。",
+      "colloquial": "最近是否总爱操心、多想，遇事容易往坏处想？",
+      "fallback_examples": ["请按最符合的整体程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 8,
+      "text": "注意力减退、思考能力下降、健忘甚至迟钝、恍惚",
+      "clinical_intent": "评估注意力、记忆与思维状态变化。",
+      "colloquial": "最近是否容易分心、记不住、反应变慢或发恍？",
+      "fallback_examples": ["请按这些表现整体最明显时的程度判断。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 9,
+      "text": "胃肠症状（胀、痛、返酸、食欲差、便秘、便多、打嗝、口干苦、恶心、消瘦）",
+      "clinical_intent": "评估胃肠道不适与消化症状。",
+      "colloquial": "最近是否有胃肠不适，比如腹胀、胃痛、反酸、恶心或食欲差？",
+      "fallback_examples": ["如果症状不止一种，请按最重时选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 10,
+      "text": "疼痛（颈部、肩部、腰部、背部、腿部等）",
+      "clinical_intent": "评估躯体疼痛症状。",
+      "colloquial": "最近是否经常有颈肩腰背或腿部等部位的疼痛？",
+      "fallback_examples": ["请按最常见或最严重时的程度作答。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 11,
+      "text": "敏感、依赖、易悲伤或伤心哭泣",
+      "clinical_intent": "评估敏感脆弱与情绪依赖表现。",
+      "colloquial": "最近是否变得比较敏感、依赖他人，或者容易悲伤想哭？",
+      "fallback_examples": ["如果这几种情况都有，请按最严重时选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 12,
+      "text": "手脚关节或身体某部位（麻木、僵硬、抽搐、颤抖、刺痛、怕冷）",
+      "clinical_intent": "评估四肢与局部躯体感觉异常。",
+      "colloquial": "最近是否有手脚或身体某处麻木、僵硬、发抖、刺痛或怕冷？",
+      "fallback_examples": ["请按这类感觉最明显时的程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 13,
+      "text": "视物模糊、眼睛干涩或胀痛、短期内视力下降",
+      "clinical_intent": "评估视觉相关不适。",
+      "colloquial": "最近是否有看东西模糊、眼睛干涩胀痛或视力下降的感觉？",
+      "fallback_examples": ["请结合近一段时间的整体情况判断。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 14,
+      "text": "激动烦躁、生气易怒、对声音过敏、易受惊吓",
+      "clinical_intent": "评估烦躁易怒与惊吓敏感。",
+      "colloquial": "最近是否容易烦躁、生气，或者对声音敏感、容易受惊？",
+      "fallback_examples": ["请按这些反应最明显时的严重程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 15,
+      "text": "追求完美、洁癖、强迫感（强迫思维、强迫行为）",
+      "clinical_intent": "评估强迫相关表现。",
+      "colloquial": "最近是否明显追求完美、洁癖，或者总有强迫性的想法和行为？",
+      "fallback_examples": ["如果不止一种表现，请按最影响你的程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 16,
+      "text": "皮肤过敏、瘙痒、皮疹、或潮红、潮热、多汗",
+      "clinical_intent": "评估皮肤过敏与植物神经相关症状。",
+      "colloquial": "最近是否有皮肤瘙痒、皮疹、潮红潮热或多汗等情况？",
+      "fallback_examples": ["请按近一段时间总体最符合的程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 17,
+      "text": "常关注健康问题、担心自己及家人生病",
+      "clinical_intent": "评估健康焦虑倾向。",
+      "colloquial": "最近是否总担心自己的身体状况，或者担心家人生病？",
+      "fallback_examples": ["请按这类担心最常见时的程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 18,
+      "text": "呼吸困难、憋闷或窒息感、喜大叹气、咳嗽或胁肋痛",
+      "clinical_intent": "评估呼吸系统不适与憋闷感。",
+      "colloquial": "最近是否有呼吸困难、憋闷、窒息感，或总想大叹气？",
+      "fallback_examples": ["如果同时有咳嗽或胁肋痛，也请按最重时选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 19,
+      "text": "咽部不适、梗阻感、鼻腔干涩、鼻塞、耳鸣、耳塞",
+      "clinical_intent": "评估咽鼻耳部不适。",
+      "colloquial": "最近是否有咽喉堵、鼻干鼻塞、耳鸣或耳塞等不适？",
+      "fallback_examples": ["请按这类症状最明显时的程度作答。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 20,
+      "text": "易尿频、尿急、尿痛、会阴部不适或性功能下降",
+      "clinical_intent": "评估泌尿生殖系统相关不适。",
+      "colloquial": "最近是否有尿频、尿急、尿痛、会阴部不适或性功能下降？",
+      "fallback_examples": ["请根据症状最明显时的程度选择。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "不存在相关症状" },
+        { "label": "轻度", "score": 2, "aliases": ["偶有", "较轻"], "description": "偶有几天存在或尚能忍受" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "一半天数存在或希望缓解" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "几乎每天存在或较难忍受" }
+      ]
+    },
+    {
+      "id": 21,
+      "text": "对工作、学习、家庭关系及人际交往等造成的困难",
+      "clinical_intent": "评估症状对社会功能的影响程度。",
+      "colloquial": "这些症状对工作、学习、家庭关系或人际交往造成了多大影响？",
+      "fallback_examples": ["这一题单独记录社会功能影响，不计入总分。"],
+      "options": [
+        { "label": "没有", "score": 1, "aliases": ["无", "不存在"], "description": "未造成明显影响" },
+        { "label": "轻度", "score": 2, "aliases": ["较轻", "轻微"], "description": "造成轻度影响" },
+        { "label": "中度", "score": 3, "aliases": ["一般", "明显"], "description": "造成中度影响" },
+        { "label": "重度", "score": 4, "aliases": ["严重", "很重"], "description": "造成重度影响" }
+      ]
     }
   ],
-  "Data": {
-    "common_options": [
-      { "value": 1, "label": "没有", "description": "不存在" },
-      { "value": 2, "label": "轻度", "description": "偶有几天存在或尚能忍受" },
-      { "value": 3, "label": "中度", "description": "一半天数存在或希望缓解" },
-      { "value": 4, "label": "重度", "description": "几乎每天存在或较难忍受" }
-    ],
-    "questions": [
+  "scoring": {
+    "method": "sum",
+    "scoreQuestionIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    "totalScoreLabel": "躯体化症状总分",
+    "totalScoreHint": "总分按第1-20题累加，范围20-80分；第21题为社会功能影响，单独记录但不计入总分。",
+    "dimensions": [
       {
-        "id": "Q1",
-        "text": "头晕、头胀、头重、头痛、眩晕、晕厥或脑鸣",
-        "dimension": "total_score"
+        "id": "total_score",
+        "label": "躯体化症状总分",
+        "questionIds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
       },
       {
-        "id": "Q2",
-        "text": "睡眠问题(入睡困难、浅睡易醒、多梦、噩梦、早醒、失眠或睡眠过多)",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q3",
-        "text": "易疲劳乏力、行动困难、精力减退",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q4",
-        "text": "兴趣减退、情绪不佳、怕烦、缺乏耐心",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q5",
-        "text": "心血管症状(心慌、胸闷、胸痛、气短)",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q6",
-        "text": "易着急紧张、担忧害怕、甚至惊恐、濒死感或失控感",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q7",
-        "text": "习惯操心、多思多虑、易纠结、遇事总往坏处想",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q8",
-        "text": "注意力减退、思考能力下降、健忘甚至迟钝、恍惚",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q9",
-        "text": "胃肠症状(胀、痛、返酸、食欲差、便秘、便多、打嗝、口干苦、恶心、消瘦)",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q10",
-        "text": "疼痛(颈部、肩部、腰部、背部、腿部等)",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q11",
-        "text": "敏感、依赖、易悲伤或伤心哭泣",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q12",
-        "text": "手脚关节或身体某部位(麻木、僵硬、抽搐、颤抖、刺痛、怕冷)",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q13",
-        "text": "视物模糊、眼睛干涩或胀痛、短期内视力下降",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q14",
-        "text": "激动烦躁、生气易怒、对声音过敏、易受惊吓",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q15",
-        "text": "追求完美、洁癖、强迫感(强迫思维、强迫行为)",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q16",
-        "text": "皮肤过敏、瘙痒、皮疹、或潮红、潮热、多汗",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q17",
-        "text": "常关注健康问题、担心自己及家人生病",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q18",
-        "text": "憋闷或窒息感、喜大叹气、咳嗽或胁肋痛、呼吸困难",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q19",
-        "text": "咽部不适、梗阻感、鼻腔干涩、鼻塞、耳鸣、耳塞",
-        "dimension": "total_score"
-      },
-      {
-        "id": "Q20",
-        "text": "易尿频、尿急、尿痛、会阴部不适或性功能下降",
-        "dimension": "total_score"
+        "id": "functional_impact",
+        "label": "社会功能影响",
+        "questionIds": [21]
       }
     ],
-    "additional_questions": [
+    "thresholds": [
       {
-        "id": "Q21_Impact",
-        "text": "对工作、学习、家庭关系及人际交往等造成的困难",
-        "dimension": "functional_impact",
-        "options": [
-          { "value": 1, "label": "没有" },
-          { "value": 2, "label": "轻度" },
-          { "value": 3, "label": "中度" },
-          { "value": 4, "label": "重度" }
-        ]
-      }
-    ]
-  },
-  "Diagnosis": {
-    "scoring_rules": [
-      {
-        "dimension_target": "total_score",
-        "method": "sum",
-        "items": [
-          "Q1",
-          "Q2",
-          "Q3",
-          "Q4",
-          "Q5",
-          "Q6",
-          "Q7",
-          "Q8",
-          "Q9",
-          "Q10",
-          "Q11",
-          "Q12",
-          "Q13",
-          "Q14",
-          "Q15",
-          "Q16",
-          "Q17",
-          "Q18",
-          "Q19",
-          "Q20"
-        ],
-        "min_score": 20,
-        "max_score": 80
+        "min": 20,
+        "max": 29,
+        "conclusion": "正常范围或症状较轻",
+        "description": "SSS 总分处于较低区间，提示当前躯体化症状总体较轻。若仍持续影响生活，建议结合临床情况继续观察。"
       },
       {
-        "dimension_target": "functional_impact",
-        "method": "single_item",
-        "items": ["Q21_Impact"],
-        "min_score": 1,
-        "max_score": 4
-      }
-    ],
-    "result_output": [
+        "min": 30,
+        "max": 39,
+        "conclusion": "轻度躯体化症状",
+        "description": "SSS 总分提示存在轻度躯体化症状，建议结合病程、压力事件与临床访谈进一步评估。"
+      },
       {
-        "id": "total_result",
-        "label": "总分",
-        "source": "total_score"
+        "min": 40,
+        "max": 59,
+        "conclusion": "中度躯体化症状",
+        "description": "SSS 总分提示中度躯体化症状，症状负担较明显，建议结合专业评估判断是否需要进一步干预。"
+      },
+      {
+        "min": 60,
+        "max": 80,
+        "conclusion": "重度躯体化症状",
+        "description": "SSS 总分提示重度躯体化症状，说明症状较为突出，建议尽快结合专科评估与随访处理。"
       }
     ]
   }

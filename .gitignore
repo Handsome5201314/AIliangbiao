@@ -72,19 +72,15 @@ prisma/*.db-journal
 
 # Temporary files
 tmp/
-tmp_*
 temp/
 *.tmp
 *.temp
 .cache/
-.tmp-*
 
 # Backup files
 *.bak
 *.backup
 *.old
-*.old.ts
-*.old.tsx
 
 # Compiled files
 *.com

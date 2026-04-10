@@ -172,6 +172,7 @@ async function requestLlmSuggestions(
     options: question.options.map((option) => ({
       label: option.label,
       score: option.score,
+      description: resolveLocalizedText(option.description, "zh"),
     })),
   }));
 

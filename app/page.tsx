@@ -1,18 +1,17 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import type { LanguageCode, ScaleCategory, ScaleDefinition, ScaleSummary } from '@/lib/schemas/core/types';
+import { useCallback, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import type { LanguageCode, ScaleCategory, ScaleDefinition } from '@/lib/schemas/core/types';
 import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 import Questionnaire from '@/components/Questionnaire';
 import TriageVoiceRecorder from '@/components/TriageVoiceRecorder';
 import CallModePanel from '@/components/CallModePanel';
-import { useAssessment, useProfile, useSkillSession } from '@/contexts';
+import { useAssessment, useAuthSession, useProfile, useSkillSession } from '@/contexts';
 import Avatar from '@/components/Avatar';
 import AccountOnboardingModal from '@/components/AccountOnboardingModal';
-import MemberCareSettingsModal from '@/components/MemberCareSettingsModal';
-import { Mic, Heart, Users, Brain, Eye, ArrowLeft, Sparkles, LayoutDashboard, History, UserPlus, BriefcaseBusiness, PhoneCall, Bot, Loader2, RotateCcw } from 'lucide-react';
-import { primeSpeechPlayback } from '@/lib/services/useSpeechPlayback';
+import PatientDoctorPanel from '@/components/PatientDoctorPanel';
+import { Mic, Heart, Users, Brain, Eye, ArrowLeft, Sparkles, LayoutDashboard, History, UserPlus, BriefcaseBusiness, PhoneCall, Bot } from 'lucide-react';
 
 // 量表卡片配置 (匹配底层 registry 中的大写 ID)
 const SCALE_CARDS = [
@@ -103,12 +102,12 @@ const UI_COPY = {
     en: 'My Personal Assessment Space',
   },
   registeredHint: {
-    zh: '已升级为正式账号，成员档案与历史评测会同步保存到云端，可管理多成员与长期记录。',
-    en: 'Registered accounts sync member profiles and assessments to the cloud for long-term management.',
+    zh: '已升级为正式账号，可管理多成员档案与历史记录入口。',
+    en: 'Registered account unlocked for multi-member profiles and history access.',
   },
   guestHint: {
-    zh: '游客模式可先体验评测；注册患者账号后可解锁云端保存、多成员管理与更多免费额度。',
-    en: 'Guest mode is great for trying assessments; patient registration unlocks cloud sync, member management, and more quota.',
+    zh: '游客模式可先体验评测；注册后解锁多成员管理与更多免费额度。',
+    en: 'Guest mode is great for trying assessments; register to unlock more features.',
   },
   emptyState: {
     zh: '暂时没有符合条件的量表，请调整搜索或筛选条件。',
@@ -139,8 +138,8 @@ const UI_COPY = {
     en: 'Open Agent',
   },
   privacyHint: {
-    zh: '评估结果仅供参考 · 游客试用以本地为主，正式注册后档案与评测数据将安全保存到云端',
-    en: 'For reference only · Guest trials stay local-first, while registered accounts store records securely in the cloud.',
+    zh: '评估结果仅供参考 · 纯本地引擎严格保护您的隐私信息',
+    en: 'For reference only · Local-first engine protects your privacy.',
   },
   language: {
     zh: '中 / En',
@@ -206,34 +205,52 @@ function LanguageSwitcher({
   );
 }
 
-function HomeContent() {
-  const router = useRouter();
+export default function Home() {
   const searchParams = useSearchParams();
-  const { setCurrentScale, resetAssessment } = useAssessment();
+  const { currentScale, setCurrentScale, resetAssessment } = useAssessment();
+  const { user, isAuthenticated, isDoctor, isPatient, logout } = useAuthSession();
   const { profile, profiles, selectProfile, isGuest, accountRole } = useProfile();
-  const { token: skillToken } = useSkillSession();
+  const { token: skillToken, loading: skillSessionLoading } = useSkillSession();
   const [quota, setQuota] = useState<{ remaining: number; dailyLimit: number; isGuest: boolean; role: string } | null>(null);
-  const [scales, setScales] = useState<ScaleSummary[]>([]);
+  const [scales, setScales] = useState<ScaleDefinition[]>([]);
   const [scalesLoading, setScalesLoading] = useState(true);
-  const [scalesError, setScalesError] = useState('');
-  const [scaleDetail, setScaleDetail] = useState<ScaleDefinition | null>(null);
-  const [scaleDetailLoading, setScaleDetailLoading] = useState(false);
-  const [scaleDetailError, setScaleDetailError] = useState('');
-  const [scaleDetailRetryKey, setScaleDetailRetryKey] = useState(0);
   const [language, setLanguage] = useState<LanguageCode>('zh');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | ScaleCategory>('all');
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [onboardingReason, setOnboardingReason] = useState<'quota' | 'history' | 'member' | 'manual'>('manual');
   const [isCallModeOpen, setIsCallModeOpen] = useState(false);
-  const [isCareSettingsOpen, setIsCareSettingsOpen] = useState(false);
-  const scaleDetailRequestRef = useRef(0);
-  const selectedScaleId = searchParams.get('scaleId')?.trim() ?? '';
 
-  const openCallMode = useCallback(() => {
-    primeSpeechPlayback(language);
-    setIsCallModeOpen(true);
-  }, [language]);
+  const loadScaleLibrary = useCallback(async () => {
+    if (skillToken) {
+      try {
+        const response = await fetch('/api/skill/v1/scales', {
+          headers: {
+            Authorization: `Bearer ${skillToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data.scales)) {
+            return data.scales as ScaleDefinition[];
+          }
+        } else {
+          console.warn('Failed to load skill scales, falling back to public scales.', response.status);
+        }
+      } catch (error) {
+        console.error('Failed to load skill scales:', error);
+      }
+    }
+
+    const fallbackResponse = await fetch('/api/scales');
+    if (!fallbackResponse.ok) {
+      throw new Error(`Failed to load public scales: ${fallbackResponse.status}`);
+    }
+
+    const fallbackData = await fallbackResponse.json();
+    return Array.isArray(fallbackData.scales) ? (fallbackData.scales as ScaleDefinition[]) : [];
+  }, [skillToken]);
 
   const loadQuota = useCallback(() => {
     if (!skillToken) {
@@ -268,76 +285,50 @@ function HomeContent() {
     void loadQuota();
   }, [accountRole, isGuest, loadQuota]);
 
-  const loadScaleSummaries = useCallback(() => {
-    setScalesLoading(true);
-    setScalesError('');
+  useEffect(() => {
+    let active = true;
 
-    return fetch('/api/scales?view=summary')
-      .then(res => res.json())
-      .then(data => {
-        if (!Array.isArray(data.scales)) {
-          throw new Error('Invalid scale summary response');
-        }
-        setScales(data.scales);
+    setScalesLoading(true);
+
+    loadScaleLibrary()
+      .then((loadedScales) => {
+        if (!active) return;
+        setScales(loadedScales);
       })
       .catch(err => {
         console.error('Failed to load scales:', err);
-        setScales([]);
-        setScalesError(language === 'en' ? 'Failed to load scales.' : '量表列表加载失败，请重试。');
+        if (active) {
+          setScales([]);
+        }
       })
       .finally(() => {
-        setScalesLoading(false);
+        if (active) {
+          setScalesLoading(false);
+        }
       });
-  }, [language]);
 
-  useEffect(() => {
-    void loadScaleSummaries();
-  }, [loadScaleSummaries]);
-
-  const buildScaleUrl = useCallback((scaleId?: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (scaleId) {
-      params.set('scaleId', scaleId);
-    } else {
-      params.delete('scaleId');
-    }
-    const query = params.toString();
-    return query ? `/?${query}` : '/';
-  }, [searchParams]);
-
-  const openScaleById = useCallback((scaleId: string, mode: 'push' | 'replace' = 'push') => {
-    const nextUrl = buildScaleUrl(scaleId);
-    if (mode === 'replace') {
-      router.replace(nextUrl, { scroll: false });
-      return;
-    }
-
-    router.push(nextUrl, { scroll: false });
-  }, [buildScaleUrl, router]);
+    return () => {
+      active = false;
+    };
+  }, [loadScaleLibrary, skillSessionLoading, skillToken]);
 
   const handleBackToHall = useCallback(() => {
-    setScaleDetail(null);
-    setScaleDetailError('');
-    setScaleDetailLoading(false);
-    setScaleDetailRetryKey(0);
-    setCurrentScale(null);
     resetAssessment();
-    router.replace(buildScaleUrl(), { scroll: false });
-  }, [buildScaleUrl, resetAssessment, router, setCurrentScale]);
+  }, [resetAssessment]);
 
   const openOnboarding = useCallback((reason: 'quota' | 'history' | 'member' | 'manual') => {
     setOnboardingReason(reason);
     setIsOnboardingOpen(true);
   }, []);
 
-  const handleScaleSelect = useCallback((scale: ScaleSummary) => {
+  const handleScaleSelect = useCallback((scale: ScaleDefinition) => {
     if (quota?.remaining === 0 && (quota.isGuest || isGuest)) {
       openOnboarding('quota');
       return;
     }
 
-    openScaleById(scale.id);
-  }, [isGuest, openOnboarding, openScaleById, quota]);
+    setCurrentScale(scale);
+  }, [isGuest, openOnboarding, quota, setCurrentScale]);
 
   const handleAgentScaleSelect = useCallback((scaleId: string) => {
     if (quota?.remaining === 0 && (quota.isGuest || isGuest)) {
@@ -345,8 +336,29 @@ function HomeContent() {
       return;
     }
 
-    openScaleById(scaleId.toUpperCase());
-  }, [isGuest, openOnboarding, openScaleById, quota]);
+    const normalizedScaleId = scaleId.toUpperCase();
+    const localScale = scales.find(scale => scale.id.toUpperCase() === normalizedScaleId);
+
+    if (localScale) {
+      setCurrentScale(localScale);
+      return;
+    }
+
+    fetch(`/api/skill/v1/scales/${encodeURIComponent(scaleId)}`, {
+      headers: skillToken
+        ? {
+            Authorization: `Bearer ${skillToken}`,
+          }
+        : undefined,
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.scale) {
+          setCurrentScale(data.scale);
+        }
+      })
+      .catch(err => console.error('Failed to load recommended scale:', err));
+  }, [isGuest, openOnboarding, quota, scales, setCurrentScale, skillToken]);
 
   const handleCallModeScaleSelect = useCallback((scaleId: string) => {
     setIsCallModeOpen(false);
@@ -354,72 +366,16 @@ function HomeContent() {
   }, [handleAgentScaleSelect]);
 
   useEffect(() => {
-    if (!selectedScaleId) {
-      setScaleDetail(null);
-      setScaleDetailError('');
-      setScaleDetailLoading(false);
-      setCurrentScale(null);
+    const scaleId = searchParams.get('scaleId');
+    if (!scaleId || currentScale || !scales.length) {
       return;
     }
 
-    const requestId = ++scaleDetailRequestRef.current;
-    const controller = new AbortController();
-    setScaleDetail(null);
-    setCurrentScale(null);
-    setScaleDetailLoading(true);
-    setScaleDetailError('');
-
-    fetch(`/api/scales?id=${encodeURIComponent(selectedScaleId)}`, {
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(
-            data.error ||
-              (res.status === 404
-                ? (language === 'en' ? 'Scale not found or unavailable.' : '量表不存在或已下线。')
-                : (language === 'en' ? 'Failed to load scale detail.' : '量表详情加载失败，请重试。'))
-          );
-        }
-
-        if (requestId !== scaleDetailRequestRef.current) {
-          return;
-        }
-
-        setScaleDetail(data.scale ?? null);
-        setCurrentScale(data.scale ?? null);
-      })
-      .catch((error) => {
-        if (controller.signal.aborted || requestId !== scaleDetailRequestRef.current) {
-          return;
-        }
-
-        console.error('Failed to load scale detail:', error);
-        setScaleDetail(null);
-        setCurrentScale(null);
-        setScaleDetailError(
-          error instanceof Error
-            ? error.message
-            : language === 'en'
-              ? 'Failed to load scale detail.'
-              : '量表详情加载失败，请重试。'
-        );
-      })
-      .finally(() => {
-        if (requestId === scaleDetailRequestRef.current) {
-          setScaleDetailLoading(false);
-        }
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, [language, scaleDetailRetryKey, selectedScaleId, setCurrentScale]);
-
-  const retryScaleDetail = useCallback(() => {
-    setScaleDetailRetryKey((current) => current + 1);
-  }, []);
+    const matchedScale = scales.find((item) => item.id.toUpperCase() === scaleId.toUpperCase());
+    if (matchedScale) {
+      handleScaleSelect(matchedScale);
+    }
+  }, [currentScale, handleScaleSelect, scales, searchParams]);
 
   const filteredScales = scales.filter((scale) => {
     const title = resolveLocalizedText(scale.title, language);
@@ -440,9 +396,6 @@ function HomeContent() {
     return haystack.includes(normalizedQuery);
   });
 
-  const selectedScaleSummary =
-    scales.find((scale) => scale.id.toUpperCase() === selectedScaleId.toUpperCase()) ?? null;
-
   const headline = profile.relation === 'self'
     ? UI_COPY.selfHeadline[language]
     : `${profile.nickname}${language === 'zh' ? '的健康档案' : '\'s Assessment Space'}`;
@@ -452,14 +405,8 @@ function HomeContent() {
     : UI_COPY.registeredHint[language];
 
   // ========= 答题状态布局 =========
-  if (selectedScaleId) {
-    const activeScale = scaleDetail;
-    const scaleTitle = activeScale
-      ? resolveLocalizedText(activeScale.title, language)
-      : selectedScaleSummary
-        ? resolveLocalizedText(selectedScaleSummary.title, language)
-        : selectedScaleId;
-    const cardConfig = getScaleCardConfig(activeScale?.id || selectedScaleSummary?.id || selectedScaleId);
+  if (currentScale) {
+    const cardConfig = getScaleCardConfig(currentScale.id);
     
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
@@ -476,7 +423,7 @@ function HomeContent() {
             <div className={`w-8 h-8 ${cardConfig?.bgColor || 'bg-slate-100'} rounded-lg flex items-center justify-center`}>
               {cardConfig?.icon || <Sparkles className="w-4 h-4 text-slate-500" />}
             </div>
-            <span className="text-slate-800 font-semibold">{scaleTitle}</span>
+            <span className="text-slate-800 font-semibold">{resolveLocalizedText(currentScale.title, language)}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher language={language} onChange={setLanguage} />
@@ -485,49 +432,8 @@ function HomeContent() {
         </nav>
 
         <main className="py-8">
-          {scaleDetailLoading && !activeScale ? (
-            <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-              <h2 className="text-lg font-semibold text-slate-900">
-                {language === 'en' ? 'Loading scale...' : '正在加载量表...'}
-              </h2>
-              <p className="text-sm text-slate-500">
-                {language === 'en'
-                  ? 'We are loading the current questionnaire detail.'
-                  : '正在获取当前量表详情，请稍候。'}
-              </p>
-            </div>
-          ) : scaleDetailError ? (
-            <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 rounded-3xl border border-rose-200 bg-white px-6 py-16 text-center shadow-sm">
-              <div className="rounded-full bg-rose-50 p-3 text-rose-500">
-                <RotateCcw className="h-6 w-6" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {language === 'en' ? 'Failed to load scale' : '量表加载失败'}
-                </h2>
-                <p className="text-sm text-slate-500">{scaleDetailError}</p>
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={retryScaleDetail}
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-600"
-                >
-                  {language === 'en' ? 'Retry' : '重新加载量表'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBackToHall}
-                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  {language === 'en' ? 'Back to library' : '返回量表大厅'}
-                </button>
-              </div>
-            </div>
-          ) : activeScale ? (
-            <Questionnaire scale={activeScale} language={language} />
-          ) : null}
+          {/* 确保您的项目中已存在 Questionnaire 组件 */}
+          <Questionnaire scale={currentScale} language={language} /> 
         </main>
       </div>
     );
@@ -588,6 +494,52 @@ function HomeContent() {
             <History className="w-4 h-4" />
             <span>{UI_COPY.history[language]}</span>
           </button>
+          {isAuthenticated ? (
+            <>
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
+                <span>{user?.accountType === 'DOCTOR' ? '医生账号' : '患者账号'}</span>
+                {user?.email && <span className="hidden md:inline text-slate-400">· {user.email}</span>}
+              </div>
+              {isDoctor && (
+                <a
+                  href="/doctor"
+                  className="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-sm font-semibold text-cyan-700 hover:bg-cyan-100"
+                >
+                  医生工作台
+                </a>
+              )}
+              {isPatient && (
+                <a
+                  href="/auth/login"
+                  className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  患者中心
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={logout}
+                className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                退出
+              </button>
+            </>
+          ) : (
+            <>
+              <a
+                href="/auth/login"
+                className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                患者登录
+              </a>
+              <a
+                href="/doctor/login"
+                className="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-sm font-semibold text-cyan-700 hover:bg-cyan-100"
+              >
+                医生登录
+              </a>
+            </>
+          )}
           <LanguageSwitcher language={language} onChange={setLanguage} />
           <SettingsButton />
         </div>
@@ -647,14 +599,6 @@ function HomeContent() {
                   <UserPlus className="w-4 h-4" />
                   <span>{UI_COPY.addMember[language]}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCareSettingsOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/25"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>{language === 'en' ? 'Care Settings' : '主治与科研设置'}</span>
-                </button>
               </div>
             </div>
           </div>
@@ -662,6 +606,10 @@ function HomeContent() {
       </div>
 
       {/* 主体卡片区域 */}
+      <div className="px-4 md:px-6 mb-6 max-w-[1400px] mx-auto w-full relative z-10">
+        <PatientDoctorPanel />
+      </div>
+
       <main className="flex-1 px-4 md:px-6 pb-44 md:pb-48 w-full max-w-[1400px] mx-auto flex flex-col justify-center relative z-10">
         <div className="mb-6 rounded-3xl border border-slate-200 bg-white/90 p-4 md:p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -694,37 +642,9 @@ function HomeContent() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 w-full">
-          {scalesLoading ? (
-            Array.from({ length: 4 }).map((_, index) => (
-              <div
-                key={`scale-skeleton-${index}`}
-                className="h-[280px] animate-pulse rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-slate-100" />
-                  <div className="space-y-2">
-                    <div className="h-5 w-16 rounded bg-slate-100" />
-                    <div className="h-3 w-28 rounded bg-slate-100" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="h-4 w-full rounded bg-slate-100" />
-                  <div className="h-4 w-5/6 rounded bg-slate-100" />
-                  <div className="h-4 w-2/3 rounded bg-slate-100" />
-                </div>
-                <div className="mt-10 space-y-3">
-                  <div className="flex justify-between">
-                    <div className="h-3 w-16 rounded bg-slate-100" />
-                    <div className="h-3 w-16 rounded bg-slate-100" />
-                  </div>
-                  <div className="h-10 rounded-xl bg-slate-100" />
-                </div>
-              </div>
-            ))
-          ) : (
-            filteredScales.map((scale) => {
+          {filteredScales.map((scale) => {
             const cardConfig = getScaleCardConfig(scale.id);
-            const estimatedTime = getEstimatedTime(scale.questionCount, scale.estimatedMinutes);
+            const estimatedTime = getEstimatedTime(scale.questions.length, scale.estimatedMinutes);
             const localizedTitle = resolveLocalizedText(scale.title, language);
             const localizedDescription = resolveLocalizedText(scale.description, language);
             
@@ -762,7 +682,7 @@ function HomeContent() {
                   <div className="flex items-center justify-between text-xs font-medium text-slate-500 px-1">
                     <span className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-slate-300 rounded-full mr-1.5"></span>
-                      {scale.questionCount} 题
+                      {scale.questions.length} 题
                     </span>
                     <span className="flex items-center">
                       <span className="w-1.5 h-1.5 bg-slate-300 rounded-full mr-1.5"></span>
@@ -776,22 +696,9 @@ function HomeContent() {
                 </div>
               </div>
             );
-          })
-          )}
+          })}
         </div>
-        {!scalesLoading && scalesError && (
-          <div className="mt-6 rounded-2xl border border-rose-200 bg-white p-6 text-center shadow-sm">
-            <p className="text-sm text-slate-600">{scalesError}</p>
-            <button
-              type="button"
-              onClick={() => void loadScaleSummaries()}
-              className="mt-4 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-600"
-            >
-              {language === 'en' ? 'Retry' : '重新加载列表'}
-            </button>
-          </div>
-        )}
-        {!scalesLoading && !scalesError && filteredScales.length === 0 && (
+        {!scalesLoading && !skillSessionLoading && filteredScales.length === 0 && (
           <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white/80 p-6 text-center text-sm text-slate-500">
             {UI_COPY.emptyState[language]}
           </div>
@@ -826,7 +733,7 @@ function HomeContent() {
 
           <button
             type="button"
-            onClick={openCallMode}
+            onClick={() => setIsCallModeOpen(true)}
             className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
           >
             <PhoneCall className="h-4 w-4" />
@@ -860,7 +767,6 @@ function HomeContent() {
           onStartScale={handleCallModeScaleSelect}
           language={language}
           mode="call"
-          onClose={() => setIsCallModeOpen(false)}
         />
       </CallModePanel>
 
@@ -869,34 +775,7 @@ function HomeContent() {
         onClose={() => setIsOnboardingOpen(false)}
         reason={onboardingReason}
       />
-      <MemberCareSettingsModal
-        open={isCareSettingsOpen}
-        onClose={() => setIsCareSettingsOpen(false)}
-        memberId={profile.id}
-        memberName={profile.nickname}
-      />
 
     </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#F8FAFC]">
-          <div className="mx-auto max-w-[1400px] px-6 py-12">
-            <div className="h-8 w-56 animate-pulse rounded bg-slate-200" />
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-[280px] animate-pulse rounded-2xl border border-slate-200 bg-white p-5" />
-              ))}
-            </div>
-          </div>
-        </div>
-      }
-    >
-      <HomeContent />
-    </Suspense>
   );
 }

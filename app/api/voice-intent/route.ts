@@ -405,6 +405,7 @@ function buildQuestionnaireIntentPrompt(question: ScaleQuestion, transcript: str
       label: option.label,
       score: option.score,
       aliases: option.aliases ?? [],
+      description: resolveLocalizedText(option.description, language),
     })),
   };
 

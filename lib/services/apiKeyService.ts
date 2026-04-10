@@ -75,9 +75,11 @@ export async function getSystemApiKeyByService(serviceType: ApiServiceType): Pro
   try {
     const apiKeys = await prisma.apiKey.findMany({
       where: {
+        purpose: 'AI',
         isActive: true,
         userId: null,
         serviceType,
+        NOT: { provider: 'mcp' },
       },
       select: {
         id: true,

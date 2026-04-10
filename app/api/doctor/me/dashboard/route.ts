@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { requireDoctorUser } from '@/lib/auth/user-session';
-import { getDoctorDashboard } from '@/lib/domain/care-service';
+import { requireApprovedDoctorUser } from '@/lib/auth/require-app-session';
+import { getDoctorDashboard } from '@/lib/services/doctor-care';
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await requireDoctorUser(request, { requireApproved: true });
-    const dashboard = await getDoctorDashboard(user.doctorProfile!.id);
-    return NextResponse.json({ dashboard });
+    const { doctorProfile } = await requireApprovedDoctorUser(request);
+    const dashboard = await getDoctorDashboard(doctorProfile.id);
+    return NextResponse.json(dashboard);
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to load doctor dashboard' },
+      { error: error instanceof Error ? error.message : 'Unauthorized' },
       { status: 401 }
     );
   }

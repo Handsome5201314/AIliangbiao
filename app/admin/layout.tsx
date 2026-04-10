@@ -1,17 +1,17 @@
 'use client';
 
-import React, { ReactNode, useEffect, useState } from 'react';
-import { LayoutDashboard, Users, Database, Activity, Settings, LogOut, Key, Shield } from 'lucide-react';
-import { useRouter, usePathname } from 'next/navigation';
+import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Activity, Database, Key, LayoutDashboard, LogOut, Settings, Shield, Users } from 'lucide-react';
 
-// 左侧导航菜单配置
 const navItems = [
   { name: '系统概览', icon: <LayoutDashboard className="w-5 h-5" />, href: '/admin' },
-  { name: '用户与画像', icon: <Users className="w-5 h-5" />, href: '/admin/users' },
+  { name: '用户与成员', icon: <Users className="w-5 h-5" />, href: '/admin/users' },
   { name: '医生审核', icon: <Shield className="w-5 h-5" />, href: '/admin/doctors' },
-  { name: 'MCP 开放平台', icon: <Activity className="w-5 h-5" />, href: '/admin/mcp' },
-  { name: '量表API密钥', icon: <Key className="w-5 h-5" />, href: '/admin/mcpkeys' },
-  { name: 'AI服务商密钥', icon: <Key className="w-5 h-5" />, href: '/admin/apikeys' },
+  { name: 'Assessment Core · MCP', icon: <Activity className="w-5 h-5" />, href: '/admin/mcp' },
+  { name: '量表 API 密钥', icon: <Key className="w-5 h-5" />, href: '/admin/mcpkeys' },
+  { name: 'AI 服务商密钥', icon: <Key className="w-5 h-5" />, href: '/admin/apikeys' },
   { name: '大模型与计费', icon: <Database className="w-5 h-5" />, href: '/admin/billing' },
   { name: '系统设置', icon: <Settings className="w-5 h-5" />, href: '/admin/settings' },
 ];
@@ -23,17 +23,46 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // 检查是否已登录
-    const token = localStorage.getItem('admin_token');
-    if (!token && pathname !== '/admin/login') {
-      router.push('/admin/login');
-    } else {
-      setIsAuthenticated(!!token);
+    if (pathname === '/admin/login') {
+      setChecking(false);
+      return;
     }
-    setChecking(false);
+
+    const token = localStorage.getItem('admin_token');
+    if (token) {
+      setIsAuthenticated(Boolean(token));
+      setChecking(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const verifyServerSession = async () => {
+      try {
+        const response = await fetch('/api/admin/settings');
+        if (!cancelled && response.ok) {
+          setIsAuthenticated(true);
+        } else if (!cancelled) {
+          router.push('/admin/login');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          router.push('/admin/login');
+        }
+      } finally {
+        if (!cancelled) {
+          setChecking(false);
+        }
+      }
+    };
+
+    void verifyServerSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname, router]);
 
-  // 登录页面不需要layout
   if (pathname === '/admin/login') {
     return <>{children}</>;
   }
@@ -42,7 +71,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
           <p className="text-slate-600">加载中...</p>
         </div>
       </div>
@@ -53,81 +82,73 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return null;
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
-    router.push('/admin/login');
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to clear admin session:', error);
+    } finally {
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      router.push('/admin/login');
+    }
   };
 
   return (
     <div className="flex h-screen bg-slate-50">
-      {/* 侧边导航栏 (SaaS 风格深色左导) */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 h-screen overflow-y-auto">
-        {/* Logo 区域 */}
-        <div className="h-16 flex items-center px-6 border-b border-slate-800 shrink-0 sticky top-0 bg-slate-900 z-10">
-          <a href="/" className="flex items-center">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center mr-3">
-              <span className="text-white font-bold">AI</span>
+      <aside className="flex h-screen w-72 shrink-0 flex-col overflow-y-auto bg-slate-950 text-white">
+        <div className="sticky top-0 z-10 flex h-16 items-center border-b border-white/10 bg-slate-950 px-6">
+          <a href="/" className="inline-flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 font-bold text-white">
+              AI
             </div>
-            <span className="text-lg font-bold text-white tracking-wider">超级管理控制台</span>
+            <span className="text-lg font-bold">平台管理后台</span>
           </a>
         </div>
 
-        {/* 菜单区域 */}
-        <nav className="flex-1 py-6 px-3 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <a
-                key={item.name}
-                href={item.href}
-                className={`flex items-center space-x-3 px-3 py-3 rounded-lg transition-colors ${
-                  isActive 
-                    ? 'bg-indigo-600 text-white shadow-md' 
-                    : 'hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                {item.icon}
-                <span className="font-medium">{item.name}</span>
-              </a>
-            );
-          })}
+        <nav className="flex-1 space-y-1 px-3 py-6">
+          {navItems.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                pathname === item.href
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-white/75 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {item.icon}
+              <span>{item.name}</span>
+            </a>
+          ))}
         </nav>
 
-        {/* 底部退出区域 */}
-        <div className="p-4 border-t border-slate-800 sticky bottom-0 bg-slate-900">
+        <div className="border-t border-white/10 p-4">
           <button
+            type="button"
             onClick={handleLogout}
-            className="flex items-center space-x-3 px-3 py-2 w-full rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
+            className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-white/75 hover:bg-white/10 hover:text-white"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="h-5 w-5" />
             <span>退出登录</span>
           </button>
         </div>
       </aside>
 
-      {/* 右侧主内容区域 */}
-      <main className="flex-1 flex flex-col min-h-screen">
-        {/* 顶部简单的顶栏 */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 sticky top-0 z-20">
+      <main className="flex min-h-screen flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-8">
           <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 text-indigo-600" />
+            <Shield className="h-5 w-5 text-indigo-600" />
             <h1 className="text-xl font-semibold text-slate-800">
-              {navItems.find(item => item.href === pathname)?.name || '管理后台'}
+              {navItems.find((item) => item.href === pathname)?.name || '管理后台'}
             </h1>
           </div>
-          <div className="flex items-center space-x-4">
-            <span className="flex items-center text-sm text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-              MCP 引擎运行中
-            </span>
+          <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-sm text-emerald-600">
+            Assessment Core 运行中
           </div>
         </header>
 
-        {/* 页面内容区（带滚动条） */}
-        <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto p-8">{children}</div>
       </main>
     </div>
   );

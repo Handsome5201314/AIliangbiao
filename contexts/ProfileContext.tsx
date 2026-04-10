@@ -71,10 +71,8 @@ interface ProfileContextType {
   selectProfile: (profileId: string) => void;
   createProfile: (profile: Partial<UserProfile>) => Promise<void>;
   upgradeAccount: (payload: {
+    phone?: string;
     email?: string;
-    password: string;
-    consentAccepted: boolean;
-    consentVersion: string;
     profile?: Partial<UserProfile>;
   }) => Promise<void>;
   refreshProfiles: () => Promise<void>;
@@ -143,6 +141,7 @@ function mapServerProfile(profile: any): UserProfile {
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<StoredProfileState>(getInitialState());
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const applyServerPayload = useCallback((payload: any) => {
     const serverProfiles = Array.isArray(payload?.profiles) && payload.profiles.length > 0
@@ -174,7 +173,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [applyServerPayload]);
 
   useEffect(() => {
-    const loadLocalProfileState = () => {
+    const loadProfileState = async () => {
+      const deviceId = getDeviceId();
+
+      try {
+        const response = await fetch(`/api/skill/v1/profile/sync?deviceId=${deviceId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.profiles?.length) {
+            applyServerPayload(data);
+            setIsLoaded(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load profiles from database:', error);
+      }
+
       const savedState = localStorage.getItem(STORAGE_KEY);
       if (savedState) {
         try {
@@ -183,6 +198,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             ...parsed,
             profiles: parsed.profiles.map(ensureProfileDefaults),
           });
+          setIsLoaded(true);
           return;
         } catch (error) {
           console.error('Failed to parse profile state', error);
@@ -214,6 +230,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           };
           setState(migratedState);
           persistState(migratedState);
+          setIsLoaded(true);
           return;
         } catch (error) {
           console.error('Failed to migrate legacy profile', error);
@@ -223,28 +240,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const fallbackState = getInitialState();
       setState(fallbackState);
       persistState(fallbackState);
+      setIsLoaded(true);
     };
 
-    const loadRemoteProfileState = async () => {
-      const deviceId = getDeviceId();
-
-      try {
-        const response = await fetch(`/api/skill/v1/profile/sync?deviceId=${deviceId}`);
-        if (!response.ok) {
-          return;
-        }
-
-        const data = await response.json();
-        if (data.profiles?.length) {
-          applyServerPayload(data);
-        }
-      } catch (error) {
-        console.error('Failed to load profiles from database:', error);
-      }
-    };
-
-    loadLocalProfileState();
-    void loadRemoteProfileState();
+    void loadProfileState();
   }, [applyServerPayload]);
 
   const selectProfile = useCallback((profileId: string) => {
@@ -344,10 +343,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [syncMember]);
 
   const upgradeAccount = useCallback(async (payload: {
+    phone?: string;
     email?: string;
-    password: string;
-    consentAccepted: boolean;
-    consentVersion: string;
     profile?: Partial<UserProfile>;
   }) => {
     const deviceId = getDeviceId();
@@ -356,10 +353,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deviceId,
+        phone: payload.phone,
         email: payload.email,
-        password: payload.password,
-        consentAccepted: payload.consentAccepted,
-        consentVersion: payload.consentVersion,
         profile: payload.profile,
       }),
     });
@@ -372,6 +367,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const data = await response.json();
     applyServerPayload(data);
   }, [applyServerPayload]);
+
+  if (!isLoaded) return null;
 
   const activeProfile = resolveActiveProfile(state);
 

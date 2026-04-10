@@ -1,149 +1,167 @@
-import { NextRequest, NextResponse } from "next/server";
+/**
+ * 量表评估服务 MCP - HTTP 端点
+ * 
+ * 提供量表列表、问题获取、评估提交等功能
+ * 支持API密钥认证
+ */
 
-import { getAgentPitSharedBearer } from "@/lib/agentpit/config";
+import { NextRequest, NextResponse } from 'next/server';
+import { scaleTools, handleScaleToolCall } from '@/lib/mcp/skills/scale/handlers';
 import {
-  AgentPitAuthError,
-  extractBearerToken,
-} from "@/lib/agentpit/shared-auth";
-import { prisma } from "@/lib/db/prisma";
-import { handleScaleToolCall, scaleTools } from "@/lib/mcp/skills/scale/handlers";
-import { listSerializableScales } from "@/lib/scales/catalog";
-import { resolveLocalizedText } from "@/lib/schemas/core/i18n";
+  createJsonRpcAuthError,
+  logMcpToolCall,
+  touchMcpApiKey,
+  validateMcpApiKey,
+} from '@/lib/mcp/auth';
+import { listSerializableScales } from '@/lib/scales/catalog';
+import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
-async function authorizeScaleMcpRequest(headers: Headers) {
-  const token = extractBearerToken(headers);
-  if (!token) {
-    throw new AgentPitAuthError("Missing Bearer token", 401);
-  }
-
-  if (token === getAgentPitSharedBearer()) {
-    return { clientId: "agentpit-shared" };
-  }
-
-  const apiKey = await prisma.apiKey.findFirst({
-    where: {
-      keyValue: token,
-      isActive: true,
-    },
-  });
-
-  if (!apiKey) {
-    throw new AgentPitAuthError("Invalid Bearer token", 403);
-  }
-
-  return { clientId: apiKey.id };
-}
-
-function createJsonRpcErrorResponse(
-  status: number,
-  code: number,
-  message: string,
-  id: string | number | null = null
-) {
-  return NextResponse.json(
-    {
-      jsonrpc: "2.0",
-      id,
-      error: { code, message },
-    },
-    { status }
-  );
-}
-
+/**
+ * POST 处理器 - 接收 MCP JSON-RPC 请求
+ */
 export async function POST(req: NextRequest) {
+  let requestId: string | number | null = null;
+
   try {
-    const { clientId } = await authorizeScaleMcpRequest(req.headers);
+    const apiKey = await validateMcpApiKey(req.headers.get('Authorization'));
+    if (!apiKey) {
+      return NextResponse.json(createJsonRpcAuthError(null), { status: 401 });
+    }
+
     const body = await req.json();
     const { method, params, id } = body;
+    requestId = id ?? null;
 
-    if (method === "tools/list") {
+    console.log(`[Scale MCP] Received: ${method}`);
+
+    if (method === 'initialize') {
+      await touchMcpApiKey(apiKey.id);
       return NextResponse.json({
-        jsonrpc: "2.0",
+        jsonrpc: '2.0',
         id,
-        result: { tools: scaleTools },
+        result: {
+          protocolVersion: '2024-11-05',
+          capabilities: { tools: {} },
+          serverInfo: {
+            name: 'ai-scale-engine-scale-compat',
+            version: '0.1.0',
+          },
+        },
       });
     }
 
+    if (method === 'ping') {
+      await touchMcpApiKey(apiKey.id);
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id,
+        result: {},
+      });
+    }
+
+    // 1. 响应工具列表请求
+    if (method === "tools/list") {
+      await touchMcpApiKey(apiKey.id);
+      return NextResponse.json({
+        jsonrpc: "2.0",
+        id,
+        result: { tools: scaleTools }
+      });
+    }
+
+    // 2. 响应工具调用请求
     if (method === "tools/call") {
-      const { name, arguments: args } = params ?? {};
-      const result = await handleScaleToolCall(name, args);
+      const { name, arguments: args } = (params || {}) as { name?: string; arguments?: unknown };
+      
+      console.log(`[Scale MCP] Calling tool: ${name}`);
+      
+      const result = await handleScaleToolCall(name || '', args);
 
-      await prisma.mcpLog
-        .create({
-          data: {
-            clientId,
-            action: String(name || "unknown"),
-            scaleId:
-              typeof args?.scaleId === "string"
-                ? args.scaleId
-                : typeof args?.scaleId === "number"
-                  ? String(args.scaleId)
-                  : null,
-          },
-        })
-        .catch((error) => {
-          console.error("[Scale MCP Log Error]:", error);
-        });
+      const isSuccessful = !isToolCallError(result);
+      await touchMcpApiKey(apiKey.id, isSuccessful);
 
+      if (isSuccessful) {
+        await logMcpToolCall({
+          apiKeyId: apiKey.id,
+          userId: apiKey.userId,
+          action: name || 'unknown_tool',
+          scaleId: getScaleId(args),
+          entrypoint: 'scale_compat',
+        }).catch((err) => console.error('Failed to log MCP call:', err));
+      }
+      
       return NextResponse.json({
         jsonrpc: "2.0",
         id,
         result: {
           content: [{ type: "text", text: JSON.stringify(result) }],
-        },
+          ...(isSuccessful ? {} : { isError: true }),
+        }
       });
     }
 
-    return createJsonRpcErrorResponse(404, -32601, "Method not found", id);
-  } catch (error) {
-    if (error instanceof AgentPitAuthError) {
-      return createJsonRpcErrorResponse(error.status, -32001, error.message);
-    }
+    // 3. 方法不存在
+    return NextResponse.json({
+      jsonrpc: "2.0",
+      id,
+      error: { code: -32601, message: "Method not found" }
+    }, { status: 404 });
 
+  } catch (error) {
     console.error("[Scale MCP Error]:", error);
-    return createJsonRpcErrorResponse(
-      500,
-      -32603,
-      error instanceof Error ? error.message : "Internal Server Error"
-    );
+    
+    return NextResponse.json({
+      jsonrpc: "2.0",
+      id: requestId,
+      error: { 
+        code: -32603, 
+        message: error instanceof Error ? error.message : "Internal Server Error" 
+      }
+    }, { status: 500 });
   }
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    await authorizeScaleMcpRequest(request.headers);
-
-    const scales = listSerializableScales();
-    return NextResponse.json({
-      service: "Scale Assessment Service",
-      version: "1.0.0",
-      status: "active",
-      description:
-        "AI量表评估服务 - 提供量表列表、问题获取与确定性评分能力",
-      authentication: "Bearer Token",
-      tools: scaleTools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-      })),
-      supportedScales: scales.map((scale) => ({
-        id: scale.id,
-        title: resolveLocalizedText(scale.title, "zh"),
-        questionCount: scale.questions.length,
-      })),
-    });
-  } catch (error) {
-    if (error instanceof AgentPitAuthError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.status }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to load MCP scale metadata" },
-      { status: 500 }
-    );
+function getScaleId(args: unknown) {
+  if (!args || typeof args !== 'object' || !('scaleId' in args)) {
+    return null;
   }
+
+  return typeof (args as { scaleId?: unknown }).scaleId === 'string'
+    ? ((args as { scaleId: string }).scaleId)
+    : null;
+}
+
+function isToolCallError(result: unknown) {
+  return Boolean(
+    result &&
+      typeof result === 'object' &&
+      'success' in result &&
+      (result as { success?: boolean }).success === false
+  );
+}
+
+/**
+ * GET 处理器 - 返回服务状态
+ */
+export async function GET() {
+  const scales = listSerializableScales();
+
+  return NextResponse.json({
+    service: "Scale Assessment Service",
+    version: "1.0.0",
+    status: "active",
+    description: "AI量表评估服务 - 提供量表列表、问题获取、评估提交",
+    authentication: "API Key (Bearer Token)",
+    tools: scaleTools.map(t => ({
+      name: t.name,
+      description: t.description
+    })),
+    supportedScales: scales.map(s => ({
+      id: s.id,
+      title: resolveLocalizedText(s.title, 'zh'),
+      questionCount: s.questions.length
+    }))
+  });
 }

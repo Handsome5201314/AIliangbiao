@@ -16,8 +16,8 @@ import {
 export const dynamic = "force-dynamic";
 
 // GET：建立 SSE 流
-export async function GET() {
-  return handleSseGet();
+export async function GET(request: Request) {
+  return handleSseGet(request);
 }
 
 // POST：处理消息

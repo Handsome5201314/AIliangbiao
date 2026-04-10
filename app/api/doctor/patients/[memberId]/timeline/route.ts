@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { requireDoctorUser } from '@/lib/auth/user-session';
-import { getDoctorPatientTimeline } from '@/lib/domain/care-service';
+import { requireApprovedDoctorUser } from '@/lib/auth/require-app-session';
+import { getDoctorPatientTimeline } from '@/lib/services/doctor-care';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ memberId: string }> }
 ) {
   try {
-    const { user } = await requireDoctorUser(request, { requireApproved: true });
+    const { doctorProfile } = await requireApprovedDoctorUser(request);
     const { memberId } = await context.params;
-    const timeline = await getDoctorPatientTimeline(user.doctorProfile!.id, memberId);
-    return NextResponse.json({ timeline });
+    const events = await getDoctorPatientTimeline(doctorProfile.id, memberId);
+    return NextResponse.json({ events });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to load patient timeline' },
+      { error: error instanceof Error ? error.message : 'Unauthorized' },
       { status: 401 }
     );
   }

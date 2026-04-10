@@ -1,4 +1,4 @@
-import type { LanguageCode, LocalizedTextValue, ScaleQuestion } from "./types";
+import type { LanguageCode, LocalizedTextValue, ScaleOption, ScaleQuestion } from "./types";
 
 export function resolveLocalizedText(
   value: LocalizedTextValue | undefined,
@@ -68,4 +68,11 @@ export function resolveFallbackExamples(
   language: LanguageCode = "zh"
 ): string[] {
   return question.fallback_examples.map((item) => resolveLocalizedText(item, language)).filter(Boolean);
+}
+
+export function resolveOptionDescription(
+  option: Pick<ScaleOption, "description">,
+  language: LanguageCode = "zh"
+): string {
+  return resolveLocalizedText(option.description, language);
 }
