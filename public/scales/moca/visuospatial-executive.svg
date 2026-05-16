@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" fill="none">
+  <rect width="960" height="420" fill="#FBF6EA"/>
+  <rect x="14" y="16" width="210" height="38" rx="4" fill="#D95C1F"/>
+  <text x="28" y="42" font-size="28" font-family="Arial, Microsoft YaHei, sans-serif" fill="#ffffff" font-weight="700">视空间与执行功能</text>
+  <text x="820" y="44" font-size="24" font-family="Arial, Microsoft YaHei, sans-serif" fill="#6B4E2F" font-weight="700">复制</text>
+  <text x="820" y="76" font-size="24" font-family="Arial, Microsoft YaHei, sans-serif" fill="#6B4E2F" font-weight="700">立方体</text>
+
+  <circle cx="120" cy="220" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="260" cy="90" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="360" cy="220" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="300" cy="220" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="230" cy="310" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="40" cy="310" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="20" cy="120" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+  <circle cx="175" cy="165" r="28" stroke="#D77A2E" stroke-width="4" fill="#fffdf8"/>
+
+  <text x="110" y="230" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">1</text>
+  <text x="250" y="100" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">甲</text>
+  <text x="350" y="230" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">2</text>
+  <text x="290" y="230" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">乙</text>
+  <text x="220" y="320" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">丙</text>
+  <text x="30" y="320" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">丁</text>
+  <text x="10" y="130" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">5</text>
+  <text x="165" y="175" font-size="32" font-family="Arial, Microsoft YaHei, sans-serif" fill="#333">开始</text>
+
+  <path d="M145 210L237 112" stroke="#D79D55" stroke-width="4" stroke-dasharray="10 10"/>
+  <path d="M283 106L335 203" stroke="#D79D55" stroke-width="4" stroke-dasharray="10 10"/>
+  <path d="M330 238L250 292" stroke="#D79D55" stroke-width="4" stroke-dasharray="10 10"/>
+  <path d="M210 298L64 146" stroke="#D79D55" stroke-width="4" stroke-dasharray="10 10"/>
+
+  <polygon points="620,80 730,120 730,260 620,220" stroke="#333" stroke-width="4" fill="none"/>
+  <polygon points="560,120 670,160 670,300 560,260" stroke="#333" stroke-width="4" fill="none"/>
+  <path d="M560 120L620 80" stroke="#333" stroke-width="4"/>
+  <path d="M670 160L730 120" stroke="#333" stroke-width="4"/>
+  <path d="M670 300L730 260" stroke="#333" stroke-width="4"/>
+  <path d="M560 260L620 220" stroke="#333" stroke-width="4"/>
+</svg>

@@ -1,242 +1,885 @@
-// 运行命令生成客户端：npx prisma generate
-// 运行命令推送到数据库：npx prisma db push
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // 完美适配腾讯云 PostgreSQL
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// ==================== 1. 用户与额度系统 ====================
+enum UserRole {
+  GUEST
+  REGISTERED
+  VIP
+}
+
+enum AuthVerificationPurpose {
+  REGISTER
+  LOGIN
+  RESET_PASSWORD
+}
+
+enum AccountType {
+  PATIENT
+  DOCTOR
+}
+
+enum MemberRelation {
+  SELF
+  CHILD
+  PARENT
+  SPOUSE
+  SIBLING
+  OTHER
+}
+
+enum LanguagePreference {
+  ZH
+  EN
+}
+
+enum CareTeamRole {
+  LEAD
+  MEMBER
+}
+
+enum CareAccessRole {
+  COLLABORATOR
+  READONLY
+}
+
+enum CollaborationResourceType {
+  PATIENT_MEMBER
+  NEONATE_ARCHIVE
+  CARE_TEAM
+}
+
+enum DoctorVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum CareAssignmentStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum DoctorPatientNoteType {
+  CLINICAL
+  RESEARCH
+}
+
+enum ResearchConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+enum ResearchExportFormat {
+  CSV
+  PDF
+  JSON
+}
+
+enum ApiKeyPurpose {
+  AI
+  MCP
+}
+
+enum DoctorScaleInviteStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum ClinicScreeningSubmissionStatus {
+  SUBMITTED
+  CLAIMED
+  ARCHIVED
+}
+
+enum DoctorNeonateBilirubinContext {
+  AMBIENT
+  PHOTOTHERAPY
+}
 
 model User {
-  id            String    @id @default(cuid())
-  isGuest       Boolean   @default(true)      // 标识是否为免登录游客
-  deviceId      String?   @unique             // 浏览器指纹 UUID（游客依赖）
-  phone         String?   @unique             // 手机号（注册用户依赖）
-  
-  // 商业化额度字段
-  dailyUsed     Int       @default(0)         // 今日已调用量表的次数
-  dailyLimit    Int       @default(1)         // 每日限制（游客默认1，注册可提升）
-  totalTokens   Int       @default(0)         // 高级资产：充值的 Token 额度
-  lastResetAt   DateTime  @default(now())     // 每日额度重置的标记时间
+  id                      String               @id @default(cuid())
+  role                    UserRole             @default(GUEST)
+  accountType             AccountType          @default(PATIENT)
+  isGuest                 Boolean              @default(true)
+  deviceId                String?              @unique
+  phone                   String?              @unique
+  email                   String?              @unique
+  passwordHash            String?
+  dailyUsed               Int                  @default(0)
+  dailyLimit              Int                  @default(5)
+  totalTokens             Int                  @default(0)
+  lastResetAt             DateTime             @default(now())
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // 关系映射
-  profiles        ChildProfile[]
-  assessments     AssessmentHistory[]
-  triageSessions  TriageSession[]
-  mcpLogs         McpLog[]
-  apiKeys         ApiKey[]
-  speechUsages    SpeechUsage[]
+  profiles                MemberProfile[]
+  assessments             AssessmentHistory[]
+  assessmentSessions      AssessmentSession[]
+  triageSessions          TriageSession[]
+  mcpLogs                 McpLog[]
+  apiKeys                 ApiKey[]
+  speechUsages            SpeechUsage[]
+  tokenUsages             TokenUsage[]
+  agentpitIdentities      AgentpitIdentity[]
+  doctorProfile           DoctorProfile?
+  agentExecutions         AgentExecution[]
+  clinicScreenings        ClinicScreeningSubmission[]
+  assignedCareAssignments CareAssignment[]     @relation("CareAssignmentAssignedByPatient")
+  researchConsentsGranted ResearchConsent[]    @relation("ResearchConsentGrantedByPatient")
+  researchExportsRequested ResearchExportLog[] @relation("ResearchExportRequestedByUser")
+  @@index([role])
+  @@index([accountType])
 }
 
-// ==================== 2. 千人千面：儿童画像 ====================
+model AuthVerificationCode {
+  id           String                  @id @default(cuid())
+  phone        String
+  purpose      AuthVerificationPurpose
+  codeHash     String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int                     @default(0)
+  createdAt    DateTime                @default(now())
 
-model ChildProfile {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  nickname      String    // 孩子小名（如：明明）
-  gender        String    // boy / girl
-  ageMonths     Int?      // 月龄
-  
-  // 扩展的上下文记忆字段
-  traits        Json      // 行为特征和记忆上下文
-                        // {
-                        //   "interests": ["恐龙", "汽车"],
-                        //   "fears": ["打针"],
-                        //   "behaviors": ["喜欢看旋转的东西"],
-                        //   "medicalHistory": ["早产", "过敏史"],
-                        //   "lastConversation": "2024-01-15",
-                        //   "conversationCount": 5,
-                        //   "recentTopics": ["体检", "社交问题"]
-                        // }
-  avatarConfig  Json      // 国风小人换装 {"base": "tiger", "clothes": "hanfu"}
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // 关系映射
-  growthRecords GrowthRecord[]
+  @@index([phone, purpose, createdAt])
+  @@index([expiresAt])
+  @@index([consumedAt])
 }
 
-// ==================== 3. 临床数据：量表评估历史 ====================
+model MemberProfile {
+  id                 String               @id @default(cuid())
+  userId             String
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relation           MemberRelation       @default(SELF)
+  languagePreference LanguagePreference   @default(ZH)
+  nickname           String
+  realName           String?
+  contactPhone       String?
+  gender             String
+  ageMonths          Int?
+  pendingClaim       Boolean              @default(false)
+  traits             Json
+  avatarConfig       Json
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  growthRecords      GrowthRecord[]
+  assessments        AssessmentHistory[]
+  assessmentSessions AssessmentSession[]
+  careAssignments    CareAssignment[]
+  doctorNotes        DoctorPatientNote[]
+  researchConsent    ResearchConsent?
+  researchExports    ResearchExportLog[]
+  linkedDoctorInvites DoctorScaleInvite[] @relation("DoctorScaleInviteLinkedMember")
+  memberAccessGrants MemberCareAccessGrant[]
+  agentProfileState  AgentProfileState?
+  agentExecutions    AgentExecution[]
+  clinicScreenings   ClinicScreeningSubmission[]
+  doctorBotChatSessions DoctorBotChatSession[]
+
+  @@index([userId, relation])
+  @@index([contactPhone])
+  @@index([realName, gender])
+  @@index([pendingClaim])
+  @@map("ChildProfile")
+}
 
 model AssessmentHistory {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  scaleId       String    // 量表标识 (如 "ABC", "CARS", "SNAP-IV")
-  scaleVersion  String    @default("1.0") // ✅ 题目版本号，防止未来改版导致历史数据无法解读
-  totalScore    Float     // 总得分
-  conclusion    String    // 临床结论 (如 "高度疑似")
-  answers       Json      // 用户的选项明细 [1, 0, 3, 2...] 供医生回溯
-  
-  createdAt     DateTime  @default(now())
-  
+  id                  String               @id @default(cuid())
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId           String?
+  profile             MemberProfile?       @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  scaleId             String
+  scaleVersion        String               @default("1.0")
+  totalScore          Float
+  conclusion          String
+  answers             Json
+  resultDetails       Json?
+  inviteId            String?
+  invite              DoctorScaleInvite?   @relation(fields: [inviteId], references: [id], onDelete: SetNull)
+  source              String               @default("DIRECT")
+  respondentRealName  String?
+  respondentPhone     String?
+  respondentGender    String?
+  respondentAgeMonths Int?
+  createdAt           DateTime             @default(now())
+
+  doctorNotes         DoctorPatientNote[]
+  assessmentSessions  AssessmentSession[]
+  clinicScreeningSubmission ClinicScreeningSubmission?
+
   @@index([userId, createdAt])
+  @@index([profileId, createdAt])
+  @@index([scaleId, scaleVersion])
+  @@index([inviteId])
+  @@index([respondentPhone, createdAt])
+}
+
+model AssessmentSession {
+  id                  String                  @id @default(cuid())
+  userId              String
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId           String?
+  profile             MemberProfile?          @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  scaleId             String
+  scaleVersion        String                  @default("1.0")
+  channel             String?
+  language            String                  @default("ZH")
+  status              String                  @default("ONGOING")
+  publicToken         String?                 @unique
+  publicTokenExpiresAt DateTime?
+  answers             Json
+  currentQuestionIndex Int?                   @default(0)
+  totalScore          Float?
+  conclusion          String?
+  resultDetails       Json?
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory?      @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  callbackDelivery    AssessmentCallbackDelivery?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  completedAt         DateTime?
+
+  @@index([userId, status, updatedAt])
+  @@index([profileId, status, updatedAt])
   @@index([scaleId, scaleVersion])
 }
 
-// ==================== 4. B端开放平台：MCP 调用流水 ====================
+model AssessmentCallbackDelivery {
+  id                    String            @id @default(cuid())
+  assessmentSessionId   String            @unique
+  assessmentSession     AssessmentSession @relation(fields: [assessmentSessionId], references: [id], onDelete: Cascade)
+  deviceId              String?
+  callbackUrl           String
+  callbackSecretEncrypted String?
+  callbackMetadata      Json?
+  eventType             String            @default("assessment.completed")
+  status                String            @default("PENDING")
+  attemptCount          Int               @default(0)
+  lastAttemptAt         DateTime?
+  deliveredAt           DateTime?
+  lastError             String?
+  payload               Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([status, updatedAt])
+}
+
+model DoctorProfile {
+  id                 String                    @id @default(cuid())
+  userId             String                    @unique
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  realName           String
+  hospitalName       String
+  departmentName     String
+  title              String
+  licenseNo          String                    @unique
+  verificationStatus DoctorVerificationStatus  @default(PENDING)
+  reviewNotes        String?
+  approvedAt         DateTime?
+  approvedByAdminId  String?
+  approvedByAdmin    Admin?                    @relation("DoctorApprovedByAdmin", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  careAssignments    CareAssignment[]
+  patientNotes       DoctorPatientNote[]
+  researchExports    ResearchExportLog[]
+  scaleInvites       DoctorScaleInvite[]
+  clinicScreeningPoints ClinicScreeningPoint[]
+  clinicScreenings   ClinicScreeningSubmission[]
+  doctorBots         DoctorBotConfig[]
+  neonateArchives    DoctorNeonateArchive[]
+  careTeamMemberships CareTeamMembership[]
+  grantedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessGrantedByDoctor")
+  receivedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessTargetDoctor")
+  grantedNeonateAccessGrants NeonateArchiveAccessGrant[] @relation("NeonateAccessGrantedByDoctor")
+  receivedNeonateAccessGrants NeonateArchiveAccessGrant[] @relation("NeonateAccessTargetDoctor")
+  collaborationAuditLogs DoctorCollaborationAuditLog[] @relation("CollaborationAuditActorDoctor")
+  collaborationAuditTargets DoctorCollaborationAuditLog[] @relation("CollaborationAuditTargetDoctor")
+
+  @@index([verificationStatus])
+  @@index([realName])
+  @@index([hospitalName, departmentName])
+}
+
+model DoctorScaleInvite {
+  id              String                  @id @default(cuid())
+  token           String                  @unique
+  doctorProfileId String
+  doctorProfile   DoctorProfile           @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  scaleId         String
+  scaleVersion    String                  @default("1.0")
+  status          DoctorScaleInviteStatus @default(ACTIVE)
+  expiresAt       DateTime
+  usedAt          DateTime?
+  linkedMemberId  String?
+  linkedMember    MemberProfile?          @relation("DoctorScaleInviteLinkedMember", fields: [linkedMemberId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  assessments     AssessmentHistory[]
+
+  @@index([doctorProfileId, status, createdAt])
+  @@index([expiresAt])
+  @@index([linkedMemberId])
+}
+
+model ClinicScreeningPoint {
+  id                   String                     @id @default(cuid())
+  name                 String
+  code                 String                     @unique
+  locationLabel        String?
+  departmentLabel      String?
+  ownerDoctorProfileId String
+  ownerDoctorProfile   DoctorProfile              @relation(fields: [ownerDoctorProfileId], references: [id])
+  isActive             Boolean                    @default(true)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  qrs                  ClinicScaleQr[]
+  screenings           ClinicScreeningSubmission[]
+
+  @@index([ownerDoctorProfileId, isActive])
+}
+
+model ClinicScaleQr {
+  id         String                     @id @default(cuid())
+  pointId    String
+  point      ClinicScreeningPoint       @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  scaleId    String
+  slug       String                     @unique
+  isActive   Boolean                    @default(true)
+  createdAt  DateTime                   @default(now())
+  updatedAt  DateTime                   @updatedAt
+
+  screenings ClinicScreeningSubmission[]
+
+  @@index([pointId, isActive])
+  @@index([scaleId, isActive])
+}
+
+model ClinicScreeningSubmission {
+  id                  String                         @id @default(cuid())
+  screeningCode       String                         @unique
+  clinicScaleQrId     String
+  clinicScaleQr       ClinicScaleQr                  @relation(fields: [clinicScaleQrId], references: [id], onDelete: Cascade)
+  pointId             String
+  point               ClinicScreeningPoint           @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  doctorProfileId     String
+  doctorProfile       DoctorProfile                  @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  userId              String?
+  user                User?                          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberProfileId     String?
+  memberProfile       MemberProfile?                 @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  guestSessionId      String?
+  respondentName      String
+  respondentGender    String
+  respondentAgeMonths Int
+  answers             Json
+  resultSummary       Json
+  assessmentHistoryId String?                        @unique
+  assessmentHistory   AssessmentHistory?             @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  status              ClinicScreeningSubmissionStatus @default(SUBMITTED)
+  claimedAt           DateTime?
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+
+  @@index([doctorProfileId, createdAt])
+  @@index([pointId, createdAt])
+  @@index([clinicScaleQrId, createdAt])
+  @@index([status, createdAt])
+  @@index([guestSessionId])
+}
+
+model CareAssignment {
+  id                    String               @id @default(cuid())
+  memberProfileId       String
+  memberProfile         MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId       String
+  doctorProfile         DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  assignedByPatientUserId String
+  assignedByPatientUser User                 @relation("CareAssignmentAssignedByPatient", fields: [assignedByPatientUserId], references: [id], onDelete: Cascade)
+  status                CareAssignmentStatus @default(ACTIVE)
+  startedAt             DateTime             @default(now())
+  endedAt               DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([memberProfileId, status])
+  @@index([doctorProfileId, status])
+}
+
+model CareTeam {
+  id                    String                      @id @default(cuid())
+  name                  String
+  hospitalName          String
+  departmentName        String
+  isActive              Boolean                     @default(true)
+  createdByAdminId      String
+  createdByAdmin        Admin                       @relation("CareTeamCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: Cascade)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  memberships           CareTeamMembership[]
+  memberAccessGrants    MemberCareAccessGrant[]
+  neonateAccessGrants   NeonateArchiveAccessGrant[]
+  collaborationAuditLogs DoctorCollaborationAuditLog[]
+
+  @@index([hospitalName, departmentName, isActive])
+  @@index([createdByAdminId, createdAt])
+}
+
+model CareTeamMembership {
+  id              String        @id @default(cuid())
+  teamId          String
+  team            CareTeam      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  doctorProfileId String
+  doctorProfile   DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  teamRole        CareTeamRole
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([teamId, doctorProfileId])
+  @@index([doctorProfileId, updatedAt])
+}
+
+model MemberCareAccessGrant {
+  id                       String         @id @default(cuid())
+  memberProfileId          String
+  memberProfile            MemberProfile  @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId          String
+  doctorProfile            DoctorProfile  @relation("MemberAccessTargetDoctor", fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  sourceTeamId             String
+  sourceTeam               CareTeam       @relation(fields: [sourceTeamId], references: [id], onDelete: Cascade)
+  accessRole               CareAccessRole
+  grantedByDoctorProfileId String
+  grantedByDoctorProfile   DoctorProfile  @relation("MemberAccessGrantedByDoctor", fields: [grantedByDoctorProfileId], references: [id], onDelete: Cascade)
+  revokedAt                DateTime?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  @@index([memberProfileId, revokedAt])
+  @@index([doctorProfileId, revokedAt])
+  @@index([sourceTeamId, revokedAt])
+}
+
+model NeonateArchiveAccessGrant {
+  id                       String               @id @default(cuid())
+  archiveId                String
+  archive                  DoctorNeonateArchive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  doctorProfileId          String
+  doctorProfile            DoctorProfile        @relation("NeonateAccessTargetDoctor", fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  sourceTeamId             String
+  sourceTeam               CareTeam             @relation(fields: [sourceTeamId], references: [id], onDelete: Cascade)
+  accessRole               CareAccessRole
+  grantedByDoctorProfileId String
+  grantedByDoctorProfile   DoctorProfile        @relation("NeonateAccessGrantedByDoctor", fields: [grantedByDoctorProfileId], references: [id], onDelete: Cascade)
+  revokedAt                DateTime?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  @@index([archiveId, revokedAt])
+  @@index([doctorProfileId, revokedAt])
+  @@index([sourceTeamId, revokedAt])
+}
+
+model DoctorCollaborationAuditLog {
+  id                    String                    @id @default(cuid())
+  resourceType          CollaborationResourceType
+  resourceId            String
+  action                String
+  actorDoctorProfileId  String?
+  actorDoctorProfile    DoctorProfile?            @relation("CollaborationAuditActorDoctor", fields: [actorDoctorProfileId], references: [id], onDelete: SetNull)
+  targetDoctorProfileId String?
+  targetDoctorProfile   DoctorProfile?            @relation("CollaborationAuditTargetDoctor", fields: [targetDoctorProfileId], references: [id], onDelete: SetNull)
+  sourceTeamId          String?
+  sourceTeam            CareTeam?                 @relation(fields: [sourceTeamId], references: [id], onDelete: SetNull)
+  metadata              Json?
+  createdAt             DateTime                  @default(now())
+
+  @@index([resourceType, resourceId, createdAt])
+  @@index([actorDoctorProfileId, createdAt])
+  @@index([sourceTeamId, createdAt])
+}
+
+model DoctorPatientNote {
+  id                   String                @id @default(cuid())
+  memberProfileId      String
+  memberProfile        MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId      String
+  doctorProfile        DoctorProfile         @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  assessmentHistoryId  String?
+  assessmentHistory    AssessmentHistory?    @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  noteType             DoctorPatientNoteType @default(CLINICAL)
+  content              String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([memberProfileId, createdAt])
+  @@index([doctorProfileId, createdAt])
+  @@index([assessmentHistoryId])
+}
+
+model ResearchConsent {
+  id                String                @id @default(cuid())
+  memberProfileId   String                @unique
+  memberProfile     MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  grantedByUserId   String
+  grantedByUser     User                  @relation("ResearchConsentGrantedByPatient", fields: [grantedByUserId], references: [id], onDelete: Cascade)
+  status            ResearchConsentStatus @default(GRANTED)
+  grantedAt         DateTime              @default(now())
+  revokedAt         DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+}
+
+model ResearchExportLog {
+  id                String               @id @default(cuid())
+  memberProfileId   String
+  memberProfile     MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId   String
+  doctorProfile     DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  requestedByUserId String
+  requestedByUser   User                 @relation("ResearchExportRequestedByUser", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  format            ResearchExportFormat @default(CSV)
+  purpose           String
+  exportedFields    Json
+  createdAt         DateTime             @default(now())
+
+  @@index([memberProfileId, createdAt])
+  @@index([doctorProfileId, createdAt])
+}
 
 model McpLog {
   id            String    @id @default(cuid())
-  userId        String?   // 关联调用该 MCP 接口的账号（如果有）
+  userId        String?
   user          User?     @relation(fields: [userId], references: [id])
-  
-  clientId      String    // 外部 Agent 的标识 (如 "hospital-agent-01")
-  action        String    // 调用的 Tool (recommend_scale / get_scale_questions / submit_and_evaluate)
-  scaleId       String?   // 涉及的具体量表
-  
+  clientId      String
+  action        String
+  scaleId       String?
+  entrypoint    String    @default("legacy")
   createdAt     DateTime  @default(now())
-}
 
-// ==================== 5. 新生儿生长曲线数据 ====================
+  @@index([entrypoint, createdAt])
+}
 
 model GrowthRecord {
-  id            String    @id @default(cuid())
-  profileId     String
-  profile       ChildProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  
-  ageMonths     Int       // 月龄（0-60个月）
-  
-  // 生长指标
-  weight        Float?    // 体重（kg）
-  height        Float?    // 身高/身长（cm）
-  headCircumference Float? // 头围（cm）
-  
-  // WHO标准评估结果
-  weightPercentile Float? // 体重百分位
-  heightPercentile Float? // 身高百分位
-  headPercentile  Float?  // 头围百分位
-  
-  weightStatus    String? // 体重评估：正常/偏轻/偏重
-  heightStatus    String? // 身高评估：正常/偏矮/偏高
-  headStatus      String? // 头围评估：正常/偏小/偏大
-  
-  notes         String?   // 医生备注
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  @@index([profileId, ageMonths])
-}
+  id                  String         @id @default(cuid())
+  profileId           String
+  profile             MemberProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  ageMonths           Int
+  gestationalWeek     Int?
+  weight              Float?
+  height              Float?
+  headCircumference   Float?
+  weightPercentile    Float?
+  heightPercentile    Float?
+  headPercentile      Float?
+  weightStatus        String?
+  heightStatus        String?
+  headStatus          String?
+  notes               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
-// ==================== 6. 语音分诊会话表 ====================
+  @@index([profileId, ageMonths])
+  @@index([profileId, gestationalWeek])
+}
 
 model TriageSession {
   id                  String    @id @default(cuid())
   userId              String
   user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  status              String    @default("ONGOING") // ONGOING(进行中), CONSENT(已同意), COMPLETED(已完成)
-  symptoms            Json      // 数组：AI 提取的症状 ["不和人交流", "喜欢转圈"]
-  conversationHistory Json      // 数组：对话历史，保证刷新不失忆
-  recommendedScale    String?   // 推荐的量表 ID
-  
+  status              String    @default("ONGOING")
+  symptoms            Json
+  conversationHistory Json
+  recommendedScale    String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-  
+
   @@index([userId, status])
   @@index([updatedAt])
 }
 
-// ==================== 7. 管理员账户系统 ====================
-
 model Admin {
-  id            String    @id @default(cuid())
-  username      String    @unique
-  passwordHash  String    // bcrypt加密后的密码
-  email         String?   @unique
-  role          String    @default("admin") // admin, superadmin
-  
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String          @id @default(cuid())
+  username        String          @unique
+  passwordHash    String
+  email           String?         @unique
+  role            String          @default("admin")
+  lastLoginAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  reviewedDoctors DoctorProfile[] @relation("DoctorApprovedByAdmin")
+  createdCareTeams CareTeam[]     @relation("CareTeamCreatedByAdmin")
 }
 
-// ==================== 7. API密钥管理 ====================
-
 model ApiKey {
-  id            String    @id @default(cuid())
-  userId        String?   // 关联的用户（可选，系统级密钥为null）
-  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String?
+  user             User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose          ApiKeyPurpose @default(AI)
+  provider         String
+  keyName          String
+  keyValue         String
+  serviceType      String    @default("text")
+  customEndpoint   String?
+  customModel      String?
+  connectionStatus String?   @default("unknown")
+  lastTestedAt     DateTime?
+  responseTime     Int?
+  isActive         Boolean   @default(true)
+  lastUsedAt       DateTime?
+  usageCount       Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  provider      String    // siliconflow, sophon, openai等
-  keyName       String    // 密钥名称/备注
-  keyValue      String    // 加密后的API密钥
-  
-  // 服务类型：text（文本对话）、speech（语音识别）
-  serviceType   String    @default("text") // text, speech
-
-  // 自定义配置
-  customEndpoint String?  // 自定义API端点URL（可选）
-  customModel    String?  // 自定义模型名称（可选）
-
-  // 连接状态
-  connectionStatus String? @default("unknown") // online, offline, unknown
-  lastTestedAt   DateTime? // 最后测试时间
-  responseTime   Int?      // 响应时间（毫秒）
-
-  isActive      Boolean   @default(true)
-
-  lastUsedAt    DateTime?
-  usageCount    Int       @default(0)
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
+  @@index([purpose, isActive])
   @@index([provider, isActive])
   @@index([serviceType, isActive])
 }
 
-// ==================== 8. 系统配置 ====================
-
 model SystemConfig {
-  id            String    @id @default(cuid())
-  configKey     String    @unique   // 配置键名
-  configValue   String              // 配置值（JSON字符串或简单值）
-  description   String?             // 配置说明
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  configKey   String   @unique
+  configValue String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
-// ==================== 9. 语音识别使用记录 ====================
-
 model SpeechUsage {
-  id            String    @id @default(cuid())
-  userId        String?   // 关联用户（可选）
-  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // 语音识别详情
-  audioDuration Float?    // 音频时长（秒）
-  audioSize     Int?      // 音频大小（字节）
-  provider      String    // 服务商：siliconflow, openai, custom
-  model         String    // 使用的模型
-  
-  // 转写结果
-  transcriptText  String? // 转写文本
-  confidence      Float?  // 置信度（0-1）
-  
-  // 上下文信息
-  context       String?   // 使用场景：triage, questionnaire, command
-  success       Boolean   @default(true) // 是否成功
-  
-  // 成本信息
-  costTokens    Int       @default(0) // 消耗的 Token
-  
-  createdAt     DateTime  @default(now())
-  
+  id             String    @id @default(cuid())
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audioDuration  Float?
+  audioSize      Int?
+  provider       String
+  model          String
+  transcriptText String?
+  confidence     Float?
+  context        String?
+  success        Boolean   @default(true)
+  costTokens     Int       @default(0)
+  createdAt      DateTime  @default(now())
+
   @@index([userId, createdAt])
   @@index([provider, createdAt])
+}
+
+model AgentpitIdentity {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerUserId String   @unique
+  email          String?
+  displayName    String?
+  avatarUrl      String?
+  rawProfile     Json?
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([email])
+}
+
+model TokenUsage {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  clientId       String
+  agentId        String
+  tokensUsed     Int
+  inputTokens    Int?
+  outputTokens   Int?
+  startedAt      DateTime
+  endedAt        DateTime
+  modelName      String?
+  requestId      String?
+  requestPath    String?
+  responseTimeMs Int?
+  responseStatus Int?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([requestId])
+}
+
+model AgentProfileState {
+  id               String                @id @default(cuid())
+  memberProfileId  String                @unique
+  memberProfile    MemberProfile         @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  version          Int                   @default(1)
+  summary          Json
+  snapshotV1       Json?
+  lastAssessmentAt DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  versions         AgentProfileVersion[]
+
+  @@index([updatedAt])
+}
+
+model AgentProfileVersion {
+  id                  String            @id @default(cuid())
+  agentProfileStateId String
+  agentProfileState   AgentProfileState @relation(fields: [agentProfileStateId], references: [id], onDelete: Cascade)
+  version             Int
+  trigger             String
+  summary             Json
+  snapshotV1          Json?
+  createdAt           DateTime          @default(now())
+
+  @@index([agentProfileStateId, version])
+  @@index([createdAt])
+}
+
+model AgentExecution {
+  id             String               @id @default(cuid())
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberProfileId String?
+  memberProfile  MemberProfile?       @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  agentSessionId String?
+  accountType    String
+  goal           String
+  status         String               @default("AWAITING_CONFIRMATION")
+  plan           Json
+  result         Json?
+  errorMessage   String?
+  confirmedAt    DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  steps          AgentExecutionStep[]
+
+  @@index([userId, createdAt])
+  @@index([memberProfileId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AgentExecutionStep {
+  id            String          @id @default(cuid())
+  executionId   String
+  execution     AgentExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stepOrder     Int
+  toolId        String
+  summary       String?
+  riskLevel     String          @default("low")
+  status        String          @default("PENDING")
+  input         Json?
+  output        Json?
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([executionId, stepOrder])
+  @@index([status, createdAt])
+}
+
+model DoctorBotConfig {
+  id                     String                 @id @default(cuid())
+  doctorProfileId        String                 @unique
+  doctorProfile          DoctorProfile          @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  assistantName          String
+  avatarUrl              String?
+  welcomeMessage         String?
+  publicSlug             String                 @unique
+  fastgptBaseUrl         String
+  fastgptApiKeyEncrypted String
+  enabledScaleIds        Json
+  status                 String                 @default("draft")
+  lastValidatedAt        DateTime?
+  validationStatus       String?
+  lastValidationError    String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  chatSessions           DoctorBotChatSession[]
+
+  @@index([status, updatedAt])
+}
+
+model DoctorBotChatSession {
+  id               String          @id @default(cuid())
+  doctorBotId      String
+  doctorBot        DoctorBotConfig @relation(fields: [doctorBotId], references: [id], onDelete: Cascade)
+  visitorSessionId String
+  chatId           String          @unique
+  deviceId         String
+  memberProfileId  String?
+  memberProfile    MemberProfile?  @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  status           String          @default("active")
+  messageCount     Int             @default(0)
+  lastError        String?
+  lastActiveAt     DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([doctorBotId, visitorSessionId])
+  @@index([status, lastActiveAt])
+  @@index([memberProfileId, lastActiveAt])
+}
+
+model DoctorNeonateArchive {
+  id                  String                     @id @default(cuid())
+  doctorProfileId     String
+  doctorProfile       DoctorProfile              @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  babyName            String
+  sex                 String
+  birthGestationWeeks Int
+  birthGestationDays  Int
+  birthDate           DateTime
+  birthTimeMinutes    Int?
+  normalizedMatchKey  String
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  growthRecords       DoctorNeonateGrowthRecord[]
+  accessGrants        NeonateArchiveAccessGrant[]
+
+  @@index([doctorProfileId, updatedAt])
+  @@index([doctorProfileId, normalizedMatchKey])
+  @@index([doctorProfileId, babyName])
+}
+
+model DoctorNeonateGrowthRecord {
+  id                    String               @id @default(cuid())
+  archiveId             String
+  archive               DoctorNeonateArchive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  recordDate            DateTime
+  recordTimeMinutes     Int?
+  length                Float?
+  weight                Float?
+  headCircumference     Float?
+  bilirubinUmol         Float?
+  bilirubinContext      DoctorNeonateBilirubinContext?
+  currentGestationWeeks Int
+  currentGestationDays  Int
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@unique([archiveId, recordDate, recordTimeMinutes])
+  @@index([archiveId, recordDate, recordTimeMinutes])
 }

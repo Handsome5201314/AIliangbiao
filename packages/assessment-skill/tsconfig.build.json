@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "ignoreDeprecations": "6.0",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "../../",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "src/index.ts",
+    "src/routes.ts",
+    "src/contracts/**/*.ts",
+    "src/service/**/*.ts",
+    "src/standalone.ts"
+  ]
+}

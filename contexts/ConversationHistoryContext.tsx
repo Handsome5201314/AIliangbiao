@@ -18,7 +18,22 @@ interface ConversationMessage {
   content: string;
   timestamp: string;
   scaleId?: string;  // 如果涉及量表
-  action?: 'scale_recommend' | 'scale_complete' | 'question' | 'triage' | 'recommend' | 'start_scale' | 'recommendation';
+  action?:
+    | 'scale_recommend'
+    | 'scale_complete'
+    | 'question'
+    | 'triage'
+    | 'recommend'
+    | 'recommend_scale'
+    | 'start_scale'
+    | 'recommendation'
+    | 'ask_followup'
+    | 'acknowledge'
+    | 'pause_session'
+    | 'resume_session'
+    | 'repeat_question'
+    | 'explain'
+    | 'risk_escalation';
 }
 
 // 对话历史Context类型

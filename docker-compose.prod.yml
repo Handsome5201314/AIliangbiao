@@ -1,0 +1,88 @@
+name: ai-scale-system
+
+services:
+  db:
+    image: postgres:16-bookworm
+    container_name: ai-scale-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - '5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - internal
+
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: ai-scale-hermes
+    restart: unless-stopped
+    command: gateway run
+    environment:
+      API_SERVER_ENABLED: 'true'
+      API_SERVER_HOST: 0.0.0.0
+      API_SERVER_PORT: 8642
+      API_SERVER_KEY: ${HERMES_API_SERVER_KEY}
+      API_SERVER_MODEL_NAME: ${HERMES_API_SERVER_MODEL:-hermes-agent}
+    volumes:
+      - hermes_data:/opt/data
+    expose:
+      - '8642'
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-scale-app
+    restart: unless-stopped
+    env_file:
+      - ${APP_ENV_FILE:-.env.production.example}
+    depends_on:
+      db:
+        condition: service_healthy
+      hermes:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      HERMES_API_SERVER_BASE_URL: ${HERMES_API_SERVER_BASE_URL:-http://hermes:8642/v1}
+      HERMES_API_SERVER_KEY: ${HERMES_API_SERVER_KEY}
+      HERMES_API_SERVER_MODEL: ${HERMES_API_SERVER_MODEL:-hermes-agent}
+    ports:
+      - '127.0.0.1:3000:3000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health', { cache: 'no-store' }).then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+    name: ai-scale-postgres-data
+  hermes_data:
+    name: ai-scale-hermes-data
+
+networks:
+  internal:
+    name: ai-scale-internal

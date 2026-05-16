@@ -7,6 +7,12 @@ import {
   Loader2
 } from 'lucide-react';
 
+import PageHeader from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+
 // 支持的AI服务商配置
 const PROVIDER_OPTIONS = [
   { value: 'siliconflow', label: '硅基流动 (SiliconFlow)', description: '推荐，新用户送14元' },
@@ -14,6 +20,7 @@ const PROVIDER_OPTIONS = [
   { value: 'deepseek', label: 'DeepSeek', description: '深度求索，性价比高' },
   { value: 'qwen', label: '通义千问 (Qwen)', description: '阿里云出品' },
   { value: 'openai', label: 'OpenAI', description: '国际领先' },
+  { value: 'oneapi', label: 'OneAPI (OpenAI兼容)', description: '支持 OneAPI 网关与 Gemini 系列模型' },
   { value: 'custom', label: '自定义 (OpenAI兼容)', description: '支持OpenAI格式API' }
 ];
 
@@ -24,6 +31,7 @@ const DEFAULT_ENDPOINTS: Record<string, string> = {
   deepseek: 'https://api.deepseek.com/v1/chat/completions',
   qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
   openai: 'https://api.openai.com/v1/chat/completions',
+  oneapi: 'http://104.197.139.51:3000/v1/chat/completions',
   custom: ''
 };
 
@@ -147,7 +155,7 @@ export default function ApiKeysPage() {
           provider: newKey.provider,
           keyName: newKey.keyName,
           keyValue: newKey.keyValue,
-          customEndpoint: newKey.provider === 'custom' ? newKey.customEndpoint : null,
+          customEndpoint: newKey.provider === 'custom' || newKey.provider === 'oneapi' ? newKey.customEndpoint : null,
           customModel: newKey.customModel || null,
           serviceType: newKey.serviceType // 保存服务类型
         })
@@ -243,22 +251,22 @@ export default function ApiKeysPage() {
   const getConnectionStatusIcon = (status?: string) => {
     switch (status) {
       case 'online':
-        return <Wifi className="w-4 h-4 text-green-500" />;
+        return <Wifi className="w-4 h-4 text-emerald-500" />;
       case 'offline':
-        return <WifiOff className="w-4 h-4 text-red-500" />;
+        return <WifiOff className="w-4 h-4 text-rose-500" />;
       default:
-        return <AlertCircle className="w-4 h-4 text-gray-400" />;
+        return <AlertCircle className="w-4 h-4 text-slate-400" />;
     }
   };
 
   const getConnectionStatusText = (status?: string) => {
     switch (status) {
       case 'online':
-        return <span className="text-green-600">在线</span>;
+        return <span className="text-emerald-600">在线</span>;
       case 'offline':
-        return <span className="text-red-600">离线</span>;
+        return <span className="text-rose-600">离线</span>;
       default:
-        return <span className="text-gray-400">未测试</span>;
+        return <span className="text-slate-400">未测试</span>;
     }
   };
 
@@ -266,34 +274,28 @@ export default function ApiKeysPage() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">API 密钥管理</h2>
-          <p className="text-sm text-slate-500 mt-1">管理系统级API密钥，支持自定义接口和测速功能</p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
+        <PageHeader title="API 密钥管理" description="仅管理 AI 服务商密钥，用于文本模型与语音识别调用，不包含 MCP 服务凭证。" />
+        <Button onClick={() => setShowAddModal(true)}>
           <Plus className="w-4 h-4" />
           <span>添加密钥</span>
-        </button>
+        </Button>
       </div>
 
       {/* 提示信息 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm text-blue-800">
-          <strong>💡 功能说明：</strong>
+      <Card className="border-cyan-200 bg-cyan-50 p-4">
+        <p className="text-sm text-cyan-800">
+          <strong>功能说明：</strong>
         </p>
-        <ul className="text-sm text-blue-700 mt-2 space-y-1 list-disc list-inside">
+        <ul className="text-sm text-cyan-700 mt-2 space-y-1 list-disc list-inside">
           <li>填写 API Key 后自动获取可用模型列表</li>
           <li>支持自定义接口 URL（OpenAI 兼容格式）</li>
           <li>点击"测速"按钮测试连接状态和响应速度</li>
           <li>系统会自动使用在线的密钥进行 AI 服务调用</li>
         </ul>
-      </div>
+      </Card>
 
       {/* API Keys 列表 */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <Card className="overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-slate-500">
             加载中...
@@ -302,12 +304,9 @@ export default function ApiKeysPage() {
           <div className="p-12 text-center text-slate-500">
             <Key className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>暂无API密钥</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="mt-4 text-indigo-600 hover:text-indigo-700 font-medium"
-            >
+            <Button variant="link" onClick={() => setShowAddModal(true)} className="mt-4">
               添加第一个密钥
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="divide-y divide-slate-200">
@@ -318,18 +317,14 @@ export default function ApiKeysPage() {
                     {/* 标题行 */}
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-semibold text-slate-900">{key.keyName}</h3>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                      <Badge variant="secondary">
                         {PROVIDER_OPTIONS.find(p => p.value === key.provider)?.label || key.provider}
-                      </span>
+                      </Badge>
                       {key.isActive && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          启用
-                        </span>
+                        <Badge variant="success">启用</Badge>
                       )}
                       {key.userId === null && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                          系统默认
-                        </span>
+                        <Badge variant="info">系统默认</Badge>
                       )}
                     </div>
 
@@ -359,7 +354,7 @@ export default function ApiKeysPage() {
                       </code>
                       <button
                         onClick={() => toggleKeyVisibility(key.id)}
-                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="p-2 hover:bg-slate-100 rounded-2xl transition-colors"
                         title={visibleKeys.has(key.id) ? '隐藏' : '显示'}
                       >
                         {visibleKeys.has(key.id) ? (
@@ -370,7 +365,7 @@ export default function ApiKeysPage() {
                       </button>
                       <button
                         onClick={() => copyToClipboard(key.keyValue, key.id)}
-                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="p-2 hover:bg-slate-100 rounded-2xl transition-colors"
                         title="复制"
                       >
                         {copiedKey === key.id ? (
@@ -401,10 +396,11 @@ export default function ApiKeysPage() {
 
                     {/* 操作按钮 */}
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => testConnection(key)}
                         disabled={testingConnection === key.id}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium disabled:opacity-50"
                       >
                         {testingConnection === key.id ? (
                           <>
@@ -417,14 +413,16 @@ export default function ApiKeysPage() {
                             测速
                           </>
                         )}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-rose-200 text-rose-600 hover:bg-rose-50"
                         onClick={() => handleDeleteKey(key.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
                       >
                         <Trash2 className="w-4 h-4" />
                         删除
-                      </button>
+                      </Button>
                     </div>
 
                     {/* 使用统计 */}
@@ -441,19 +439,17 @@ export default function ApiKeysPage() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* 添加密钥弹窗 */}
+      </Card>
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">添加 API 密钥</h3>
 
             <div className="space-y-4">
               {/* 服务商选择 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  服务商 <span className="text-red-500">*</span>
+                  服务商 <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={newKey.provider}
@@ -485,7 +481,7 @@ export default function ApiKeysPage() {
               {/* 服务类型选择 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  服务类型 <span className="text-red-500">*</span>
+                  服务类型 <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -503,7 +499,7 @@ export default function ApiKeysPage() {
                         setAvailableModels([]);
                         setIsUserManualInput(false); // 重置手动输入标记
                       }}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                      className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
                     />
                     <span className="text-sm text-slate-700">文本对话模型</span>
                   </label>
@@ -522,7 +518,7 @@ export default function ApiKeysPage() {
                         setAvailableModels([]);
                         setIsUserManualInput(false); // 重置手动输入标记
                       }}
-                      className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                      className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
                     />
                     <span className="text-sm text-slate-700">语音识别模型</span>
                   </label>
@@ -537,7 +533,7 @@ export default function ApiKeysPage() {
               {/* 密钥名称 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  密钥名称 <span className="text-red-500">*</span>
+                  密钥名称 <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -551,7 +547,7 @@ export default function ApiKeysPage() {
               {/* API 密钥 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  API 密钥 <span className="text-red-500">*</span>
+                  API 密钥 <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -566,21 +562,23 @@ export default function ApiKeysPage() {
               </div>
 
               {/* 自定义接口配置（仅自定义服务商且为文本模型显示） */}
-              {newKey.provider === 'custom' && newKey.serviceType === 'text' && (
+              {(newKey.provider === 'custom' || newKey.provider === 'oneapi') && newKey.serviceType === 'text' && (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
-                      接口地址 (Endpoint) <span className="text-red-500">*</span>
+                      接口地址 (Endpoint) <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={newKey.customEndpoint}
                       onChange={(e) => setNewKey({ ...newKey, customEndpoint: e.target.value })}
-                      placeholder="https://api.example.com/v1/chat/completions"
+                      placeholder={newKey.provider === 'oneapi' ? 'http://your-oneapi-host:3000/v1/chat/completions' : 'https://api.example.com/v1/chat/completions'}
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                      支持 OpenAI 兼容的 API 格式
+                      {newKey.provider === 'oneapi'
+                        ? 'OneAPI 基地址必须兼容 /v1/chat/completions，模型名需与 OneAPI 后台别名完全一致'
+                        : '支持 OpenAI 兼容的 API 格式'}
                     </p>
                   </div>
                 </>
@@ -663,7 +661,7 @@ export default function ApiKeysPage() {
                       )}
                     </div>
                     
-                    <p className="text-xs text-green-600 mt-1">
+                    <p className="text-xs text-emerald-600 mt-1">
                       ✅ 已获取 {availableModels.length} 个可用模型，也可点击"手动输入"自定义
                     </p>
                   </>
@@ -676,7 +674,7 @@ export default function ApiKeysPage() {
                         setIsUserManualInput(true);
                         setNewKey({ ...newKey, customModel: e.target.value });
                       }}
-                      placeholder={newKey.provider === 'custom' ? '输入模型名称' : '将使用默认模型'}
+                      placeholder={newKey.provider === 'custom' || newKey.provider === 'oneapi' ? '输入模型名称' : '将使用默认模型'}
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
                     />
                     {newKey.keyValue && !loadingModels && (
@@ -691,8 +689,7 @@ export default function ApiKeysPage() {
               {/* 快速测试连接 */}
               {newKey.keyValue && (
                 <div className="bg-slate-50 rounded-lg p-4">
-                  <button
-                    onClick={async () => {
+                  <Button className="w-full" onClick={async () => {
                       try {
                         const res = await fetch('/api/admin/apikeys/test', {
                           method: 'POST',
@@ -715,17 +712,18 @@ export default function ApiKeysPage() {
                         alert('测试失败');
                       }
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                   >
                     <Zap className="w-4 h-4" />
                     测试连接
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button
+              <Button
+                variant="outline"
+                className="flex-1"
                 onClick={() => {
                   setShowAddModal(false);
                   setNewKey({
@@ -737,21 +735,20 @@ export default function ApiKeysPage() {
                     serviceType: 'text'
                   });
                   setAvailableModels([]);
-                  setIsUserManualInput(false); // 重置手动输入标记
+                  setIsUserManualInput(false);
                 }}
-                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
               >
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
+                className="flex-1"
                 onClick={handleAddKey}
-                disabled={!newKey.keyName || !newKey.keyValue || (newKey.provider === 'custom' && !newKey.customEndpoint)}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!newKey.keyName || !newKey.keyValue || ((newKey.provider === 'custom' || newKey.provider === 'oneapi') && !newKey.customEndpoint)}
               >
                 添加
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </div>

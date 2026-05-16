@@ -1,0 +1,238 @@
+# FastGPT 知识对接文档
+
+## 1. 总体结论
+- 推荐采用：**你的项目做主智能体 + FastGPT 做文献知识 / RAG 引擎**。
+- 不建议让 FastGPT 直接接管患者主链路、量表会话、成员档案权限、医生动作。
+- 你的项目负责：
+  - 患者与医生入口
+  - 量表推荐与评估会话
+  - 成员档案与权限
+  - 医生协作、导出、审计
+- FastGPT 负责：
+  - 文献知识库
+  - 指南 / 论文 / SOP 检索
+  - 带引用的知识型回答草稿
+
+## 2. 架构分工
+### 2.1 你的项目负责
+- `/api/agent/session`
+- `/api/skill/v1/voice-intent`
+- `/api/skill/v1/scales/*`
+- member / patient / doctor 权限边界
+- 量表推荐、会话启动、评估提交、报告导出
+
+### 2.2 FastGPT 负责
+- 文献库导入与管理
+- RAG 检索
+- 引文片段召回
+- 基于文献的问答
+
+### 2.3 明确禁止
+- 不让 FastGPT 直接启动量表
+- 不让 FastGPT 直接读写 member
+- 不让 FastGPT 直接执行医生邀请
+- 不让 FastGPT 直接接管你的主智能体
+
+## 3. 推荐数据流
+### 3.1 知识问答
+1. 用户在 `/agent` 提问
+2. 你的 agent 先判断意图
+3. 如果是知识型问题，再调用 FastGPT
+4. FastGPT 返回：
+   - `answer`
+   - `citations`
+   - `sourceChunks`
+   - `confidence`
+5. 你的项目再组织最终回答并负责展示
+
+### 3.2 量表主链路
+1. 用户进入量表流程
+2. 你的项目本地 agent 决定推荐哪张量表
+3. 量表题目、推进、计分、结果全部由本地代码完成
+4. FastGPT 不参与最终评分
+
+## 4. 你的项目中 FastGPT 的角色
+- 新增知识工具：`knowledge.literature.ask`
+- 工具职责只有三件事：
+  - 向 FastGPT 发送问题与最小必要上下文
+  - 获取带引用的知识回答
+  - 将结果标准化后返回给当前 agent
+
+## 5. 需要新增的接口与类型
+### 5.1 服务层
+- `lib/services/fastgptKnowledge.ts`
+
+### 5.2 服务层最小接口
+- `askLiterature(question, context): Promise<{ answer, citations, sourceChunks, confidence }>`
+
+### 5.3 后端 API
+- `POST /api/knowledge/literature/ask`
+
+### 5.4 入参建议
+- `question: string`
+- `language: 'zh' | 'en'`
+- `role: 'PATIENT' | 'DOCTOR'`
+- `memberContext?: { ageMonths?, relation?, currentScaleId? }`
+- `scene?: 'agent' | 'result_advice' | 'doctor_workspace'`
+
+### 5.5 出参建议
+- `answer: string`
+- `citations: Array<{ title: string; source: string; snippet?: string }>`
+- `sourceChunks: Array<{ id: string; text: string; source?: string }>`
+- `confidence?: number`
+
+## 6. FastGPT 侧配置建议
+### 6.1 应用类型
+- 只建立“知识问答型应用”
+- 不在 FastGPT 中直接接入你项目业务工具
+
+### 6.2 文献库拆分建议
+- 临床指南
+- 量表说明
+- 共识 / 专家建议
+- 教材 / SOP
+
+### 6.3 文档导入优先级
+1. 指南与共识全文
+2. 量表官方说明
+3. 你自己的业务 SOP
+4. 论文摘要、结论、适应范围与注意事项
+
+### 6.4 元数据建议
+- `source_type`
+- `topic`
+- `age_group`
+- `language`
+- `doc_title`
+- `version_or_year`
+
+## 7. 何时调用 FastGPT
+### 7.1 应调用
+- “这个量表适合几岁”
+- “这个结果是什么意思”
+- “指南怎么说”
+- “有没有文献支持”
+- “SNAP-IV 和 SRS 有什么区别”
+
+### 7.2 不应调用
+- 启动量表
+- 回答当前题目选项
+- 切换成员
+- 导出报告
+- 医生邀请
+- 任何需要改写数据库状态的动作
+
+## 8. 外部智能体身份绑定方案
+### 8.1 设计目标
+- 外部智能体第一次调用时，不要求先知道 `userId` 或 `memberId`
+- 允许用户先匿名开始
+- 需要长期保存、跨设备恢复时再绑定手机号
+
+### 8.2 推荐身份模型
+- 阶段 A：临时身份
+  - `externalSessionId`
+  - 或 `guestSessionId`
+  - 或面向外部智能体的 `deviceId`
+- 阶段 B：正式身份
+  - `app session token`
+  - `userId`
+  - `memberId`
+
+### 8.3 首次进入的推荐做法
+- 先生成 `externalSessionId`
+- 用临时身份创建 guest user
+- 再创建 temporary member
+- 后续需要长期能力时再绑定正式账号
+
+### 8.4 推荐路径
+- `externalSessionId -> guest user -> temporary member -> 手机号绑定 -> 正式 user/member`
+
+## 9. FastGPT 量表工具调用规范
+### 9.1 核心原则
+- FastGPT 调用量表工具时，**整条会话必须复用同一个 `deviceId`**。
+- `deviceId` 可以理解成：
+  - `external_session_id`
+  - 或 FastGPT 当前这位访客的稳定会话标识
+- 不要在一次量表流程中途更换 `deviceId`，否则后续 `sessionId` 会和用户归属断开。
+
+### 9.2 推荐调用顺序
+1. `create_assessment_session`
+2. `get_current_question`
+3. `submit_answer`
+4. 重复 `get_current_question -> submit_answer`
+5. `get_assessment_result`
+
+### 9.3 create_assessment_session 建议入参
+- 最小可用入参：
+  - `deviceId`
+  - `scaleId`
+- 推荐入参：
+  - `deviceId`
+  - `scaleId`
+  - `language`
+  - `memberSnapshot`
+
+### 9.4 memberSnapshot 建议
+- `nickname`
+- `gender`
+- `ageMonths`
+- `relation`
+- `languagePreference`
+
+### 9.5 当前系统兼容行为
+- 如果没传 `memberSnapshot`
+- 且这个 `deviceId` 下还没有成员档案
+- 系统会自动创建一个“临时受测对象”
+
+### 9.6 submit_answer 规则
+- 必须使用：
+  - 同一个 `deviceId`
+  - 同一个 `sessionId`
+  - 当前题目的 `questionId`
+  - 当前题对应合法的 `score`
+- 不要自己跳题
+- 不要自己缓存下一题 ID
+- 每次提交完都应重新调用 `get_current_question`
+
+### 9.7 不推荐优先使用的工具
+- `submit_assessment`
+- `submit_and_evaluate`
+
+原因：
+- 这两个更适合作为兼容兜底
+- 不适合作为 FastGPT 的首选会话式流程
+
+### 9.8 失败回退策略
+- 如果 `create_assessment_session` 失败：
+  - 先检查 `deviceId`
+  - 再检查 `scaleId`
+  - 再尝试补发 `memberSnapshot`
+- 如果 `get_current_question / submit_answer / get_assessment_result` 失败：
+  - 先检查是否仍是同一个 `deviceId`
+  - 再检查 `sessionId` 是否来自同一条 `create_assessment_session`
+
+### 9.9 可直接用于 FastGPT 的提示词约束
+- 你是量表流程助手，不要自己计算量表得分。
+- 所有量表得分、题目推进、完成状态，必须以工具返回为准。
+- 当你开始一次量表时，先创建会话，再逐题读取和提交。
+- 整条量表链路都必须复用同一个 `deviceId`。
+- 如果还没有成员档案，可以直接创建会话；系统会自动创建临时受测对象。
+- 如能获取用户昵称、性别、年龄，优先随 `memberSnapshot` 一起提交。
+- 不要一次性生成整份量表答案，也不要跳过当前题直接写结果。
+
+## 10. 测试建议
+### 10.1 知识层
+- 患者问量表流程问题时，不应请求 FastGPT
+- 患者问指南 / 文献问题时，应命中 FastGPT
+- 医生问文献依据时，应返回更专业的知识型回答
+
+### 10.2 量表工具层
+- `create_assessment_session` 在只有 `deviceId + scaleId` 时可成功
+- `get_current_question / submit_answer / get_assessment_result` 能在同一 `deviceId` 下完整走通
+- 外部智能体换 `deviceId` 时，应能明确暴露会话断开的预期行为
+
+## 11. 默认假设
+- 默认采用 **自托管 FastGPT**
+- 默认你的项目继续作为主智能体入口
+- 默认 FastGPT 只做知识副脑，不接管主业务
+- 默认量表流程仍由本地确定性代码完成

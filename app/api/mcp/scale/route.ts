@@ -7,70 +7,63 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { scaleTools, handleScaleToolCall } from '@/lib/mcp/skills/scale/handlers';
-import { prisma } from '@/lib/db/prisma';
+import {
+  createJsonRpcAuthError,
+  logMcpToolCall,
+  touchMcpApiKey,
+  validateMcpApiKey,
+} from '@/lib/mcp/auth';
+import { listSerializableScales } from '@/lib/scales/catalog';
+import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * 验证API密钥
- */
-async function validateApiKey(authHeader: string | null): Promise<{ valid: boolean; clientId?: string }> {
-  if (!authHeader) {
-    return { valid: false };
-  }
-
-  // 提取Bearer token
-  const token = authHeader.replace('Bearer ', '');
-  
-  if (!token || token.length < 10) {
-    return { valid: false };
-  }
-
-  // 查询有效的API密钥
-  try {
-    const apiKey = await prisma.apiKey.findFirst({
-      where: {
-        keyValue: token,
-        isActive: true
-      }
-    });
-
-    if (!apiKey) {
-      return { valid: false };
-    }
-
-    return { valid: true, clientId: apiKey.id };
-  } catch (error) {
-    console.error('API key validation error:', error);
-    return { valid: false };
-  }
-}
 
 /**
  * POST 处理器 - 接收 MCP JSON-RPC 请求
  */
 export async function POST(req: NextRequest) {
-  try {
-    // 验证API密钥（可选，根据需求启用）
-    const authHeader = req.headers.get('Authorization');
-    const { valid, clientId } = await validateApiKey(authHeader);
+  let requestId: string | number | null = null;
 
-    // 如果需要强制认证，取消下面的注释
-    // if (!valid) {
-    //   return NextResponse.json({
-    //     jsonrpc: "2.0",
-    //     id: null,
-    //     error: { code: -32600, message: "Invalid API key" }
-    //   }, { status: 401 });
-    // }
+  try {
+    const apiKey = await validateMcpApiKey(req.headers.get('Authorization'));
+    if (!apiKey) {
+      return NextResponse.json(createJsonRpcAuthError(null), { status: 401 });
+    }
 
     const body = await req.json();
     const { method, params, id } = body;
+    requestId = id ?? null;
 
     console.log(`[Scale MCP] Received: ${method}`);
 
+    if (method === 'initialize') {
+      await touchMcpApiKey(apiKey.id);
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion: '2024-11-05',
+          capabilities: { tools: {} },
+          serverInfo: {
+            name: 'ai-scale-engine-scale-compat',
+            version: '0.1.0',
+          },
+        },
+      });
+    }
+
+    if (method === 'ping') {
+      await touchMcpApiKey(apiKey.id);
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id,
+        result: {},
+      });
+    }
+
     // 1. 响应工具列表请求
     if (method === "tools/list") {
+      await touchMcpApiKey(apiKey.id);
       return NextResponse.json({
         jsonrpc: "2.0",
         id,
@@ -80,28 +73,31 @@ export async function POST(req: NextRequest) {
 
     // 2. 响应工具调用请求
     if (method === "tools/call") {
-      const { name, arguments: args } = params;
+      const { name, arguments: args } = (params || {}) as { name?: string; arguments?: unknown };
       
       console.log(`[Scale MCP] Calling tool: ${name}`);
       
-      const result = await handleScaleToolCall(name, args);
-      
-      // 记录MCP调用日志
-      if (clientId) {
-        await prisma.mcpLog.create({
-          data: {
-            clientId: clientId,
-            action: name,
-            scaleId: args.scaleId
-          }
-        }).catch(err => console.error('Failed to log MCP call:', err));
+      const result = await handleScaleToolCall(name || '', args);
+
+      const isSuccessful = !isToolCallError(result);
+      await touchMcpApiKey(apiKey.id, isSuccessful);
+
+      if (isSuccessful) {
+        await logMcpToolCall({
+          apiKeyId: apiKey.id,
+          userId: apiKey.userId,
+          action: name || 'unknown_tool',
+          scaleId: getScaleId(args),
+          entrypoint: 'scale_compat',
+        }).catch((err) => console.error('Failed to log MCP call:', err));
       }
       
       return NextResponse.json({
         jsonrpc: "2.0",
         id,
         result: {
-          content: [{ type: "text", text: JSON.stringify(result) }]
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          ...(isSuccessful ? {} : { isError: true }),
         }
       });
     }
@@ -118,7 +114,7 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json({
       jsonrpc: "2.0",
-      id: null,
+      id: requestId,
       error: { 
         code: -32603, 
         message: error instanceof Error ? error.message : "Internal Server Error" 
@@ -127,10 +123,31 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function getScaleId(args: unknown) {
+  if (!args || typeof args !== 'object' || !('scaleId' in args)) {
+    return null;
+  }
+
+  return typeof (args as { scaleId?: unknown }).scaleId === 'string'
+    ? ((args as { scaleId: string }).scaleId)
+    : null;
+}
+
+function isToolCallError(result: unknown) {
+  return Boolean(
+    result &&
+      typeof result === 'object' &&
+      'success' in result &&
+      (result as { success?: boolean }).success === false
+  );
+}
+
 /**
  * GET 处理器 - 返回服务状态
  */
 export async function GET() {
+  const scales = listSerializableScales();
+
   return NextResponse.json({
     service: "Scale Assessment Service",
     version: "1.0.0",
@@ -141,13 +158,10 @@ export async function GET() {
       name: t.name,
       description: t.description
     })),
-    supportedScales: AllScales.map(s => ({
+    supportedScales: scales.map(s => ({
       id: s.id,
-      title: s.title,
+      title: resolveLocalizedText(s.title, 'zh'),
       questionCount: s.questions.length
     }))
   });
 }
-
-// 导入量表注册表
-import { AllScales } from '@/lib/schemas/core/registry';

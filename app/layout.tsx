@@ -3,8 +3,10 @@ import "./globals.css";
 import "./globals.print.css";
 import "@/lib/polyfills/crypto"; // crypto.randomUUID polyfill
 import { AssessmentProvider } from "@/contexts/AssessmentContext";
-import { ProfileProvider } from "@/contexts/ProfileContext";
 import { ConversationHistoryProvider } from "@/contexts/ConversationHistoryContext";
+import { AuthSessionProvider } from "@/contexts/AuthSessionContext";
+import { ProfileProvider } from "@/contexts/ProfileContext";
+import { SkillSessionProvider } from "@/contexts/SkillSessionContext";
 
 export const metadata: Metadata = {
   title: "AI量表系统 - 智能心理评估平台",
@@ -17,15 +19,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN">
-      <body>
-        <ProfileProvider>
-          <ConversationHistoryProvider>
-            <AssessmentProvider>
-              {children}
-            </AssessmentProvider>
-          </ConversationHistoryProvider>
-        </ProfileProvider>
+    <html lang="zh-CN" suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        <AuthSessionProvider>
+          <ProfileProvider>
+            <SkillSessionProvider>
+              <ConversationHistoryProvider>
+                <AssessmentProvider>
+                  {children}
+                </AssessmentProvider>
+              </ConversationHistoryProvider>
+            </SkillSessionProvider>
+          </ProfileProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

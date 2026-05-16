@@ -21,17 +21,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 获取剩余额度
-    const remaining = await QuotaManager.getRemainingQuota(deviceId);
-    
-    // 获取用户信息
     const user = await QuotaManager.getOrCreateGuest(deviceId);
+    const remaining = Math.max(0, user.dailyLimit - user.dailyUsed);
 
     return NextResponse.json({ 
       remaining,
       dailyLimit: user.dailyLimit,
       dailyUsed: user.dailyUsed,
       isGuest: user.isGuest,
+      role: (user as any).role || (user.isGuest ? 'GUEST' : 'REGISTERED'),
     });
   } catch (error) {
     console.error('[Check Quota Error]:', error);

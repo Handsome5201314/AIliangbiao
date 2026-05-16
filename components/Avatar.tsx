@@ -10,132 +10,138 @@ interface AvatarProps {
 export default function Avatar({ state, gender, className = "w-24 h-24" }: AvatarProps) {
   const { mood, clothing, headwear } = state;
 
-  // 颜色定义 (国风色系)
   const colors = {
-    skin: '#FFE4E1',      // 粉白肤色
-    hair: '#2C3E50',      // 黛黑
-    tangSuit: '#E74C3C',  // 朱砂红 (唐装)
-    tangTrim: '#F1C40F',  // 明黄 (唐装镶边)
-    hanfu: '#3498DB',     // 靛蓝 (汉服)
-    hanfuTrim: '#ECF0F1', // 月白 (汉服镶边)
-    tigerHat: '#E67E22',  // 橘黄 (虎头帽)
+    skin: '#FFE4D6',
+    blush: '#FFB7B2',
+    hair: '#2D3748',
+    eye: '#1A202C',
+    tangSuit: '#F05252',
+    tangTrim: '#FBD38D',
+    hanfu: '#63B3ED',
+    hanfuTrim: '#F7FAFC',
+    tigerHat: '#ED8936',
+    tigerStripe: '#C05621',
   };
 
   return (
     <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
-      {/* 1. 背景光晕 (可选，增加科技/仙气感) */}
-      <circle cx="50" cy="50" r="48" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="2" />
-      
-      {/* 2. 身体与服装 */}
-      <g transform="translate(0, 10)">
+      <defs>
+        <radialGradient id="eyeHighlight" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.2" />
+        </radialGradient>
+      </defs>
+
+      <circle cx="50" cy="50" r="48" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="1.5" />
+
+      <g transform="translate(0, 8)">
         {clothing === 'tang_suit' ? (
-          // 唐装 (红色为主，黄色盘扣)
           <g>
-            <path d="M25 80 Q50 45 75 80 L80 100 L20 100 Z" fill={colors.tangSuit} />
-            <path d="M40 60 L60 60" stroke={colors.tangTrim} strokeWidth="2" strokeLinecap="round" />
-            <path d="M45 70 L55 70" stroke={colors.tangTrim} strokeWidth="2" strokeLinecap="round" />
+            <path d="M 15 92 Q 25 72 50 72 Q 75 72 85 92 L 85 100 L 15 100 Z" fill={colors.tangSuit} />
+            <path d="M 50 72 L 50 100" stroke={colors.tangTrim} strokeWidth="2.5" />
+            <circle cx="50" cy="80" r="2" fill={colors.tangTrim} />
+            <circle cx="50" cy="90" r="2" fill={colors.tangTrim} />
+            <path d="M 35 72 Q 50 82 65 72" stroke={colors.tangTrim} strokeWidth="3" fill="none" strokeLinecap="round" />
           </g>
         ) : (
-          // 汉服 (蓝色交领右衽)
           <g>
-            <path d="M25 80 Q50 45 75 80 L80 100 L20 100 Z" fill={colors.hanfu} />
-            <path d="M30 65 L70 90" stroke={colors.hanfuTrim} strokeWidth="4" />
-            <path d="M70 65 L45 80" stroke={colors.hanfuTrim} strokeWidth="4" />
+            <path d="M 12 92 Q 25 72 50 72 Q 75 72 88 92 L 88 100 L 12 100 Z" fill={colors.hanfu} />
+            <path d="M 30 72 L 65 95" stroke={colors.hanfuTrim} strokeWidth="4" strokeLinecap="round" />
+            <path d="M 70 72 L 45 88" stroke={colors.hanfuTrim} strokeWidth="4" strokeLinecap="round" />
           </g>
         )}
       </g>
 
-      {/* 3. 头部与肤色 */}
-      <circle cx="50" cy="45" r="22" fill={colors.skin} />
-      
-      {/* 4. 发型 (根据性别) */}
-      {gender === 'boy' ? (
-        // 男孩短发
-        <path d="M 28 40 Q 50 15 72 40 Q 50 25 28 40 Z" fill={colors.hair} />
-      ) : (
-        // 女孩双丫髻
+      <rect x="42" y="65" width="16" height="12" rx="4" fill="#F5CBB5" />
+
+      <circle cx="25" cy="54" r="5" fill={colors.skin} />
+      <circle cx="75" cy="54" r="5" fill={colors.skin} />
+
+      <rect x="25" y="32" width="50" height="42" rx="22" fill={colors.skin} />
+
+      <ellipse cx="34" cy="58" rx="4.5" ry="3" fill={colors.blush} opacity="0.6" />
+      <ellipse cx="66" cy="58" rx="4.5" ry="3" fill={colors.blush} opacity="0.6" />
+
+      {gender === 'girl' ? (
         <g>
-          <path d="M 28 40 Q 50 15 72 40 Q 50 25 28 40 Z" fill={colors.hair} />
-          <circle cx="30" cy="25" r="8" fill={colors.hair} />
-          <circle cx="70" cy="25" r="8" fill={colors.hair} />
+          <circle cx="22" cy="32" r="11" fill={colors.hair} />
+          <circle cx="78" cy="32" r="11" fill={colors.hair} />
+          <path d="M 18 36 Q 22 42 26 36" stroke={colors.tangSuit} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          <path d="M 74 36 Q 78 42 82 36" stroke={colors.tangSuit} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          <path d="M 26 40 C 26 25 74 25 74 40 C 74 40 60 32 50 32 C 40 32 26 40 26 40 Z" fill={colors.hair} />
+        </g>
+      ) : (
+        <g>
+          <path d="M 26 42 C 26 20 74 20 74 42 C 74 42 65 30 50 30 C 35 30 26 42 26 42 Z" fill={colors.hair} />
+          <path d="M 45 26 Q 50 20 52 26" stroke={colors.hair} strokeWidth="2.5" fill="none" strokeLinecap="round" />
         </g>
       )}
 
-      {/* 5. 动态表情 (Mood) */}
       <g>
         {mood === 'happy' && (
           <>
-            {/* 弯弯的笑眼 */}
-            <path d="M 38 42 Q 42 38 46 42" stroke="#4A5568" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <path d="M 54 42 Q 58 38 62 42" stroke="#4A5568" strokeWidth="2" fill="none" strokeLinecap="round" />
-            {/* 开心大笑嘴 */}
-            <path d="M 45 52 Q 50 58 55 52 Z" fill="#E74C3C" />
-            {/* 脸颊红晕 */}
-            <circle cx="35" cy="48" r="4" fill="#FFB6C1" opacity="0.6" />
-            <circle cx="65" cy="48" r="4" fill="#FFB6C1" opacity="0.6" />
+            <path d="M 34 50 Q 38 44 42 50" stroke={colors.eye} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+            <path d="M 58 50 Q 62 44 66 50" stroke={colors.eye} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+            <path d="M 46 60 Q 50 68 54 60 Z" fill="#F56565" />
+            <ellipse cx="34" cy="56" rx="5" ry="3.5" fill={colors.blush} opacity="0.8" />
+            <ellipse cx="66" cy="56" rx="5" ry="3.5" fill={colors.blush} opacity="0.8" />
           </>
         )}
-        
+
         {mood === 'nervous' && (
           <>
-            {/* 担忧的眼睛 */}
-            <circle cx="42" cy="42" r="2.5" fill="#4A5568" />
-            <circle cx="58" cy="42" r="2.5" fill="#4A5568" />
-            {/* 倒八字眉 */}
-            <path d="M 38 38 L 44 36" stroke="#4A5568" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M 62 38 L 56 36" stroke="#4A5568" strokeWidth="1.5" strokeLinecap="round" />
-            {/* 紧张抿嘴 */}
-            <path d="M 46 54 Q 50 52 54 54" stroke="#4A5568" strokeWidth="2" fill="none" strokeLinecap="round" />
-            {/* 汗滴 */}
-            <path d="M 70 35 Q 72 40 70 42 Q 68 40 70 35 Z" fill="#85C1E9" />
+            <circle cx="38" cy="50" r="4.5" fill={colors.eye} />
+            <circle cx="62" cy="50" r="4.5" fill={colors.eye} />
+            <circle cx="39" cy="48" r="1.5" fill="#FFF" />
+            <circle cx="63" cy="48" r="1.5" fill="#FFF" />
+            <path d="M 34 44 L 42 42" stroke={colors.eye} strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            <path d="M 66 44 L 58 42" stroke={colors.eye} strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            <path d="M 46 62 Q 48 60 50 62 T 54 62" stroke={colors.eye} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <path d="M 72 38 Q 75 44 72 46 Q 69 44 72 38 Z" fill="#90CDF4" opacity="0.8" />
           </>
         )}
 
         {mood === 'curious' && (
           <>
-            {/* 睁大的圆眼 */}
-            <circle cx="42" cy="42" r="3.5" fill="#4A5568" />
-            <circle cx="58" cy="42" r="3.5" fill="#4A5568" />
-            {/* 挑高的眉毛 */}
-            <path d="M 38 35 Q 42 33 46 35" stroke="#4A5568" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-            <path d="M 54 35 Q 58 33 62 35" stroke="#4A5568" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-            {/* "O"型嘴 */}
-            <circle cx="50" cy="54" r="3" fill="#E74C3C" />
+            <circle cx="38" cy="50" r="5" fill={colors.eye} />
+            <circle cx="62" cy="50" r="5" fill={colors.eye} />
+            <circle cx="39.5" cy="48.5" r="2" fill="url(#eyeHighlight)" />
+            <circle cx="63.5" cy="48.5" r="2" fill="url(#eyeHighlight)" />
+            <path d="M 34 42 Q 38 38 42 42" stroke={colors.eye} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <path d="M 58 42 Q 62 38 66 42" stroke={colors.eye} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <circle cx="50" cy="62" r="2.5" fill="#F56565" />
           </>
         )}
 
         {mood === 'normal' && (
           <>
-            {/* 正常眼睛 */}
-            <circle cx="42" cy="42" r="2.5" fill="#4A5568" />
-            <circle cx="58" cy="42" r="2.5" fill="#4A5568" />
-            {/* 淡淡微笑 */}
-            <path d="M 46 52 Q 50 55 54 52" stroke="#4A5568" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <circle cx="38" cy="50" r="4.5" fill={colors.eye} />
+            <circle cx="62" cy="50" r="4.5" fill={colors.eye} />
+            <circle cx="39.5" cy="48" r="1.8" fill="#FFF" />
+            <circle cx="63.5" cy="48" r="1.8" fill="#FFF" />
+            <path d="M 47 61 Q 50 64 53 61" stroke="#F56565" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.8" />
           </>
         )}
       </g>
 
-      {/* 6. 特殊头饰 */}
       {headwear === 'hu_tou_mao' && (
-        <g transform="translate(0, -5)">
-          {/* 虎头帽主体 */}
-          <path d="M 26 40 Q 50 5 74 40 Q 50 15 26 40 Z" fill={colors.tigerHat} />
-          {/* 老虎耳朵 */}
-          <circle cx="32" cy="22" r="6" fill={colors.tangTrim} />
-          <circle cx="68" cy="22" r="6" fill={colors.tangTrim} />
-          {/* "王"字印记 */}
-          <path d="M 46 22 L 54 22 M 46 25 L 54 25 M 44 28 L 56 28 M 50 20 L 50 28" stroke="#D35400" strokeWidth="1.5" strokeLinecap="round" />
+        <g transform="translate(0, -2)">
+          <path d="M 20 52 C 15 15 85 15 80 52 C 80 55 65 30 50 30 C 35 30 20 55 20 52 Z" fill={colors.tigerHat} />
+          <circle cx="28" cy="22" r="8" fill={colors.tigerHat} />
+          <circle cx="28" cy="22" r="4" fill="#FFF" opacity="0.8" />
+          <circle cx="72" cy="22" r="8" fill={colors.tigerHat} />
+          <circle cx="72" cy="22" r="4" fill="#FFF" opacity="0.8" />
+          <path d="M 45 22 L 55 22 M 46 26 L 54 26 M 44 30 L 56 30 M 50 22 L 50 30" stroke={colors.tigerStripe} strokeWidth="2" strokeLinecap="round" />
         </g>
       )}
 
       {headwear === 'flower' && (
-        <g transform="translate(65, 25)">
-          {/* 小红花头饰 */}
-          <circle cx="0" cy="-5" r="3" fill="#E74C3C" />
-          <circle cx="5" cy="0" r="3" fill="#E74C3C" />
-          <circle cx="-5" cy="0" r="3" fill="#E74C3C" />
-          <circle cx="0" cy="5" r="3" fill="#E74C3C" />
-          <circle cx="0" cy="0" r="2" fill="#F1C40F" />
+        <g transform="translate(68, 28) scale(1.2)">
+          <circle cx="0" cy="-4" r="3" fill="#F56565" />
+          <circle cx="4" cy="0" r="3" fill="#F56565" />
+          <circle cx="-4" cy="0" r="3" fill="#F56565" />
+          <circle cx="0" cy="4" r="3" fill="#F56565" />
+          <circle cx="0" cy="0" r="2.5" fill={colors.tangTrim} />
         </g>
       )}
     </svg>

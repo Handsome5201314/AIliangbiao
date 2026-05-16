@@ -1,293 +1,258 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Save, Key, Globe, Shield, Bell, Database, Trash2, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Bot, Database, Loader2, Save, Settings, Sparkles } from 'lucide-react';
+
+import PageHeader from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+
+const AGENT_CONFIG_KEY = 'agentWorkspaceConfig';
+
+type SettingsState = {
+  siteName: string;
+  siteDescription: string;
+  defaultDailyLimit: string;
+  enableGuestMode: boolean;
+  enableAPIKeyManagement: boolean;
+  requireLogin: boolean;
+  enableNotifications: boolean;
+  enableDataExport: boolean;
+  agentWorkspaceConfig: string;
+};
+
+const DEFAULT_SETTINGS: SettingsState = {
+  siteName: 'AI 临床辅助评估系统',
+  siteDescription: '基于 MCP 协议与确定性量表引擎的 AI 评估平台',
+  defaultDailyLimit: '1',
+  enableGuestMode: true,
+  enableAPIKeyManagement: true,
+  requireLogin: false,
+  enableNotifications: true,
+  enableDataExport: true,
+  agentWorkspaceConfig: '{}',
+};
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState({
-    siteName: 'AI 临床辅助评估系统',
-    siteDescription: '基于 MCP 协议的 AI 驱动临床量表评估系统',
-    defaultDailyLimit: '1',
-    enableGuestMode: true,
-    enableAPIKeyManagement: true,
-    requireLogin: false,
-    enableNotifications: true,
-    enableDataExport: true
-  });
+  const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isUpdatingQuota, setIsUpdatingQuota] = useState(false);
+  const [configError, setConfigError] = useState('');
 
-  // 加载设置
   useEffect(() => {
-    loadSettings();
+    void loadSettings();
   }, []);
 
   const loadSettings = async () => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/admin/settings');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.settings) {
-          setSettings(prev => ({
-            ...prev,
-            siteName: data.settings.siteName || prev.siteName,
-            siteDescription: data.settings.siteDescription || prev.siteDescription,
-            defaultDailyLimit: data.settings.defaultDailyLimit || prev.defaultDailyLimit,
-            enableGuestMode: data.settings.enableGuestMode === 'true',
-            enableAPIKeyManagement: data.settings.enableAPIKeyManagement === 'true',
-            requireLogin: data.settings.requireLogin === 'true',
-            enableNotifications: data.settings.enableNotifications === 'true',
-            enableDataExport: data.settings.enableDataExport === 'true'
-          }));
-        }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || '加载系统设置失败');
       }
+
+      setSettings({
+        siteName: data.settings.siteName || DEFAULT_SETTINGS.siteName,
+        siteDescription: data.settings.siteDescription || DEFAULT_SETTINGS.siteDescription,
+        defaultDailyLimit: data.settings.defaultDailyLimit || DEFAULT_SETTINGS.defaultDailyLimit,
+        enableGuestMode: data.settings.enableGuestMode !== 'false',
+        enableAPIKeyManagement: data.settings.enableAPIKeyManagement !== 'false',
+        requireLogin: data.settings.requireLogin === 'true',
+        enableNotifications: data.settings.enableNotifications !== 'false',
+        enableDataExport: data.settings.enableDataExport !== 'false',
+        agentWorkspaceConfig: data.settings[AGENT_CONFIG_KEY] || DEFAULT_SETTINGS.agentWorkspaceConfig,
+      });
     } catch (error) {
-      console.error('加载设置失败:', error);
+      alert(error instanceof Error ? error.message : '加载系统设置失败');
     } finally {
       setIsLoading(false);
     }
   };
 
+  useEffect(() => {
+    try {
+      JSON.parse(settings.agentWorkspaceConfig);
+      setConfigError('');
+    } catch (error) {
+      setConfigError(error instanceof Error ? error.message : 'Agent JSON 解析失败');
+    }
+  }, [settings.agentWorkspaceConfig]);
+
+  const parsedAgentConfig = useMemo(() => {
+    try {
+      return JSON.parse(settings.agentWorkspaceConfig);
+    } catch {
+      return null;
+    }
+  }, [settings.agentWorkspaceConfig]);
+
   const handleSave = async () => {
+    if (!parsedAgentConfig) {
+      alert('Agent 原始 JSON 当前无法解析，请先修正后再保存。');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({
+          settings: {
+            siteName: settings.siteName,
+            siteDescription: settings.siteDescription,
+            defaultDailyLimit: settings.defaultDailyLimit,
+            enableGuestMode: settings.enableGuestMode,
+            enableAPIKeyManagement: settings.enableAPIKeyManagement,
+            requireLogin: settings.requireLogin,
+            enableNotifications: settings.enableNotifications,
+            enableDataExport: settings.enableDataExport,
+            [AGENT_CONFIG_KEY]: settings.agentWorkspaceConfig,
+          },
+        }),
       });
 
-      if (response.ok) {
-        alert('设置已保存成功！');
-      } else {
-        throw new Error('保存失败');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || '保存系统设置失败');
       }
+
+      alert('系统设置已保存');
+      await loadSettings();
     } catch (error) {
-      console.error('保存设置失败:', error);
-      alert('保存失败，请重试');
+      alert(error instanceof Error ? error.message : '保存系统设置失败');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 批量更新游客配额
-  const handleUpdateQuota = async () => {
-    const newLimit = parseInt(settings.defaultDailyLimit);
-    
-    if (isNaN(newLimit) || newLimit < 0) {
-      alert('请输入有效的配额值');
-      return;
-    }
-
-    if (!confirm(`确认将所有游客的配额更新为 ${newLimit} 次？\n\n注意：这将同时保存系统设置。`)) {
-      return;
-    }
-
-    setIsUpdatingQuota(true);
-    try {
-      const response = await fetch('/api/admin/settings/update-quota', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: newLimit })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(data.message);
-        // 重新加载设置以确保同步
-        await loadSettings();
-      } else {
-        throw new Error('更新失败');
-      }
-    } catch (error) {
-      console.error('更新配额失败:', error);
-      alert('更新失败，请重试');
-    } finally {
-      setIsUpdatingQuota(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">系统设置</h2>
-        <p className="text-sm text-slate-500 mt-1">管理系统全局配置和参数</p>
-      </div>
+      <PageHeader title="系统设置" description="这里保留平台级设置与 Agent 原始 JSON 兜底入口。结构化的 Agent 配置管理已经迁移到独立页面。" />
 
-      {/* 基本设置 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Globe className="w-5 h-5 text-slate-600" />
-          基本设置
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">站点名称</label>
-            <input
-              type="text"
-              value={settings.siteName}
-              onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+      <Card className="border-cyan-200 bg-cyan-50 p-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl bg-white p-3 text-cyan-700">
+            <Bot className="h-5 w-5" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">站点描述</label>
-            <textarea
-              value={settings.siteDescription}
-              onChange={(e) => setSettings({ ...settings, siteDescription: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 额度管理 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Shield className="w-5 h-5 text-slate-600" />
-          额度管理
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">游客每日限额</label>
-            <div className="flex items-center gap-4">
-              <input
-                type="number"
-                value={settings.defaultDailyLimit}
-                onChange={(e) => setSettings({ ...settings, defaultDailyLimit: e.target.value })}
-                className="w-32 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                onClick={handleUpdateQuota}
-                disabled={isUpdatingQuota}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {isUpdatingQuota ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    更新中...
-                  </>
-                ) : (
-                  '立即应用到所有游客'
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 mt-2">
-              💡 点击"立即应用"会同时保存设置并更新所有游客账户的配额
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-slate-900">Agent 配置已迁移到独立后台</h3>
+            <p className="mt-2 text-sm leading-7 text-slate-600">
+              如果你想像应用配置面板那样选择模型、修改提示词、管理工具风控和 agent 专属配额，请直接前往
+              <Link href="/admin/agent" className="mx-1 font-semibold text-cyan-700 underline-offset-4 hover:underline">
+                /admin/agent
+              </Link>
+              。那里配置的是 Agent 的 provider/model 偏好，底层仍然复用“AI 服务商密钥”中的可用系统密钥池；本页保留原始 JSON 编辑入口，主要用于排查和紧急兜底。
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* 功能开关 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Key className="w-5 h-5 text-slate-600" />
-          功能开关
-        </h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-900">游客模式</p>
-              <p className="text-sm text-slate-500">允许用户无需注册即可使用</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.enableGuestMode}
-                onChange={(e) => setSettings({ ...settings, enableGuestMode: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
+      <Card className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Settings className="h-5 w-5 text-slate-600" />
+          <h3 className="text-lg font-semibold text-slate-900">基础设置</h3>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>正在加载设置...</span>
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-900">API Key 管理</p>
-              <p className="text-sm text-slate-500">允许用户配置自己的 API 密钥</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.enableAPIKeyManagement}
-                onChange={(e) => setSettings({ ...settings, enableAPIKeyManagement: e.target.checked })}
-                className="sr-only peer"
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-slate-700">站点名称</label>
+              <Input
+                value={settings.siteName}
+                onChange={(event) => setSettings((prev) => ({ ...prev, siteName: event.target.value }))}
               />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-slate-700">站点描述</label>
+              <textarea
+                rows={3}
+                value={settings.siteDescription}
+                onChange={(event) => setSettings((prev) => ({ ...prev, siteDescription: event.target.value }))}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">游客默认日额度</label>
+              <Input
+                type="number"
+                value={settings.defaultDailyLimit}
+                onChange={(event) => setSettings((prev) => ({ ...prev, defaultDailyLimit: event.target.value }))}
+              />
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-900">要求登录</p>
-              <p className="text-sm text-slate-500">用户必须登录后才能使用系统</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.requireLogin}
-                onChange={(e) => setSettings({ ...settings, requireLogin: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
+        )}
+      </Card>
+
+      <Card className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-cyan-600" />
+          <h3 className="text-lg font-semibold text-slate-900">Agent 原始 JSON 兜底入口</h3>
+        </div>
+        <p className="mb-4 text-sm leading-7 text-slate-500">
+          这份 JSON 与 <code>/admin/agent</code> 读写的是同一个 <code>agentWorkspaceConfig</code>。其中模型部分保存的是 Agent 的 provider/model 偏好，不是某条具体 API Key 的绑定关系。正常运营建议用结构化页面，这里保留给高级调试和紧急回滚。
+        </p>
+        <textarea
+          value={settings.agentWorkspaceConfig}
+          onChange={(event) => setSettings((prev) => ({ ...prev, agentWorkspaceConfig: event.target.value }))}
+          rows={26}
+          className="w-full rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs text-slate-100 outline-none focus:border-cyan-400"
+        />
+        {configError ? (
+          <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            JSON 校验失败：{configError}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            当前 JSON 可以正常解析并保存。
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Database className="h-5 w-5 text-slate-600" />
+          <h3 className="text-lg font-semibold text-slate-900">遗留画像与记忆能力索引</h3>
+        </div>
+
+        <div className="space-y-3 text-sm text-slate-600">
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="font-medium text-slate-900">Legacy Profile Context API</div>
+            <div className="mt-1">旧的 `/api/profile/context` 与 `lib/services/userContext.ts`，维护 traits / interests / fears / behaviors 这类画像上下文。</div>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="font-medium text-slate-900">Legacy Memory MCP Skill</div>
+            <div className="mt-1">`lib/mcp/skills/memory/handlers.ts` 中仍有一套记忆技能，用于读写用户记忆标签。</div>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="font-medium text-slate-900">Persona Snapshot v1</div>
+            <div className="mt-1">当前对外导出的 Arena / Persona Snapshot 协议，仍然是实际在用的兼容输出。</div>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="font-medium text-slate-900">Agent Profile State</div>
+            <div className="mt-1">新的 `/agent` 活体画像状态层，用于在自主工作台中汇总画像、状态效果和评估历史。</div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* 数据管理 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Database className="w-5 h-5 text-slate-600" />
-          数据管理
-        </h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-900">数据导出</p>
-              <p className="text-sm text-slate-500">允许用户导出评估历史数据</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.enableDataExport}
-                onChange={(e) => setSettings({ ...settings, enableDataExport: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
-          </div>
-          <div className="pt-4 border-t border-slate-200">
-            <button className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">
-              <Trash2 className="w-4 h-4" />
-              <span>清空所有数据</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 保存按钮 */}
       <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        <Button
+          onClick={() => void handleSave()}
+          disabled={isSaving || Boolean(configError)}
         >
-          {isSaving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>保存中...</span>
-            </>
-          ) : (
-            <>
-              <Save className="w-5 h-5" />
-              <span>保存设置</span>
-            </>
-          )}
-        </button>
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <span>{isSaving ? '保存中...' : '保存设置'}</span>
+        </Button>
       </div>
     </div>
   );

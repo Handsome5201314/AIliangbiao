@@ -228,6 +228,7 @@ export async function handleGrowthToolCall(name: string, args: any) {
         data: {
           profileId: profile.id,
           ageMonths,
+          gestationalWeek: null,
           weight,
           height,
           headCircumference,
@@ -262,7 +263,10 @@ export async function handleGrowthToolCall(name: string, args: any) {
       const { limit = 10 } = args;
       
       const records = await prisma.growthRecord.findMany({
-        where: { profileId: profile.id },
+        where: {
+          profileId: profile.id,
+          gestationalWeek: null,
+        },
         orderBy: { ageMonths: 'asc' },
         take: limit
       });
@@ -286,7 +290,10 @@ export async function handleGrowthToolCall(name: string, args: any) {
     case "evaluate_growth": {
       // 获取最新记录
       const latestRecord = await prisma.growthRecord.findFirst({
-        where: { profileId: profile.id },
+        where: {
+          profileId: profile.id,
+          gestationalWeek: null,
+        },
         orderBy: { createdAt: 'desc' }
       });
       

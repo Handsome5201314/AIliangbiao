@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
     const ongoingSession = await prisma.triageSession.findFirst({
       where: {
         userId: user.id,
-        status: 'ONGOING',
+        status: {
+          in: ['ONGOING', 'CONSENT', 'PAUSED'],
+        },
       },
       orderBy: {
         updatedAt: 'desc',

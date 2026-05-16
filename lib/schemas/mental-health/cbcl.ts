@@ -1,0 +1,198 @@
+import type {
+  ExecutableScaleDefinition,
+  ScaleOption,
+  ScaleQuestion,
+  ScaleScoreResult,
+} from "../core/types";
+
+const createCBCLOptions = (): ScaleOption[] => [
+  {
+    label: "无",
+    score: 0,
+    aliases: ["没有", "从不", "完全没有"],
+    description: "无这些表现",
+  },
+  {
+    label: "有时有",
+    score: 1,
+    aliases: ["偶尔", "轻度", "有一点", "有时"],
+    description: "有时有或情况有些",
+  },
+  {
+    label: "经常有",
+    score: 2,
+    aliases: ["经常", "明显", "总是", "很严重"],
+    description: "明显有或经常有",
+  },
+];
+
+export const CBCL_Scale: ExecutableScaleDefinition = {
+  id: "CBCL_113",
+  version: "1.0",
+  title: {
+    zh: "儿童行为量表 (CBCL)",
+    en: "Child Behavior Checklist (CBCL)",
+  },
+  description: {
+    zh: "Achenbach 儿童行为量表（家长用），适用于 4—16 岁儿童。用于评估儿童在过去半年内的社会能力和行为情绪问题。本模块仅包含量表核心的行为问题筛查部分。",
+  },
+  category: "Mental Health",
+  source: "builtin",
+  tags: ["儿童行为", "情绪障碍", "CBCL", "心理健康筛查"],
+  estimatedMinutes: 15,
+  interactionMode: "manual_only",
+  supportedLanguages: ["zh"],
+  requiresConfirmation: false,
+  questions: [
+    { id: 1, text: "1. 行为幼稚与其年龄不符", clinical_intent: "评估发育退行或幼稚化行为", colloquial: "孩子的行为是不是显得比同龄的小孩幼稚？", fallback_examples: ["比如做一些小宝宝才做的事情？"], options: createCBCLOptions() },
+    { id: 2, text: "2. 过敏性症状", clinical_intent: "评估是否存在过敏等躯体化倾向", colloquial: "孩子平时有过敏的症状吗？", fallback_examples: ["比如皮肤经常过敏或者起疹子？"], options: createCBCLOptions() },
+    { id: 3, text: "3. 喜欢争论", clinical_intent: "评估对立违抗倾向", colloquial: "孩子平时是不是很喜欢和别人争论、顶嘴？", fallback_examples: ["别人说什么他都要反驳几句吗？"], options: createCBCLOptions() },
+    { id: 4, text: "4. 哮喘病", clinical_intent: "评估心身疾病表现", colloquial: "孩子有哮喘病或者类似发作的情况吗？", fallback_examples: ["有没有经常喘不上气？"], options: createCBCLOptions() },
+    { id: 5, text: "5. 举动像异性", clinical_intent: "评估性别认同或特殊行为模式", colloquial: "孩子的举动有时候是不是很像异性？", fallback_examples: ["比如男孩子表现得很像女孩子，或者女孩子特别像男孩子？"], options: createCBCLOptions() },
+    { id: 6, text: "6. 随地大便", clinical_intent: "评估排泄控制问题", colloquial: "孩子有没有随地大便的情况？", fallback_examples: ["不在厕所而在其他不合适的地方大便？"], options: createCBCLOptions() },
+    { id: 7, text: "7. 喜欢吹牛或自夸", clinical_intent: "评估夸大或寻求关注的言语", colloquial: "孩子是不是经常喜欢吹牛或者自己夸自己？", fallback_examples: ["经常说一些夸张的话来显摆自己？"], options: createCBCLOptions() },
+    { id: 8, text: "8. 精神不能集中，注意力不能持久", clinical_intent: "评估注意力缺陷", colloquial: "孩子是不是很难集中精神，注意力没法保持很久？", fallback_examples: ["做事情经常走神，或者三分钟热度？"], options: createCBCLOptions() },
+    { id: 9, text: "9. 老是想某些事情，不能摆脱，强迫观念", clinical_intent: "评估强迫思维", colloquial: "孩子会不会老是纠结某件事情，脑子里摆脱不掉？", fallback_examples: ["比如强迫自己一直想某个没用的念头？"], options: createCBCLOptions() },
+    { id: 10, text: "10. 坐立不安，活动过多", clinical_intent: "评估多动表现", colloquial: "孩子平时是不是总是坐立不安，活动特别多？", fallback_examples: ["像个小马达一样停不下来，静坐不住？"], options: createCBCLOptions() },
+    { id: 11, text: "11. 喜欢缠着大人或过分依赖", clinical_intent: "评估过度依恋或分离焦虑", colloquial: "孩子是不是特别粘人，过分依赖大人？", fallback_examples: ["总是喜欢缠着你，自己一点都不独立？"], options: createCBCLOptions() },
+    { id: 12, text: "12. 常说感到寂寞", clinical_intent: "评估孤独感", colloquial: "孩子有没有经常说自己觉得很寂寞、孤单？", fallback_examples: ["经常抱怨没有人陪他玩？"], options: createCBCLOptions() },
+    { id: 13, text: "13. 胡里胡涂，如在云里雾中", clinical_intent: "评估意识清晰度或分裂样走神", colloquial: "孩子有时候是不是表现得糊里糊涂，像在云里雾里一样？", fallback_examples: ["经常发呆，不知道他在想什么，整个人懵懵的？"], options: createCBCLOptions() },
+    { id: 14, text: "14. 常常哭叫", clinical_intent: "评估情绪控制与易激惹", colloquial: "孩子是不是动不动就哭闹、大叫？", fallback_examples: ["遇到一点小事就用哭叫来表达？"], options: createCBCLOptions() },
+    { id: 15, text: "15. 虐待动物", clinical_intent: "评估残忍或品行障碍", colloquial: "孩子有过虐待小动物的行为吗？", fallback_examples: ["比如故意伤害猫狗或者虫子？"], options: createCBCLOptions() },
+    { id: 16, text: "16. 虐待、欺侮别人或吝啬", clinical_intent: "评估攻击性及社交不良", colloquial: "孩子会不会去欺负别人，或者对待别人非常自私吝啬？", fallback_examples: ["有没有故意找别人的麻烦或者欺压别的小朋友？"], options: createCBCLOptions() },
+    { id: 17, text: "17. 好做白日梦或呆想", clinical_intent: "评估内向退缩与分裂样表现", colloquial: "孩子经常做白日梦或者一个人呆呆地想心事吗？", fallback_examples: ["经常沉浸在自己的幻想里，对周围没反应？"], options: createCBCLOptions() },
+    { id: 18, text: "18. 故意伤害自己或企图自杀", clinical_intent: "评估自伤与重度抑郁风险", colloquial: "孩子有没有故意伤害过自己，或者表达过不想活了的想法？", fallback_examples: ["比如自己打自己，或者用东西划伤自己？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 19, text: "19. 需要别人经常注意自己", clinical_intent: "评估寻求关注行为", colloquial: "孩子是不是总是需要大人或者别人一直关注他？", fallback_examples: ["总是要搞点小动作来吸引大家的眼光？"], options: createCBCLOptions() },
+    { id: 20, text: "20. 破坏自己的东西", clinical_intent: "评估情绪发泄与冲动控制", colloquial: "孩子发脾气或者平时会搞坏他自己的东西吗？", fallback_examples: ["比如故意撕烂自己的书或者砸坏自己的玩具？"], options: createCBCLOptions() },
+    { id: 21, text: "21. 破坏家里或其他儿童的东西", clinical_intent: "评估破坏性与外化品行问题", colloquial: "孩子会不会去搞坏家里的物品或者其他小朋友的东西？", fallback_examples: ["比如故意摔坏家里的碗，或者弄坏别人的玩具？"], options: createCBCLOptions() },
+    { id: 22, text: "22. 在家不听话", clinical_intent: "评估对立违抗行为", colloquial: "孩子在家里是不是很不听话？", fallback_examples: ["家长说的话当耳旁风，让他做什么偏不做？"], options: createCBCLOptions() },
+    { id: 23, text: "23. 在学校不听话", clinical_intent: "评估学校适应与纪律性", colloquial: "老师有没有反映孩子在学校里不听话、不守纪律？", fallback_examples: ["上课不遵守规矩，或者不听老师的指令？"], options: createCBCLOptions() },
+    { id: 24, text: "24. 不肯好好吃饭", clinical_intent: "评估进食问题", colloquial: "孩子吃饭是不是很不乖，总是不肯好好吃？", fallback_examples: ["严重挑食，或者吃饭要大人追着喂很久？"], options: createCBCLOptions() },
+    { id: 25, text: "25. 不与其他儿童相处", clinical_intent: "评估社交退缩", colloquial: "孩子是不是不愿意和其他小朋友在一起玩？", fallback_examples: ["总是自己一个人孤零零的，不合群？"], options: createCBCLOptions() },
+    { id: 26, text: "26. 有不良行为后不感到内疚", clinical_intent: "评估缺乏内疚感或冷酷无情特质", colloquial: "孩子做错事或者做了不好的行为之后，会不会觉得内疚或者后悔？", fallback_examples: ["哪怕闯祸了也一副无所谓的样子，不觉得抱歉？"], options: createCBCLOptions() },
+    { id: 27, text: "27. 易嫉妒", clinical_intent: "评估情绪稳定性与社交嫉妒", colloquial: "孩子是不是很容易嫉妒别人？", fallback_examples: ["看到别人有好东西或者被表扬了，他就会很不高兴？"], options: createCBCLOptions() },
+    { id: 28, text: "28. 好吃不能作为食物的东西", clinical_intent: "评估异食癖", colloquial: "孩子会不会把不能吃的东西塞进嘴里当食物吃？", fallback_examples: ["比如吃土、吃纸张、吃头发这些？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 29, text: "29. 除怕上学外，还害怕某些动物、处境或地方", clinical_intent: "评估特定恐惧症倾向", colloquial: "孩子有没有特别害怕某些特定的动物或者环境？", fallback_examples: ["比如极度害怕狗、黑屋子或者某个特定的地方？"], options: createCBCLOptions() },
+    { id: 30, text: "30. 怕上学", clinical_intent: "评估学校恐惧症或分离焦虑", colloquial: "孩子是不是特别害怕去学校？", fallback_examples: ["一提到去学校就找各种理由或者哭闹？"], options: createCBCLOptions() },
+    { id: 31, text: "31. 怕自己想坏念头或做坏事", clinical_intent: "评估强迫恐惧或过度道德焦虑", colloquial: "孩子会不会很害怕自己脑子里冒出坏念头，或者担心自己会做坏事？", fallback_examples: ["过分担忧自己是个坏孩子？"], options: createCBCLOptions() },
+    { id: 32, text: "32. 觉得自己必须十全十美", clinical_intent: "评估完美主义倾向", colloquial: "孩子是不是要求自己凡事都必须十全十美，一点错都不能出？", fallback_examples: ["写错一个字就要把整张纸撕掉重写？"], options: createCBCLOptions() },
+    { id: 33, text: "33. 觉得或抱怨没有人喜欢自己", clinical_intent: "评估抑郁感及人际敏感", colloquial: "孩子有没有常说觉得没人在乎他，或者没朋友喜欢他？", fallback_examples: ["经常抱怨别人都讨厌他？"], options: createCBCLOptions() },
+    { id: 34, text: "34. 觉得别人存心捉弄自己", clinical_intent: "评估被害妄想倾向或极度敏感", colloquial: "孩子是不是总觉得别人在针对他，或者故意捉弄他？", fallback_examples: ["同学不小心碰到他，他也觉得是别人故意的？"], options: createCBCLOptions() },
+    { id: 35, text: "35. 觉得自己无用或有自卑感", clinical_intent: "评估自我价值感低", colloquial: "孩子会不会常说觉得自己很没用，表现得很自卑？", fallback_examples: ["觉得自己什么都做不好，比不上别人？"], options: createCBCLOptions() },
+    { id: 36, text: "36. 身体经常弄伤，容易出事故", clinical_intent: "评估多动、冲动或躯体协调性", colloquial: "孩子是不是很容易磕磕碰碰，经常让自己受伤？", fallback_examples: ["手脚毛躁，三天两头摔跤或者弄出小伤口？"], options: createCBCLOptions() },
+    { id: 37, text: "37. 经常打架", clinical_intent: "评估躯体攻击性", colloquial: "孩子平时在外面或者学校里经常打架吗？", fallback_examples: ["一言不合就动手打人？"], options: createCBCLOptions() },
+    { id: 38, text: "38. 常被人戏弄", clinical_intent: "评估被欺凌状态或社交弱势", colloquial: "孩子是不是经常被别的小朋友捉弄或者欺负？", fallback_examples: ["在同伴里经常是被开玩笑或者欺负的对象？"], options: createCBCLOptions() },
+    { id: 39, text: "39. 爱和出麻烦的儿童在一起", clinical_intent: "评估违纪品行或同伴影响", colloquial: "孩子是不是喜欢和那些调皮捣蛋、爱惹麻烦的小孩混在一起？", fallback_examples: ["常常和老师眼里的‘问题学生’玩得很好？"], options: createCBCLOptions() },
+    { id: 40, text: "40. 听到某些实际上没有的声音", clinical_intent: "评估幻听症状", colloquial: "孩子有没有说过，他能听到一些别人听不见的声音？", fallback_examples: ["比如房间里明明没人，他却说有人在跟他讲话？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 41, text: "41. 冲动或行为粗鲁", clinical_intent: "评估冲动控制及礼貌性", colloquial: "孩子做事是不是很冲动，或者言行举止比较粗鲁？", fallback_examples: ["做事不计后果，或者动作很粗暴？"], options: createCBCLOptions() },
+    { id: 42, text: "42. 喜欢孤独", clinical_intent: "评估社交退缩及分裂样表现", colloquial: "孩子是不是特别喜欢一个人呆着？", fallback_examples: ["比起和大家玩，他更宁愿自己独处？"], options: createCBCLOptions() },
+    { id: 43, text: "43. 撒谎或欺骗", clinical_intent: "评估品行违纪", colloquial: "孩子平时撒谎或者骗人多吗？", fallback_examples: ["为了逃避惩罚或者达到目的而编造谎话？"], options: createCBCLOptions() },
+    { id: 44, text: "44. 咬指甲", clinical_intent: "评估焦虑性神经小动作", colloquial: "孩子有咬指甲的习惯吗？", fallback_examples: ["手指甲经常被自己咬得光秃秃的？"], options: createCBCLOptions() },
+    { id: 45, text: "45. 神经过敏，容易激动或紧张", clinical_intent: "评估焦虑易感性", colloquial: "孩子是不是神经特别敏感，很容易紧张或者激动？", fallback_examples: ["遇到一点点事情就大惊小怪，情绪起伏很大？"], options: createCBCLOptions() },
+    { id: 46, text: "46. 动作紧张或带有抽动性", clinical_intent: "评估抽动症倾向", colloquial: "孩子有没有一些紧张性的小动作，或者不自觉的抽搐？", fallback_examples: ["比如经常不自觉地眨眼、耸肩或者面部抽动？"], options: createCBCLOptions() },
+    { id: 47, text: "47. 做恶梦", clinical_intent: "评估睡眠障碍或夜间焦虑", colloquial: "孩子晚上经常做恶梦吗？", fallback_examples: ["半夜从梦里惊醒，或者常常诉说做了可怕的梦？"], options: createCBCLOptions() },
+    { id: 48, text: "48. 不被其他儿童喜欢", clinical_intent: "评估同伴接纳度低", colloquial: "其他小朋友是不是都不太喜欢和你的孩子玩？", fallback_examples: ["他在同龄人圈子里总是不受欢迎？"], options: createCBCLOptions() },
+    { id: 49, text: "49. 便秘", clinical_intent: "评估躯体化肠胃功能", colloquial: "孩子经常有便秘的问题吗？", fallback_examples: ["好几天才拉一次肚子，排便很困难？"], options: createCBCLOptions() },
+    { id: 50, text: "50. 过度恐惧或担心", clinical_intent: "评估广泛性焦虑", colloquial: "孩子是不是总是担惊受怕的，对很多事情都有过度的恐惧？", fallback_examples: ["遇到一点没把握的事情就开始胡思乱想、担心害怕？"], options: createCBCLOptions() },
+    { id: 51, text: "51. 感到头昏", clinical_intent: "评估不明原因躯体化症状", colloquial: "孩子经常抱怨自己头晕、头昏吗？", fallback_examples: ["去医院也查不出毛病，但他就是经常说头晕？"], options: createCBCLOptions() },
+    { id: 52, text: "52. 过份内疚", clinical_intent: "评估抑郁情绪中的病态自责", colloquial: "孩子是不是遇到事情很容易觉得是自己的错，过分自责内疚？", fallback_examples: ["哪怕不是他造成的，他也觉得对不起大家？"], options: createCBCLOptions() },
+    { id: 53, text: "53. 吃得过多", clinical_intent: "评估暴食倾向", colloquial: "孩子吃饭是不是总是吃得过多，毫无节制？", fallback_examples: ["不管肚子饿不饿都要往嘴里塞食物？"], options: createCBCLOptions() },
+    { id: 54, text: "54. 过份疲劳", clinical_intent: "评估躯体活力降低或抑郁症状", colloquial: "孩子是不是总觉得特别累，精神很差？", fallback_examples: ["没做什么体力活也总是喊累，提不起精神？"], options: createCBCLOptions() },
+    { id: 55, text: "55. 身体过重", clinical_intent: "评估体重超标", colloquial: "孩子的体重是不是明显偏胖超重？", fallback_examples: ["比同龄的小孩胖出很多？"], options: createCBCLOptions() },
+    { id: 561, text: "56a. 找不到原因的躯体症状：疼痛", clinical_intent: "评估躯体化疼痛", colloquial: "孩子有没有经常说身体哪里疼，但医院又查不出原因？", fallback_examples: ["经常抱怨浑身疼或者某个地方疼？"], options: createCBCLOptions() },
+    { id: 562, text: "56b. 找不到原因的躯体症状：头痛", clinical_intent: "评估躯体化头痛", colloquial: "孩子经常抱怨自己头痛吗（并且查不出具体病因）？", fallback_examples: ["动不动就说自己头疼？"], options: createCBCLOptions() },
+    { id: 563, text: "56c. 找不到原因的躯体症状：恶心想吐", clinical_intent: "评估躯体化恶心", colloquial: "孩子是不是经常说自己恶心、想吐，但实际上肠胃并没有明确生病？", fallback_examples: ["遇到不想面对的事情就反胃想吐？"], options: createCBCLOptions() },
+    { id: 564, text: "56d. 找不到原因的躯体症状：眼睛有问题", clinical_intent: "评估躯体化眼部不适", colloquial: "除了近视和眼病外，孩子有没有经常觉得眼睛不舒服？", fallback_examples: ["常常说眼睛看不清或者难受，但医生说没病？"], options: createCBCLOptions() },
+    { id: 565, text: "56e. 找不到原因的躯体症状：发疹或其他皮肤病", clinical_intent: "评估心身性皮肤反应", colloquial: "孩子是不是常常莫名其妙地起疹子或者皮肤不舒服？", fallback_examples: ["紧张或者有压力的时候皮肤就出现问题？"], options: createCBCLOptions() },
+    { id: 566, text: "56f. 找不到原因的躯体症状：腹部疼痛或绞痛", clinical_intent: "评估肠胃躯体化", colloquial: "孩子经常喊肚子痛或者肚子绞痛吗（不是明确肠胃炎那种）？", fallback_examples: ["去上学或者遇到考试前就总是说肚子痛？"], options: createCBCLOptions() },
+    { id: 567, text: "56g. 找不到原因的躯体症状：呕吐", clinical_intent: "评估躯体化呕吐", colloquial: "孩子有没有找不到生理原因的呕吐情况？", fallback_examples: ["有时候会莫名其妙地吐出来？"], options: createCBCLOptions() },
+    { id: 568, text: "56h. 找不到原因的躯体症状：其他", clinical_intent: "评估其他心身症状", colloquial: "孩子还有没有其他查不出原因的身体不舒服？", fallback_examples: ["比如发热、手麻等但体检一切正常的表现？"], options: createCBCLOptions() },
+    { id: 57, text: "57. 对别人身体进行攻击", clinical_intent: "评估直接的躯体攻击行为", colloquial: "孩子会对别人有直接的身体攻击吗？", fallback_examples: ["比如用脚踢人、用手打人或者咬人？"], options: createCBCLOptions() },
+    { id: 58, text: "58. 挖鼻孔、皮肤或身体其他部分", clinical_intent: "评估强迫性习惯", colloquial: "孩子有经常挖鼻孔，或者抠破自己皮肤的坏习惯吗？", fallback_examples: ["总是不自觉地抠身上的疤痕或者死皮？"], options: createCBCLOptions() },
+    { id: 59, text: "59. 公开玩弄自己的生殖器", clinical_intent: "评估性心理发育或自控", colloquial: "孩子有没有在大庭广众之下摸或者玩弄自己的生殖器？", fallback_examples: ["不分场合地去摸私处？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 60, text: "60. 过多地玩弄自己的生殖器", clinical_intent: "评估频繁的性探索小动作", colloquial: "孩子私底下玩弄自己生殖器的次数是不是过多？", fallback_examples: ["经常被发现躲起来摸私处？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 61, text: "61. 功课差", clinical_intent: "评估学业不良问题", colloquial: "孩子在学校里的学习成绩是不是比较差？", fallback_examples: ["考试经常不及格，或者跟不上学习进度？"], options: createCBCLOptions() },
+    { id: 62, text: "62. 动作不灵活", clinical_intent: "评估精细或粗大运动协调不良", colloquial: "孩子平时表现得笨手笨脚，动作不太灵活吗？", fallback_examples: ["跑步容易摔跤，或者拿东西总拿不稳？"], options: createCBCLOptions() },
+    { id: 63, text: "63. 喜欢和年龄较大的儿童在一起", clinical_intent: "评估社交圈层异质性", colloquial: "孩子是不是更喜欢和比他大很多的小朋友玩？", fallback_examples: ["不爱和同龄人玩，专找大哥哥大姐姐？"], options: createCBCLOptions() },
+    { id: 64, text: "64. 喜欢和年龄较小的儿童在一起", clinical_intent: "评估社交退缩或寻求安全感", colloquial: "孩子是不是总是喜欢和比他小很多的小朋友一起玩？", fallback_examples: ["和同龄人玩不到一块，反而总去带小弟弟小妹妹？"], options: createCBCLOptions() },
+    { id: 65, text: "65. 不肯说话", clinical_intent: "评估缄默症或极度社交退缩", colloquial: "孩子平时在家里或者外面是不是非常不爱开口说话？", fallback_examples: ["别人问他话，他也憋着不说？"], options: createCBCLOptions() },
+    { id: 66, text: "66. 不断重复某些动作，强迫行为", clinical_intent: "评估强迫动作", colloquial: "孩子有没有不断重复的、像强迫症一样的动作？", fallback_examples: ["比如反复洗手，或者出门必须走特定路线不能改？"], options: createCBCLOptions() },
+    { id: 67, text: "67. 离家出走", clinical_intent: "评估严重违纪及逃避", colloquial: "孩子有过离家出走的行为吗？", fallback_examples: ["因为赌气或者害怕惩罚而偷偷跑出家门不回来？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 68, text: "68. 经常尖叫", clinical_intent: "评估情绪失控", colloquial: "孩子是不是经常不受控制地尖叫？", fallback_examples: ["遇到一点刺激或者不顺心就发出刺耳叫声？"], options: createCBCLOptions() },
+    { id: 69, text: "69. 守口如瓶，有事不说出来", clinical_intent: "评估压抑与沟通障碍", colloquial: "孩子是不是遇到什么事都憋在心里，问他也不肯说？", fallback_examples: ["在外面受了委屈或者惹了祸，也不跟父母讲？"], options: createCBCLOptions() },
+    { id: 70, text: "70. 看到某些实际上没有的东西", clinical_intent: "评估幻视症状", colloquial: "孩子有没有说过自己看到了别人看不到的东西？", fallback_examples: ["比如指着空地方说那里有个人或者奇怪东西？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 71, text: "71. 感到不自然或容易发窘", clinical_intent: "评估社交尴尬与极度害羞", colloquial: "孩子在别人面前是不是很不自然，特别容易觉得尴尬或者害羞？", fallback_examples: ["遇到生人打招呼就会脸红、手足无措？"], options: createCBCLOptions() },
+    { id: 72, text: "72. 玩火", clinical_intent: "评估违纪品行", colloquial: "孩子有过玩火柴或者打火机的危险行为吗？", fallback_examples: ["偷偷在家里或者外面点火玩？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 73, text: "73. 性方面的问题", clinical_intent: "评估异常性偏好或性问题", colloquial: "孩子有没有表现出性方面的奇怪行为或问题？", fallback_examples: ["过早对性知识表现出不正常痴迷，或者有越界举动？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 74, text: "74. 夸耀自己或胡闹", clinical_intent: "评估多动、冲动或哗众取宠", colloquial: "孩子是不是喜欢瞎吹嘘自己，或者瞎胡闹来引起注意？", fallback_examples: ["人一多就喜欢搞些夸张动作胡闹？"], options: createCBCLOptions() },
+    { id: 75, text: "75. 害羞或胆小", clinical_intent: "评估退缩与胆怯", colloquial: "孩子性格是不是特别害羞、胆子特别小？", fallback_examples: ["去陌生环境或者见陌生人都会躲在你身后？"], options: createCBCLOptions() },
+    { id: 76, text: "76. 比大多数孩子睡得少", clinical_intent: "评估睡眠需要减少或失眠", colloquial: "孩子的睡眠时间是不是比同龄孩子要少很多？", fallback_examples: ["晚上很晚睡，早上很早起，精神还很亢奋？"], options: createCBCLOptions() },
+    { id: 77, text: "77. 比大多数孩子睡得多", clinical_intent: "评估嗜睡与精神萎靡", colloquial: "除去偶尔赖床，孩子平时是不是比其他同龄孩子睡得多很多？", fallback_examples: ["白天也总是睡不醒的感觉？"], options: createCBCLOptions() },
+    { id: 78, text: "78. 玩弄粪便", clinical_intent: "评估严重异常发育或严重心理障碍", colloquial: "孩子有没有玩弄自己或他人粪便的行为？", fallback_examples: ["把大便弄在手上或者墙上玩？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 79, text: "79. 言语问题", clinical_intent: "评估构音障碍、口吃或失语", colloquial: "孩子在说话交流方面有问题吗，比如口吃或者吐字不清？", fallback_examples: ["说话经常结巴，或者发音让别人听不懂？"], options: createCBCLOptions() },
+    { id: 80, text: "80. 茫然凝视", clinical_intent: "评估意识丧失、癫痫发作或极度分裂样发呆", colloquial: "孩子会不会经常两眼发直，茫然地盯着一个地方发呆？", fallback_examples: ["叫他也没反应，就那样呆呆地看着前方？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 81, text: "81. 在家偷东西", clinical_intent: "评估品行障碍（家庭场景）", colloquial: "孩子在家里有过偷钱或者偷拿东西的行为吗？", fallback_examples: ["偷偷从父母口袋里拿钱买零食？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 82, text: "82. 在外偷东西", clinical_intent: "评估品行障碍（社会场景）", colloquial: "孩子在外面比如超市或者学校偷过东西吗？", fallback_examples: ["把不属于自己的文具或者商品悄悄拿走？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 83, text: "83. 收藏自己不需要的东西", clinical_intent: "评估囤积症倾向", colloquial: "除了正常爱好，孩子会不会喜欢捡一些没用的东西藏起来？", fallback_examples: ["把废纸团、破盒子都当成宝贝一样堆着？"], options: createCBCLOptions() },
+    { id: 84, text: "84. 怪异行为", clinical_intent: "评估反常的动作表达", colloquial: "孩子有没有一些让人觉得非常怪异的行为？", fallback_examples: ["做一些正常孩子一般不会做的古怪举动？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 85, text: "85. 怪异想法", clinical_intent: "评估分裂样奇思怪想或妄想", colloquial: "孩子会不会说出一些非常离奇、不符合常理的怪异想法？", fallback_examples: ["比如坚持认为外星人每天晚上都在跟他说话？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 86, text: "86. 固执、绷着脸或容易激怒", clinical_intent: "评估脾气与情绪管理", colloquial: "孩子是不是特别倔强，经常板着脸，或者很容易被激怒发火？", fallback_examples: ["脾气很臭，一点就着，怎么说都不听？"], options: createCBCLOptions() },
+    { id: 87, text: "87. 情绪突然变化", clinical_intent: "评估情绪不稳", colloquial: "孩子的情绪是不是变化特别快？", fallback_examples: ["上一秒还在笑，下一秒突然就大哭大闹？"], options: createCBCLOptions() },
+    { id: 88, text: "88. 常常生气", clinical_intent: "评估易激惹性", colloquial: "孩子平时是不是经常处于生气的状态？", fallback_examples: ["看什么都不顺眼，动不动就气鼓鼓的？"], options: createCBCLOptions() },
+    { id: 89, text: "89. 多疑", clinical_intent: "评估偏执与不信任感", colloquial: "孩子是不是对什么事都很多疑，总是不太相信别人？", fallback_examples: ["总怀疑别人在背后说他坏话或者要害他？"], options: createCBCLOptions() },
+    { id: 90, text: "90. 咒骂或讲粗话", clinical_intent: "评估言语攻击与不良习惯", colloquial: "孩子平时常常骂人或者讲脏话吗？", fallback_examples: ["一开口就带有不文明的粗口？"], options: createCBCLOptions() },
+    { id: 91, text: "91. 声言要自杀", clinical_intent: "评估自杀意念与求助呼喊", colloquial: "孩子有没有挂在嘴边说过要自杀，或者说不想活了？", fallback_examples: ["遇到挫折就说‘我还不如死了算了’？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 92, text: "92. 说梦话或有梦游", clinical_intent: "评估睡眠障碍特征", colloquial: "孩子晚上睡觉经常说梦话，或者有过梦游的经历吗？", fallback_examples: ["睡着了还会叽里咕噜说话，或者半夜自己爬起来走动？"], options: createCBCLOptions() },
+    { id: 93, text: "93. 话太多", clinical_intent: "评估多动或轻躁狂特征", colloquial: "孩子平时是不是话特别多，叽叽喳喳讲个不停？", fallback_examples: ["一旦打开话匣子就停不下来，别人插不上嘴？"], options: createCBCLOptions() },
+    { id: 94, text: "94. 常戏弄他人", clinical_intent: "评估主动挑衅与人际边界感", colloquial: "孩子是不是很喜欢去戏弄、捉弄别人？", fallback_examples: ["总是开一些让别人很不舒服的玩笑？"], options: createCBCLOptions() },
+    { id: 95, text: "95. 乱发脾气或脾气暴躁", clinical_intent: "评估情绪爆发与暴躁", colloquial: "孩子是不是脾气很暴躁，经常乱发火？", fallback_examples: ["遇到一点不合心意的事情就大发雷霆？"], options: createCBCLOptions() },
+    { id: 96, text: "96. 对性的问题想得太多", clinical_intent: "评估性心理过早关注", colloquial: "孩子是不是对性方面的问题过度关注、想得很多？", fallback_examples: ["经常询问或者沉迷和性有关的话题？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 97, text: "97. 威胁他人", clinical_intent: "评估攻击性品行", colloquial: "孩子有没有经常出言威胁或者恐吓别人？", fallback_examples: ["比如对同伴说‘你再这样我就揍你’？"], options: createCBCLOptions() },
+    { id: 98, text: "98. 吮吸大拇指", clinical_intent: "评估发育期滞留或焦虑缓解动作", colloquial: "孩子平时有吸吮大拇指的习惯吗？", fallback_examples: ["无聊或者紧张的时候就把大拇指塞进嘴里吸？"], options: createCBCLOptions() },
+    { id: 99, text: "99. 过分要求整齐清洁", clinical_intent: "评估强迫清洁倾向", colloquial: "孩子是不是对干净、整洁要求到了过分的程度？", fallback_examples: ["东西稍微没摆正或者有一点灰尘就受不了？"], options: createCBCLOptions() },
+    { id: 100, text: "100. 睡眠不好", clinical_intent: "评估失眠或睡眠质量", colloquial: "孩子平时的睡眠质量差吗？", fallback_examples: ["经常翻来覆去睡不着，或者半夜容易醒来？"], options: createCBCLOptions() },
+    { id: 101, text: "101. 逃学", clinical_intent: "评估严重违纪", colloquial: "孩子有过逃学旷课的情况吗？", fallback_examples: ["该去上学的时候偷偷跑去别的地方玩？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 102, text: "102. 不够活跃，动作迟钝或精力不足", clinical_intent: "评估精神运动性迟缓或抑郁表现", colloquial: "孩子平时是不是不太活跃，动作慢吞吞的，没什么精力？", fallback_examples: ["干什么都提不起劲，整个人慢半拍？"], options: createCBCLOptions() },
+    { id: 103, text: "103. 闷闷不乐，悲伤或抑郁", clinical_intent: "评估抑郁情绪", colloquial: "孩子是不是经常看起来闷闷不乐，甚至比较悲伤抑郁？", fallback_examples: ["脸上没什么笑容，经常愁眉苦脸？"], options: createCBCLOptions() },
+    { id: 104, text: "104. 说话声音特别大", clinical_intent: "评估情绪高涨或多动特征", colloquial: "孩子平时说话的声音是不是大得有点不正常？", fallback_examples: ["在家里或者公共场合总是扯着嗓门大喊？"], options: createCBCLOptions() },
+    { id: 105, text: "105. 喝酒或使用成瘾药", clinical_intent: "评估物质滥用", colloquial: "孩子有过偷偷喝酒，或者使用其他成瘾药物的情况吗？", fallback_examples: ["被发现偷喝大人的酒，或者抽烟用违禁药物？"], options: createCBCLOptions(), riskLevel: "high" },
+    { id: 106, text: "106. 损坏公物", clinical_intent: "评估破坏品行", colloquial: "孩子有过故意损坏学校、小区等公共物品的行为吗？", fallback_examples: ["比如故意划破公共座椅，或者砸坏公共设施？"], options: createCBCLOptions() },
+    { id: 107, text: "107. 白天遗尿", clinical_intent: "评估白天控制力异常", colloquial: "孩子除了晚上外，白天清醒的时候也会尿裤子吗？", fallback_examples: ["玩得太入神或者无缘无故就尿在裤子里？"], options: createCBCLOptions() },
+    { id: 108, text: "108. 夜间遗尿", clinical_intent: "评估夜间遗尿症", colloquial: "孩子晚上睡觉的时候经常尿床吗？", fallback_examples: ["已经过了正常尿床的年纪还总是尿在床上？"], options: createCBCLOptions() },
+    { id: 109, text: "109. 爱哭诉", clinical_intent: "评估受委屈心态或求关注", colloquial: "孩子是不是特别爱向大人哭诉委屈？", fallback_examples: ["一点点小事就挂着眼泪来跟你告状？"], options: createCBCLOptions() },
+    { id: 110, text: "110. 希望成为异性", clinical_intent: "评估性别认同障碍风险", colloquial: "孩子有没有说过，他或她非常希望自己能变成另一种性别？", fallback_examples: ["比如男孩子非常希望自己是女孩，或者反过来？"], options: createCBCLOptions(), riskLevel: "sensitive" },
+    { id: 111, text: "111. 孤独、不合群", clinical_intent: "评估社交孤立状态", colloquial: "孩子是不是显得非常孤独，很难融入集体？", fallback_examples: ["别的小朋友都在一起玩，他总是被孤立在外面？"], options: createCBCLOptions() },
+    { id: 112, text: "112. 忧虑重重", clinical_intent: "评估焦虑与担忧基调", colloquial: "孩子是不是平时心思很重，对很多事情都忧心忡忡？", fallback_examples: ["像个小大人一样，经常发愁未来的事情？"], options: createCBCLOptions() },
+  ],
+  calculateScore: (answers: number[]): ScaleScoreResult => {
+    const safeAnswers =
+      answers.length === 119
+        ? answers
+        : [...answers.slice(0, 119), ...Array(Math.max(0, 119 - answers.length)).fill(0)];
+
+    const totalScore = safeAnswers.reduce((sum, val) => sum + val, 0);
+
+    let riskLevel: "normal" | "sensitive" | "high" = "normal";
+    let conclusion = "行为情绪在正常范围内";
+
+    if (totalScore > 40) {
+      riskLevel = "high";
+      conclusion = "总粗分高于常模上限（存在较高行为/情绪风险）";
+    } else if (totalScore >= 30) {
+      riskLevel = "sensitive";
+      conclusion = "总粗分处于边缘水平（建议关注）";
+    }
+
+    return {
+      totalScore,
+      conclusion,
+      details: {
+        riskLevel,
+        description:
+          `该总分为 119 项核心行为问题的累加粗分。CBCL 具有较复杂的常模解释体系。准确的临床结论需结合被测儿童的年龄组（4-5 岁、6-11 岁、12-16 岁）及性别，进一步换算为分量表或 T 分进行解释。\n\n当前总粗分为 ${totalScore} 分。一般而言，总分超过 40 分提示需要进一步做专业医学或心理评估。`,
+        TODO_PDF_CHECK:
+          "原 PDF 还包含一般人口学资料、社会能力以及按年龄/性别细分的因子映射表。本实现仅纳入核心行为问题筛查，并对第 56 题的 a-h 子项进行了展平。",
+      },
+    };
+  },
+};

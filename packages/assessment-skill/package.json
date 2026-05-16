@@ -1,0 +1,22 @@
+{
+  "name": "@ailiangbiao/assessment-skill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Assessment skill core contracts, auth, and server adapters for the AIliangbiao platform.",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p ./tsconfig.build.json",
+    "start": "node ./dist/standalone.js"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./routes": "./src/routes.ts",
+    "./server": "./src/server/index.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./service": "./src/service/index.ts"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  }
+}

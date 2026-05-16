@@ -69,9 +69,12 @@ prisma/*.db-journal
 
 # Codebuddy
 .codebuddy/
+.claude/
 
 # Temporary files
 tmp/
+tmp_*
+tmp_*/
 temp/
 *.tmp
 *.temp
@@ -79,8 +82,11 @@ temp/
 
 # Backup files
 *.bak
+*.bak_*
+*.bak-garbled
 *.backup
 *.old
+Userslishuaishuai.claudeplans*
 
 # Compiled files
 *.com
@@ -113,9 +119,20 @@ secrets/
 *.sqlite3
 *.sql.gz
 
+# Production migration bundles
+backups/prod/*
+!backups/prod/.gitignore
+
 # Uploads
 uploads/
 public/uploads/
 
 # Scripts generated files
 scripts/output/
+scripts/__pycache__/
+
+# Package build output
+packages/assessment-skill/dist/
+
+# Generated type declarations in source dirs
+lib/**/*.d.ts

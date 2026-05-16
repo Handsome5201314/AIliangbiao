@@ -27,6 +27,11 @@ const PROVIDER_CONFIGS = {
     name: 'OpenAI',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     testKey: null
+  },
+  oneapi: {
+    name: 'OneAPI',
+    endpoint: 'http://104.197.139.51:3000/v1/chat/completions',
+    testKey: null
   }
 };
 

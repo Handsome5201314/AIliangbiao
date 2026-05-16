@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import bcrypt from 'bcryptjs';
 
+import {
+  ADMIN_SESSION_COOKIE_NAME,
+  getAdminSessionCookieOptions,
+  issueAdminSessionToken,
+} from '@/lib/auth/admin-session';
+
 // 简单的token生成（生产环境应使用JWT）
 function generateToken(): string {
   return Buffer.from(Date.now().toString() + Math.random()).toString('base64');
@@ -38,10 +44,14 @@ export async function POST(req: NextRequest) {
       data: { lastLoginAt: new Date() }
     });
 
-    // 生成token
     const token = generateToken();
+    const adminSession = issueAdminSessionToken({
+      adminId: admin.id,
+      username: admin.username,
+      role: admin.role,
+    });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       token,
       user: {
@@ -51,6 +61,14 @@ export async function POST(req: NextRequest) {
         role: admin.role
       }
     });
+
+    response.cookies.set(
+      ADMIN_SESSION_COOKIE_NAME,
+      adminSession.token,
+      getAdminSessionCookieOptions()
+    );
+
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
@@ -63,6 +81,10 @@ export async function POST(req: NextRequest) {
 // 初始化或更新管理员账户（从 .env 读取配置）
 export async function GET() {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const adminUsername = process.env.ADMIN_USERNAME || 'admin';
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 

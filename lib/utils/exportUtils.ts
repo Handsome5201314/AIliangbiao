@@ -25,11 +25,48 @@ export interface AssessmentExportData {
   advice?: string;
 }
 
+function extractDimensionRows(details?: AssessmentExportData['details']) {
+  const dimensions =
+    typeof details?.dimensions === 'object' && details.dimensions !== null
+      ? (details.dimensions as Record<string, unknown>)
+      : undefined;
+
+  if (!dimensions) {
+    return [];
+  }
+
+  return Object.entries(dimensions)
+    .filter(([key, value]) => key !== 'functional_impact' && typeof value === 'object' && value !== null)
+    .map(([key, value]) => {
+      const entry = value as { label?: unknown; score?: unknown; maxScore?: unknown };
+      const label = typeof entry.label === 'string' ? entry.label : key;
+      const score = typeof entry.score === 'number' ? entry.score : undefined;
+      const maxScore = typeof entry.maxScore === 'number' ? entry.maxScore : undefined;
+
+      if (score === undefined) {
+        return null;
+      }
+
+      return [label, maxScore !== undefined ? `${score} / ${maxScore}` : String(score)] as [string, string];
+    })
+    .filter((row): row is [string, string] => row !== null);
+}
+
 /**
  * 导出为 CSV 格式
  */
 export function exportToCSV(data: AssessmentExportData): void {
   const rows: string[][] = [];
+  const scoreLabel = typeof data.details?.scoreLabel === 'string' ? data.details.scoreLabel : '总分';
+  const scoreDisplay = typeof data.details?.scoreDisplay === 'string'
+    ? data.details.scoreDisplay
+    : data.totalScore.toString();
+  const totalScoreLabel = typeof data.details?.totalScoreLabel === 'string'
+    ? data.details.totalScoreLabel
+    : '总分';
+  const totalScoreHint = typeof data.details?.totalScoreHint === 'string'
+    ? data.details.totalScoreHint
+    : '';
 
   // 标题行
   rows.push(['评估报告']);
@@ -54,10 +91,21 @@ export function exportToCSV(data: AssessmentExportData): void {
 
   // 评估结果
   rows.push(['评估结果']);
-  rows.push(['总分', data.totalScore.toString()]);
+  rows.push([scoreLabel, scoreDisplay]);
+  if (scoreLabel !== '总分') {
+    rows.push([totalScoreLabel, data.totalScore.toString()]);
+  }
   rows.push(['评估结论', data.conclusion]);
   if (data.details?.description) {
     rows.push(['详细说明', data.details.description]);
+  }
+  if (totalScoreHint) {
+    rows.push(['说明', totalScoreHint]);
+  }
+  const dimensionRows = extractDimensionRows(data.details);
+  if (dimensionRows.length) {
+    rows.push(['子领域得分']);
+    dimensionRows.forEach((row) => rows.push(row));
   }
   rows.push([]);
 

@@ -3,6 +3,12 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, MoreVertical, User, Mail, Calendar, Activity } from 'lucide-react';
 
+import PageHeader from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+
 interface UserProfile {
   id: string;
   deviceId: string;
@@ -74,34 +80,30 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">用户与画像管理</h2>
-        <p className="text-sm text-slate-500 mt-1">查看和管理系统用户及其画像信息</p>
-      </div>
+      <PageHeader title="用户与成员管理" description="查看和管理系统用户及其最小成员档案信息" />
 
       {/* 搜索和筛选 */}
-      <div className="bg-white rounded-lg border border-slate-200 p-4">
+      <Card className="p-4">
         <div className="flex gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
+            <Input
               type="text"
               placeholder="搜索用户昵称或设备ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="pl-10"
             />
           </div>
-          <button className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-2">
+          <Button variant="outline">
             <Filter className="w-4 h-4" />
             <span>筛选</span>
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {/* 用户列表 */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -148,13 +150,9 @@ export default function UsersPage() {
                       <code className="text-xs bg-slate-100 px-2 py-1 rounded">{user.deviceId}</code>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.isGuest 
-                          ? 'bg-amber-100 text-amber-800' 
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}>
+                      <Badge variant={user.isGuest ? 'warning' : 'success'}>
                         {user.isGuest ? '游客' : '注册用户'}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -172,9 +170,9 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                      <Button variant="ghost" size="icon">
                         <MoreVertical className="w-4 h-4 text-slate-400" />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -182,13 +180,13 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-50 rounded-lg">
+            <div className="p-3 bg-blue-50 rounded-2xl">
               <User className="w-6 h-6 text-blue-600" />
             </div>
             <div>
@@ -196,10 +194,10 @@ export default function UsersPage() {
               <p className="text-sm text-slate-500">总用户数</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
+        </Card>
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-50 rounded-lg">
+            <div className="p-3 bg-emerald-50 rounded-2xl">
               <Activity className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
@@ -207,10 +205,10 @@ export default function UsersPage() {
               <p className="text-sm text-slate-500">总评估次数</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
+        </Card>
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-50 rounded-lg">
+            <div className="p-3 bg-amber-50 rounded-2xl">
               <Calendar className="w-6 h-6 text-amber-600" />
             </div>
             <div>
@@ -218,7 +216,7 @@ export default function UsersPage() {
               <p className="text-sm text-slate-500">今日新增</p>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );

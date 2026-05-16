@@ -6,8 +6,12 @@
 import { prisma } from '@/lib/db/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+
 export async function POST(request: NextRequest) {
   try {
+    await requireAdminRequest(request);
+
     const body = await request.json();
     const { limit } = body;
 
@@ -47,6 +51,10 @@ export async function POST(request: NextRequest) {
       newLimit: defaultLimit
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     console.error('[Update Quota Error]:', error);
     return NextResponse.json(
       { error: '更新配额失败' },

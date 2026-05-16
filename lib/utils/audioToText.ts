@@ -8,14 +8,16 @@
  * 4. 超时保护
  */
 
+import { resolveAgentApiKeyByService } from '@/lib/agent/model-resolver';
 import { prisma } from '@/lib/db/prisma';
+import { getSystemApiKeyByService } from '@/lib/services/apiKeyService';
 
 // 支持的音频格式
 export type AudioFormat = 'webm' | 'wav' | 'mp3' | 'm4a' | 'ogg';
 
 // 语音识别配置
 export interface TranscriptionConfig {
-  provider: 'siliconflow' | 'openai' | 'custom';
+  provider: 'siliconflow' | 'openai' | 'oneapi' | 'custom';
   model?: string;
   language?: string; // 语言代码：zh-CN, en-US
   apiKey?: string;
@@ -44,12 +46,34 @@ export async function getSpeechApiKey(preferredProvider?: string): Promise<{
   model: string;
 } | null> {
   try {
+    if (!preferredProvider) {
+      const agentPreferred = await resolveAgentApiKeyByService('speech');
+      if (agentPreferred) {
+        return {
+          apiKey: agentPreferred.key,
+          provider: agentPreferred.provider,
+          endpoint: agentPreferred.endpoint,
+          model: agentPreferred.model,
+        };
+      }
+
+      const systemFallback = await getSystemApiKeyByService('speech');
+      return {
+        apiKey: systemFallback.key,
+        provider: systemFallback.provider,
+        endpoint: systemFallback.endpoint,
+        model: systemFallback.model,
+      };
+    }
+
     // ✅ 修复：查询活跃的语音识别服务 API Key（必须指定 serviceType）
     const apiKeyRecord = await prisma.apiKey.findFirst({
       where: {
+        purpose: 'AI',
         provider: preferredProvider || 'siliconflow',
         serviceType: 'speech', // ✅ 关键：只查询语音识别服务的 API Key
         isActive: true,
+        NOT: { provider: 'mcp' },
       },
       orderBy: {
         lastUsedAt: 'asc', // 轮询使用
@@ -105,6 +129,8 @@ function getDefaultEndpoint(provider: string): string {
       return 'https://api.siliconflow.cn/v1/audio/transcriptions';
     case 'openai':
       return 'https://api.openai.com/v1/audio/transcriptions';
+    case 'oneapi':
+      return '';
     default:
       return '';
   }
@@ -119,6 +145,8 @@ function getDefaultModel(provider: string): string {
       return 'FunAudioLLM/SenseVoiceSmall'; // SiliconFlow 推荐模型
     case 'openai':
       return 'whisper-1'; // OpenAI Whisper
+    case 'oneapi':
+      return '';
     default:
       return 'whisper-1';
   }

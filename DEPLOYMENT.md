@@ -1,277 +1,394 @@
-# 🚀 AI 量表系统 - 生产部署指南
+# OpenCloudOS 9 Docker Deployment Guide
 
-## 📋 部署前检查清单
+This project is designed to run on a single OpenCloudOS 9 server with three Docker containers:
 
-### ✅ 已完成的优化
+- `app`: Next.js application container
+- `db`: PostgreSQL container
+- `hermes`: Hermes Agent API Server container
 
-- [x] 删除开发测试文件（tests/）
-- [x] 删除构建缓存（.next/）
-- [x] 删除开发文档（CHANGELOG.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md, REFACTORING_REPORT.md）
-- [x] 删除开发配置（.github/, docs/）
-- [x] 删除临时文件（tsconfig.tsbuildinfo, test_agent_integration.mjs）
-- [x] 构建测试通过（无错误）
-- [x] TypeScript 类型检查通过
+Recommended public entrypoint:
 
-### 📦 项目文件结构
+- Nginx on the host handles `80/443`
+- Nginx proxies traffic to `127.0.0.1:3000`
+- PostgreSQL stays inside the Docker network and is not exposed to the public internet
 
-```
-AI量表系统/
-├── app/                    # Next.js 应用路由
-├── components/             # React 组件
-├── contexts/               # React Context
-├── lib/                    # 核心库文件
-├── prisma/                 # 数据库 Schema
-├── scripts/                # 部署脚本
-├── types/                  # TypeScript 类型定义
-├── .env.example            # 环境变量模板
-├── package.json            # 依赖配置
-├── next.config.js          # Next.js 配置
-├── tsconfig.json           # TypeScript 配置
-└── tailwind.config.ts      # Tailwind CSS 配置
-```
+## 1. Migration Package Workflow
 
----
+Use a two-stage migration workflow before reinstalling the server:
 
-## 🌐 服务器部署步骤
+1. Run a rehearsal export while production is still online
+2. Validate that the dump, checksum, and `pg_restore --list` output were created
+3. Enter a maintenance window before the real cutover
+4. Run one final export and treat that last bundle as the only restore source
 
-### 1️⃣ 上传代码到服务器
-
-在本地 PowerShell 执行：
-
-```powershell
-cd "C:\Users\lishuaishuai\Desktop\AI量表系统"
-
-# 清理服务器旧代码
-ssh root@136.110.9.74 "rm -rf ~/AIliangbiao"
-
-# 创建目录
-ssh root@136.110.9.74 "mkdir -p ~/AIliangbiao"
-
-# 上传所有文件（排除 node_modules 和 .next）
-scp -r * root@136.110.9.74:~/AIliangbiao/
-
-# 密码: kId8r69XoXM1i07TzWZ7
-```
-
----
-
-### 2️⃣ 服务器端配置
-
-SSH 登录服务器：
+Direct export entrypoint:
 
 ```bash
-ssh root@136.110.9.74
-cd ~/AIliangbiao
+SOURCE_DATABASE_URL='postgresql://user:password@old-host:5432/dbname' \
+bash scripts/export-production-db.sh
 ```
 
-#### 2.1 配置 `.env` 文件
+Default bundle output:
+
+- `backups/prod/<UTC timestamp>/production.dump`
+- `backups/prod/<UTC timestamp>/production.dump.sha256`
+- `backups/prod/<UTC timestamp>/production.dump.contents.txt`
+- `backups/prod/<UTC timestamp>/restore-verification.sql`
+- `backups/prod/<UTC timestamp>/env-snapshot-instructions.md`
+- `backups/prod/<UTC timestamp>/manifest.json`
+
+Important cutover rules:
+
+- Do not reopen production traffic after the final dump
+- Keep the current production `.env.production` offline and out of git
+- Save the final bundle outside the server that is about to be reinstalled
+
+## 2. Deployment Layout
+
+Recommended directories on the server:
+
+- App repo: `/opt/ai-scale-system/current`
+- Runtime env file: `/opt/ai-scale-system/shared/.env.production`
+- Database backups: `/var/backups/ai-scale-system/postgres`
+- Hermes runtime data: Docker volume `ai-scale-hermes-data`
+- Nginx site config: `/etc/nginx/conf.d/ai-scale-system.conf`
+
+Recommended firewall / security group:
+
+- Open: `22`, `80`, `443`
+- Do not open: `5432`
+
+## 3. Required Software On OpenCloudOS 9
+
+Install base packages:
 
 ```bash
-cat > .env << 'EOF'
-# ============================================
-# 数据库配置（服务器本地 PostgreSQL）
-# ============================================
-DATABASE_URL="postgresql://postgres@localhost:5432/ai_scale_db"
-DIRECT_URL="postgresql://postgres@localhost:5432/ai_scale_db"
-
-# ============================================
-# 应用配置
-# ============================================
-NEXT_PUBLIC_APP_URL="http://ailiangbiao.agentpit.io"
-NEXT_PUBLIC_API_URL="http://ailiangbiao.agentpit.io"
-NEXT_PUBLIC_APP_NAME="AI 量表系统"
-
-# Session Secret（请修改为随机字符串）
-SESSION_SECRET="your-random-secret-key-change-me-in-production"
-
-# ============================================
-# 管理员配置
-# ============================================
-ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="your-secure-password"
-
-# ============================================
-# AI 服务配置（可选）
-# ============================================
-DEEPSEEK_API_KEY=""
-TENCENT_SECRET_ID=""
-TENCENT_SECRET_KEY=""
-TENCENT_SPEECH_SECRET_ID=""
-TENCENT_SPEECH_SECRET_KEY=""
-
-# ============================================
-# 功能开关
-# ============================================
-ENABLE_VOICE_INTERACTION="true"
-ENABLE_MCP_SERVER="true"
-
-# ============================================
-# 性能/日志
-# ============================================
-CACHE_TTL="3600"
-MAX_CACHE_SIZE="1000"
-LOG_LEVEL="info"
-EOF
+sudo dnf install -y dnf-plugins-core ca-certificates curl gnupg2 nginx firewalld
 ```
 
-#### 2.2 运行部署脚本
+Add the Docker CE repository and install Docker Engine plus the Compose plugin:
 
 ```bash
-chmod +x scripts/deploy-with-domain.sh
-./scripts/deploy-with-domain.sh
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
----
-
-### 3️⃣ 验证部署
-
-访问以下地址验证：
-
-- 🏠 **首页**: http://ailiangbiao.agentpit.io
-- 🔐 **管理后台**: http://ailiangbiao.agentpit.io/admin/login
-- 🏥 **健康检查**: http://ailiangbiao.agentpit.io/api/health
-
----
-
-## ⚙️ 环境变量说明
-
-### 必需配置
-
-| 变量名 | 说明 | 示例 |
-|--------|------|------|
-| `DATABASE_URL` | 数据库连接字符串 | `postgresql://postgres@localhost:5432/ai_scale_db` |
-| `SESSION_SECRET` | 会话加密密钥 | 随机 32 位以上字符串 |
-| `ADMIN_USERNAME` | 管理员用户名 | `admin` |
-| `ADMIN_PASSWORD` | 管理员密码 | 强密码 |
-
-### 可选配置
-
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `DEEPSEEK_API_KEY` | DeepSeek AI 密钥 | 空 |
-| `TENCENT_SECRET_ID` | 腾讯云 API ID | 空 |
-| `TENCENT_SECRET_KEY` | 腾讯云 API Key | 空 |
-| `ENABLE_VOICE_INTERACTION` | 启用语音交互 | `true` |
-| `ENABLE_MCP_SERVER` | 启用 MCP 服务器 | `true` |
-
----
-
-## 🔒 安全建议
-
-### 1. 修改默认密码
+Install Certbot. If `python3-certbot-nginx` is not available from your enabled repositories, enable EPEL first and retry:
 
 ```bash
-# 修改 .env 中的管理员密码
-ADMIN_PASSWORD="Strong@Password#2026"
+sudo dnf install -y epel-release
+sudo dnf install -y certbot python3-certbot-nginx
 ```
 
-### 2. 设置 Session Secret
+Enable the required services:
 
 ```bash
-# 生成随机密钥
-openssl rand -base64 32
-
-# 更新 .env
-SESSION_SECRET="生成的随机密钥"
+sudo systemctl enable --now docker
+sudo systemctl enable --now nginx
+sudo systemctl enable --now firewalld
 ```
 
-### 3. 启用 HTTPS（推荐）
-
-部署脚本会自动配置 Let's Encrypt SSL 证书。
-
-### 4. 配置防火墙
+Apply the host firewall rules:
 
 ```bash
-# 只开放必要端口
-ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP
-ufw allow 443/tcp   # HTTPS
-ufw allow 5432/tcp  # PostgreSQL（可选，本地访问不需要）
-ufw enable
+sudo firewall-cmd --permanent --add-service=ssh
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
 ```
 
----
+Verify the runtime:
 
-## 📊 性能优化建议
+```bash
+docker --version
+docker compose version
+sudo systemctl status docker --no-pager
+```
 
-### 1. 启用 Redis 缓存（可选）
+OpenCloudOS 9 container guidance requires a Docker version newer than `20.10.9`.
+
+## 4. Production Env File
+
+Do not use the workspace `.env` file in production.
+
+Create a dedicated server-side env file:
+
+```bash
+sudo mkdir -p /opt/ai-scale-system/shared
+sudo cp /opt/ai-scale-system/current/.env.production.example /opt/ai-scale-system/shared/.env.production
+sudo chmod 600 /opt/ai-scale-system/shared/.env.production
+```
+
+Minimum values to review before first launch:
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_API_URL`
+- `SESSION_SECRET`
+- `APP_SESSION_SECRET`
+- `ADMIN_SESSION_SECRET`
+- `ADMIN_PASSWORD`
+- `HERMES_API_SERVER_BASE_URL`
+- `HERMES_API_SERVER_KEY`
+- `HERMES_API_SERVER_MODEL`
+
+Important defaults:
+
+- `DATABASE_URL` and `DIRECT_URL` should point to `db:5432`, not `localhost`
+- `HERMES_API_SERVER_BASE_URL` should point to the internal Compose hostname `http://hermes:8642/v1`
+- `LOG_LEVEL` should stay at `info` or `warn` in production
+- Reuse the existing production `.env.production` during the OpenCloudOS reinstall migration
+
+Example database URLs inside Docker:
 
 ```env
-REDIS_URL="redis://localhost:6379"
+DATABASE_URL=postgresql://ai_scale_app:<password>@db:5432/ai_scale_db
+DIRECT_URL=postgresql://ai_scale_app:<password>@db:5432/ai_scale_db
 ```
 
-### 2. 配置 CDN（可选）
+## 5. Build And Start
 
-将静态资源上传到 CDN 加速访问。
-
-### 3. 数据库优化
+From the repo root on the server:
 
 ```bash
-# 定期清理日志
-psql -d ai_scale_db -c "DELETE FROM \"ConversationHistory\" WHERE \"createdAt\" < NOW() - INTERVAL '30 days';"
+cd /opt/ai-scale-system/current
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production build
 
-# 重建索引
-psql -d ai_scale_db -c "REINDEX DATABASE ai_scale_db;"
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production up -d
 ```
 
----
-
-## 🛠️ 常见问题
-
-### Q1: 构建失败？
+Check status:
 
 ```bash
-# 清理并重新构建
-rm -rf .next node_modules
-npm install
-npm run build
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production ps
 ```
 
-### Q2: 数据库连接失败？
+Health checks:
+
+- App health endpoint: `GET /api/health`
+- App container health: HTTP check against `http://127.0.0.1:3000/api/health`
+- DB container health: `pg_isready`
+- Hermes service: internal API server on `http://hermes:8642/v1`
+
+## 6. Database Restore During Server Rebuild
+
+Start the target PostgreSQL container first:
 
 ```bash
-# 检查 PostgreSQL 状态
-systemctl status postgresql
-
-# 测试连接
-psql -h localhost -U postgres -d ai_scale_db -c "SELECT 1;"
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production up -d db
 ```
 
-### Q3: 端口被占用？
+Restore the final migration dump:
 
 ```bash
-# 查看端口占用
-netstat -tlnp | grep :3000
-
-# 杀死进程
-kill -9 <PID>
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+bash scripts/docker-db-restore.sh /path/to/backups/prod/<timestamp>/production.dump
 ```
 
-### Q4: Nginx 配置错误？
+Before restoring, review these files from the same backup bundle:
+
+- `production.dump.sha256`
+- `production.dump.contents.txt`
+- `restore-verification.sql`
+- `env-snapshot-instructions.md`
+- `manifest.json`
+
+Sanity check the dump file before restore:
 
 ```bash
-# 测试配置
-nginx -t
-
-# 重启 Nginx
-systemctl restart nginx
+docker run --rm -i postgres:16-bookworm pg_restore --list < /path/to/backups/prod/<timestamp>/production.dump
 ```
 
----
+## 7. Prisma Schema Sync
 
-## 📞 技术支持
+After restoring data, run Prisma sync without `--accept-data-loss`:
 
-- 📧 Email: support@example.com
-- 📖 文档: https://docs.example.com
-- 🐛 问题反馈: https://github.com/example/ai-scale/issues
+```bash
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+bash scripts/docker-prisma-sync.sh
+```
 
----
+If Prisma reports a destructive change, stop here and review manually before serving production traffic.
 
-## 📅 更新日志
+## 8. Data Verification
 
-### v1.0.0 (2026-04-06)
-- ✅ 完成生产环境部署优化
-- ✅ 修复所有 TypeScript 类型错误
-- ✅ 清理开发测试文件
-- ✅ 优化数据库连接配置
-- ✅ 增强安全性（密码管理）
+Use the generated `restore-verification.sql` file from the backup bundle and compare row counts between:
+
+- the old production database
+- the new PostgreSQL container database
+
+The verification query checks these physical tables:
+
+- `User`
+- `ChildProfile`
+- `DoctorProfile`
+- `AssessmentHistory`
+- `Admin`
+- `ApiKey`
+- `SystemConfig`
+
+Note:
+
+- `MemberProfile` is mapped to the physical table `ChildProfile`
+
+## 9. Nginx Reverse Proxy
+
+Use the example config in:
+
+- `deploy/nginx/ai-scale-system.conf.example`
+
+Copy it into place and replace `example.com` with the real domain:
+
+```bash
+sudo cp deploy/nginx/ai-scale-system.conf.example /etc/nginx/conf.d/ai-scale-system.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+SSE-specific handling for `/api/mcp` is already included:
+
+- `proxy_http_version 1.1`
+- `proxy_buffering off`
+- `proxy_read_timeout 3600s`
+- `X-Accel-Buffering no`
+
+## 10. HTTPS Certificate
+
+After DNS points to the rebuilt server:
+
+```bash
+sudo mkdir -p /var/www/certbot
+sudo certbot --nginx -d example.com
+```
+
+Verify auto-renew:
+
+```bash
+sudo systemctl status certbot.timer
+```
+
+## 11. Backups
+
+Manual backup of the live containerized database:
+
+```bash
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+bash scripts/docker-db-backup.sh
+```
+
+Default backup location:
+
+- `/var/backups/ai-scale-system/postgres`
+
+Default retention:
+
+- `14` days
+
+Cron example for a nightly backup at 03:30:
+
+```cron
+30 3 * * * cd /opt/ai-scale-system/current && APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production DB_BACKUP_DIR=/var/backups/ai-scale-system/postgres bash scripts/docker-db-backup.sh >> /var/log/ai-scale-db-backup.log 2>&1
+```
+
+Install the cron entry automatically on the server:
+
+```bash
+sudo APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+DB_BACKUP_DIR=/var/backups/ai-scale-system/postgres \
+BACKUP_RETENTION_DAYS=14 \
+bash scripts/install-db-backup-cron.sh
+```
+
+Restore test:
+
+- Periodically restore a recent dump into a non-production database before trusting the backup policy
+
+## 12. Smoke Tests
+
+After the containers and Nginx are online, verify:
+
+- `/`
+- `/agent`
+- Admin login
+- Patient login
+- Doctor login
+- `/api/agent/session`
+- `/api/skill/v1/scales`
+- `/api/auth/me`
+- `/api/doctor/workspace`
+- `/api/mcp`
+- Hermes API server is reachable from the app container on `http://hermes:8642/v1`
+
+Also confirm:
+
+- `docker compose ps` shows the full app stack running
+- `docker logs ai-scale-app` does not print Prisma `query` logs in production
+- the server cannot be reached on public `5432`
+
+## 13. Common Operations
+
+Restart services:
+
+```bash
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production restart
+```
+
+Follow logs:
+
+```bash
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production logs -f app
+```
+
+Stop services:
+
+```bash
+APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
+docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production down
+```
+
+Redeploy a new application release from your workstation:
+
+```bash
+DEPLOY_PASSWORD='your-ssh-password' \
+python scripts/docker-redeploy.py --host tongyimohe.cloud --user root
+```
+
+Useful flags:
+
+- `--skip-backup`: skip the pre-deploy database dump
+- `--skip-prisma-push`: skip `prisma db push`
+- `--keep-releases 3`: keep the current release plus the two most recent older releases after deploy
+
+Run a one-time server cleanup manually:
+
+```bash
+sudo APP_BASE=/opt/ai-scale-system KEEP_RELEASES=3 \
+bash scripts/docker-server-cleanup.sh
+```
+
+## 14. Rollback
+
+Recommended rollback order:
+
+1. Keep the PostgreSQL volume untouched unless the rollback explicitly requires data restore
+2. Re-deploy the previous app image or previous git revision
+3. Restart the stack
+4. If data must be rolled back, restore from a known-good dump and re-run Prisma sync only after review
+
+For containerized rollback, the safest first move is to restore the previous application build while preserving the current database volume.
+
+## 15. Reference Material
+
+- OpenCloudOS Docker guide: https://docs.opencloudos.org/OCS/Virtualization_and_Containers_Guide/Docker_guide/
+- OpenCloudOS 9 installation docs: https://docs.opencloudos.org/en/OC9/install/
+- Docker Engine on RPM-based distros: https://docs.docker.com/engine/install/centos/

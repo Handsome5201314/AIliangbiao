@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
+import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+
 // 各服务商的默认配置
 const PROVIDER_CONFIGS: Record<string, { 
   textEndpoint: string; 
@@ -49,6 +51,13 @@ const PROVIDER_CONFIGS: Record<string, {
     speechModel: 'whisper-1',
     name: 'OpenAI'
   },
+  oneapi: {
+    textEndpoint: 'http://104.197.139.51:3000/v1/chat/completions',
+    speechEndpoint: '',
+    textModel: 'gemini-3-flash-preview',
+    speechModel: '',
+    name: 'OneAPI'
+  },
   custom: {
     textEndpoint: '',
     speechEndpoint: '',
@@ -60,6 +69,8 @@ const PROVIDER_CONFIGS: Record<string, {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAdminRequest(request);
+
     const body = await request.json();
     const { provider, endpoint, apiKey, model, keyId, serviceType } = body;
 
@@ -368,6 +379,10 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return createAdminUnauthorizedResponse();
+    }
+
     console.error('[Test Connection Error]:', error);
     return NextResponse.json(
       { error: '测试失败' },

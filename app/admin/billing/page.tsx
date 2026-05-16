@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { CreditCard, TrendingUp, DollarSign, Calendar, Download, Filter } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 export default function BillingPage() {
   const [timeRange, setTimeRange] = useState('7d');
@@ -22,16 +26,13 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       {/* 页面标题 */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900">大模型与计费</h2>
-        <p className="text-sm text-slate-500 mt-1">查看 API 调用量和费用明细</p>
-      </div>
+      <PageHeader title="大模型与计费" description="查看 API 调用量和费用明细" />
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-50 rounded-lg">
+            <div className="p-3 bg-blue-50 rounded-2xl">
               <CreditCard className="w-6 h-6 text-blue-600" />
             </div>
             <div>
@@ -39,10 +40,10 @@ export default function BillingPage() {
               <p className="text-sm text-slate-500">本周消费</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        </Card>
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-50 rounded-lg">
+            <div className="p-3 bg-emerald-50 rounded-2xl">
               <TrendingUp className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
@@ -50,10 +51,10 @@ export default function BillingPage() {
               <p className="text-sm text-slate-500">总调用次数</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        </Card>
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-purple-50 rounded-lg">
+            <div className="p-3 bg-purple-50 rounded-2xl">
               <DollarSign className="w-6 h-6 text-purple-600" />
             </div>
             <div>
@@ -61,10 +62,10 @@ export default function BillingPage() {
               <p className="text-sm text-slate-500">平均单价</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        </Card>
+        <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-50 rounded-lg">
+            <div className="p-3 bg-amber-50 rounded-2xl">
               <Calendar className="w-6 h-6 text-amber-600" />
             </div>
             <div>
@@ -72,11 +73,11 @@ export default function BillingPage() {
               <p className="text-sm text-slate-500">活跃服务商</p>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 筛选器 */}
-      <div className="bg-white rounded-lg border border-slate-200 p-4">
+      <Card className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -110,15 +111,13 @@ export default function BillingPage() {
               近90天
             </button>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+          <Button variant="outline">
             <Download className="w-4 h-4" />
             <span>导出报表</span>
-          </button>
+          </Button>
         </div>
-      </div>
-
-      {/* 费用明细表 */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      </Card>
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -139,13 +138,9 @@ export default function BillingPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      item.provider === 'siliconflow' 
-                        ? 'bg-blue-100 text-blue-800' 
-                        : 'bg-purple-100 text-purple-800'
-                    }`}>
+                    <Badge variant={item.provider === 'siliconflow' ? 'info' : 'secondary'}>
                       {item.provider === 'siliconflow' ? '硅基流动' : '算能'}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm font-medium text-slate-900">{item.calls}</span>
@@ -158,7 +153,7 @@ export default function BillingPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

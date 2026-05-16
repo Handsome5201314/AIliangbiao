@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function AdminLoginPage() {
           <form onSubmit={handleLogin} className="space-y-6">
             {/* 错误提示 */}
             {error && (
-              <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-300">
+              <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 rounded-lg px-4 py-3 text-rose-300">
                 <AlertCircle className="w-5 h-5 flex-shrink-0" />
                 <p className="text-sm">{error}</p>
               </div>
@@ -127,9 +128,9 @@ export default function AdminLoginPage() {
 
         {/* 返回首页 */}
         <div className="mt-6 text-center">
-          <a href="/" className="text-sm text-slate-400 hover:text-white transition-colors">
+          <Link href="/" className="text-sm text-slate-400 hover:text-white transition-colors">
             ← 返回首页
-          </a>
+          </Link>
         </div>
       </div>
     </div>

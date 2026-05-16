@@ -1,9 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Key, Plus, Trash2, Copy, CheckCircle, Eye, EyeOff, Code, ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle, Code, Copy, Key, Plus, Trash2 } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
-interface MCPKey {
+interface McpKey {
   id: string;
   keyName: string;
   keyValue: string;
@@ -14,7 +19,7 @@ interface MCPKey {
 }
 
 export default function MCPKeysPage() {
-  const [keys, setKeys] = useState<MCPKey[]>([]);
+  const [keys, setKeys] = useState<McpKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
@@ -22,7 +27,7 @@ export default function MCPKeysPage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    loadKeys();
+    void loadKeys();
   }, []);
 
   const loadKeys = async () => {
@@ -42,14 +47,14 @@ export default function MCPKeysPage() {
       const res = await fetch('/api/admin/mcpkeys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyName: newKeyName || 'MCP API Key' })
+        body: JSON.stringify({ keyName: newKeyName || 'Assessment Core MCP Key' }),
       });
 
       const data = await res.json();
       if (data.success) {
         setCreatedKey(data.key.keyValue);
-        loadKeys();
         setNewKeyName('');
+        void loadKeys();
       }
     } catch (error) {
       console.error('Failed to create key:', error);
@@ -57,13 +62,15 @@ export default function MCPKeysPage() {
   };
 
   const handleDeleteKey = async (id: string) => {
-    if (!confirm('确定要删除此密钥吗？删除后无法恢复！')) return;
+    if (!confirm('确定要删除这个 MCP 密钥吗？删除后将无法恢复。')) {
+      return;
+    }
 
     try {
       const res = await fetch(`/api/admin/mcpkeys?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        setKeys(keys.filter(k => k.id !== id));
+        setKeys((prev) => prev.filter((key) => key.id !== id));
       }
     } catch (error) {
       console.error('Failed to delete key:', error);
@@ -73,252 +80,215 @@ export default function MCPKeysPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(text);
-    setTimeout(() => setCopiedKey(null), 2000);
+    window.setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const mcpEndpoint = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp/scale` : '';
+  const mcpEndpoint = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : '';
 
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">MCP API 密钥管理</h2>
-          <p className="text-sm text-slate-500 mt-1">管理量表服务API密钥，供外部智能体调用</p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
+        <PageHeader title="MCP API 密钥管理" description="管理外部智能体接入 Assessment Core MCP 服务时使用的专用密钥。" />
+        <Button onClick={() => setShowAddModal(true)}>
+          <Plus className="h-4 w-4" />
           <span>创建密钥</span>
-        </button>
+        </Button>
       </div>
 
-      {/* 接入信息卡片 */}
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-6 text-white">
-        <h3 className="text-lg font-semibold mb-3">📡 MCP 端点信息</h3>
+      <div className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
+        <h3 className="mb-3 text-lg font-semibold">标准 MCP 入口</h3>
         <div className="space-y-3">
           <div>
-            <p className="text-sm text-indigo-100 mb-1">服务地址</p>
-            <code className="bg-white/20 px-4 py-2 rounded-lg block font-mono text-sm">
+            <p className="mb-1 text-sm text-indigo-100">Endpoint</p>
+            <code className="block rounded-lg bg-white/20 px-4 py-2 font-mono text-sm">
               {mcpEndpoint}
             </code>
           </div>
           <div>
-            <p className="text-sm text-indigo-100 mb-1">认证方式</p>
-            <code className="bg-white/20 px-4 py-2 rounded-lg block font-mono text-sm">
+            <p className="mb-1 text-sm text-indigo-100">认证方式</p>
+            <code className="block rounded-lg bg-white/20 px-4 py-2 font-mono text-sm">
               Authorization: Bearer sk-your-api-key
             </code>
           </div>
           <div>
-            <p className="text-sm text-indigo-100 mb-1">协议标准</p>
-            <code className="bg-white/20 px-4 py-2 rounded-lg block font-mono text-sm">
-              MCP JSON-RPC 2.0
+            <p className="mb-1 text-sm text-indigo-100">协议</p>
+            <code className="block rounded-lg bg-white/20 px-4 py-2 font-mono text-sm">
+              MCP JSON-RPC 2.0 / SSE
             </code>
           </div>
         </div>
       </div>
 
-      {/* 使用说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="font-semibold text-blue-900 mb-2">使用方式</h4>
-        <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-          <li>点击"创建密钥"生成API密钥</li>
-          <li>复制密钥和端点地址</li>
-          <li>在智能体平台配置HTTP插件</li>
-          <li>调用MCP接口即可使用量表服务</li>
+      <Card className="border-cyan-200 bg-cyan-50 p-4">
+        <h4 className="mb-2 font-semibold text-cyan-900">使用说明</h4>
+        <ol className="list-inside list-decimal space-y-1 text-sm text-cyan-800">
+          <li>先创建一个 MCP 密钥。</li>
+          <li>把密钥配置到外部智能体平台的 Bearer Token 中。</li>
+          <li>统一使用标准入口 `/api/mcp`，不再使用旧的 FastGPT 专用兼容入口。</li>
+          <li>工具调用顺序与规范以 `packages/assessment-skill/README.md` 为准。</li>
         </ol>
-      </div>
+        <p className="mt-3 text-sm text-cyan-900">
+          这里的 MCP 密钥只用于访问你的量表与 Assessment Core 服务，不等同于 OpenAI、
+          DeepSeek、SiliconFlow 等模型服务商的 API Key。
+        </p>
+      </Card>
 
-      {/* API密钥列表 */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <Card className="overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-slate-500">加载中...</div>
         ) : keys.length === 0 ? (
           <div className="p-12 text-center text-slate-500">
-            <Key className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>暂无API密钥</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="mt-4 text-indigo-600 hover:text-indigo-700 font-medium"
-            >
-              创建第一个密钥
-            </button>
+            <Key className="mx-auto mb-4 h-12 w-12 opacity-50" />
+            <p>暂无 MCP API 密钥</p>
+            <Button variant="link" onClick={() => setShowAddModal(true)} className="mt-4">创建第一个密钥</Button>
           </div>
         ) : (
           <div className="divide-y divide-slate-200">
             {keys.map((key) => (
-              <div key={key.id} className="p-6 hover:bg-slate-50 transition-colors">
+              <div key={key.id} className="p-6 transition-colors hover:bg-slate-50">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="mb-2 flex items-center gap-3">
                       <h3 className="font-semibold text-slate-900">{key.keyName}</h3>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        key.isActive 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : 'bg-slate-100 text-slate-800'
-                      }`}>
-                        {key.isActive ? '启用' : '禁用'}
-                      </span>
+                      <Badge variant={key.isActive ? 'success' : 'secondary'}>{key.isActive ? '启用' : '禁用'}</Badge>
                     </div>
 
-                    <div className="flex items-center gap-2 mb-3">
-                      <code className="flex-1 bg-slate-50 px-4 py-2 rounded-lg text-sm font-mono border border-slate-200">
+                  <div className="mb-3 flex items-center gap-2">
+                      <code className="flex-1 break-all rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-mono">
                         {key.keyValue}
                       </code>
-                      <button
-                        onClick={() => copyToClipboard(key.keyValue)}
-                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="复制"
-                      >
-                        {copiedKey === key.keyValue ? (
-                          <CheckCircle className="w-5 h-5 text-emerald-500" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-slate-400" />
-                        )}
-                      </button>
                     </div>
 
                     <div className="flex items-center gap-6 text-sm text-slate-500">
                       <span>调用次数：{key.usageCount}</span>
-                      {key.lastUsedAt && (
+                      {key.lastUsedAt ? (
                         <span>最后使用：{new Date(key.lastUsedAt).toLocaleString()}</span>
-                      )}
+                      ) : null}
                       <span>创建时间：{new Date(key.createdAt).toLocaleString()}</span>
+                    </div>
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      列表中显示的是打码后的密钥，只用于核对，不能直接复制去接入外部平台。
+                      如需完整密钥，请重新创建一个新密钥，并在创建成功弹窗中一次性复制。
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteKey(key.id)}
-                    className="ml-4 p-2 hover:bg-red-50 rounded-lg transition-colors text-red-600"
-                    title="删除"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                  <Button variant="ghost" size="icon" className="ml-4 text-rose-600 hover:bg-rose-50" onClick={() => void handleDeleteKey(key.id)} title="删除">
+                    <Trash2 className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* 创建密钥弹窗 */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">创建 MCP API 密钥</h3>
-            
+      {showAddModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-md p-6">
+            <h3 className="mb-4 text-lg font-semibold text-slate-900">
+              创建 Assessment Core MCP 密钥
+            </h3>
+
             {!createdKey ? (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    密钥名称（可选）
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    密钥名称
                   </label>
-                  <input
-                    type="text"
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                    placeholder="例如：生产环境密钥"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <Input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="例如：生产环境 MCP Key" />
                 </div>
 
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => setShowAddModal(false)}>
                     取消
-                  </button>
-                  <button
-                    onClick={handleCreateKey}
-                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                  >
+                  </Button>
+                  <Button className="flex-1" onClick={() => void handleCreateKey()}>
                     创建
-                  </button>
+                  </Button>
                 </div>
               </>
             ) : (
               <>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-emerald-800 font-semibold mb-2">✅ 密钥创建成功！</p>
-                  <p className="text-xs text-emerald-700">请立即复制并妥善保管，此密钥只显示一次</p>
+                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="mb-2 text-sm font-semibold text-emerald-800">密钥创建成功</p>
+                  <p className="text-xs text-emerald-700">
+                    请立即复制并妥善保存，这个密钥只会完整展示一次。
+                  </p>
                 </div>
 
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     API 密钥
                   </label>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-slate-50 px-4 py-2 rounded-lg text-sm font-mono border border-slate-200 break-all">
+                    <code className="flex-1 break-all rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-mono">
                       {createdKey}
                     </code>
                     <button
                       onClick={() => copyToClipboard(createdKey)}
-                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="rounded-lg p-2 transition-colors hover:bg-slate-100"
+                      title="复制"
                     >
                       {copiedKey === createdKey ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-500" />
+                        <CheckCircle className="h-5 w-5 text-emerald-500" />
                       ) : (
-                        <Copy className="w-5 h-5 text-slate-400" />
+                        <Copy className="h-5 w-5 text-slate-400" />
                       )}
                     </button>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => {
+                <Button className="w-full" onClick={() => {
                     setShowAddModal(false);
                     setCreatedKey(null);
-                  }}
-                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
+                  }}>
                   完成
-                </button>
+                </Button>
               </>
             )}
-          </div>
+          </Card>
         </div>
-      )}
+      ) : null}
 
-      {/* 快速接入示例 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Code className="w-5 h-5" />
+      <Card className="p-6">
+        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
+          <Code className="h-5 w-5" />
           快速接入示例
         </h3>
 
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-slate-700 mb-2">curl 示例</p>
-            <pre className="bg-slate-900 text-slate-100 p-4 rounded-lg text-xs overflow-x-auto">
+            <p className="mb-2 text-sm font-medium text-slate-700">SSE 会话建立</p>
+            <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
+{`curl -N ${mcpEndpoint} \\
+  -D - \\
+  -H "Accept: text/event-stream" \\
+  -H "Authorization: Bearer sk-your-api-key"`}
+            </pre>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-slate-700">
+              使用返回的会话继续发送 JSON-RPC
+            </p>
+            <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
 {`curl -X POST ${mcpEndpoint} \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer sk-your-api-key" \\
+  -H "X-Session-Id: <session-id>" \\
   -d '{
     "jsonrpc": "2.0",
     "id": "1",
-    "method": "tools/call",
-    "params": {
-      "name": "list_scales",
-      "arguments": {}
-    }
+    "method": "tools/list"
   }'`}
             </pre>
           </div>
 
-          <div className="flex items-center gap-4">
-            <a 
-              href="/AGENT_SCALE_INTEGRATION_GUIDE.md"
-              className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
-            >
-              <ExternalLink className="w-4 h-4" />
-              查看完整接入文档
-            </a>
-          </div>
+          <code className="inline-block rounded bg-slate-100 px-3 py-2 text-xs text-slate-700">
+            packages/assessment-skill/README.md
+          </code>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
