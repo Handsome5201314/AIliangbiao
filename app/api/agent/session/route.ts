@@ -3,13 +3,19 @@ import { z } from 'zod';
 
 import { issueAgentSessionToken } from '@/lib/assessment-skill/auth';
 import { getAgentToolCapabilities, resolveAgentSessionContext } from '@/lib/services/agent-session';
-import { assertAiToyDeviceBinding } from '@/lib/services/ai-toy-device-binding';
+import {
+  AiToyPartnerAuthError,
+  assertAiToyDeviceBinding,
+  assertAiToyPartnerToken,
+  ensureAiToyDeviceBindingForDevice,
+} from '@/lib/services/ai-toy-device-binding';
 
 const requestSchema = z.object({
   deviceId: z.string().min(1),
   memberId: z.string().optional(),
   entrypoint: z.enum(['app', 'agent']).optional(),
   clientKind: z.enum(['app', 'ai_toy']).optional(),
+  autoCreateBinding: z.boolean().optional(),
   memberSnapshot: z
     .object({
       nickname: z.string().optional(),
@@ -27,13 +33,30 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = requestSchema.parse(await request.json());
-    const { user, member, profiles, activeAccountType } = await resolveAgentSessionContext({
-      request,
-      deviceId: body.deviceId,
-      memberId: body.memberId,
-      memberSnapshot: body.memberSnapshot,
-    });
-    if (body.clientKind === 'ai_toy') {
+    const shouldAutoCreateAiToyBinding =
+      body.clientKind === 'ai_toy' && body.autoCreateBinding === true;
+
+    const context = shouldAutoCreateAiToyBinding
+      ? await (async () => {
+          assertAiToyPartnerToken(request.headers.get('authorization') || request.headers.get('Authorization'));
+          const resolved = await ensureAiToyDeviceBindingForDevice({
+            deviceId: body.deviceId,
+            memberSnapshot: body.memberSnapshot,
+          });
+          if (body.memberId && body.memberId !== resolved.member.id) {
+            throw new Error('AI toy device binding does not match this account member');
+          }
+          return resolved;
+        })()
+      : await resolveAgentSessionContext({
+          request,
+          deviceId: body.deviceId,
+          memberId: body.memberId,
+          memberSnapshot: body.memberSnapshot,
+        });
+
+    const { user, member, profiles, activeAccountType } = context;
+    if (body.clientKind === 'ai_toy' && !shouldAutoCreateAiToyBinding) {
       await assertAiToyDeviceBinding({
         deviceId: body.deviceId,
         userId: user.id,
@@ -84,9 +107,16 @@ export async function POST(request: NextRequest) {
       })),
     });
   } catch (error) {
+    const status =
+      error instanceof AiToyPartnerAuthError
+        ? 401
+        : error instanceof z.ZodError
+          ? 400
+          : 400;
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to issue agent session' },
-      { status: 400 }
+      { status }
     );
   }
 }

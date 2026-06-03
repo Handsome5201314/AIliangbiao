@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { ensureMemberForDevice } from "@/lib/assessment-skill/member-service";
 
 export const AI_TOY_VOICE_SCALE_WHITELIST = [
   "PHQ-9",
@@ -21,6 +22,24 @@ type AiToyDeviceBindingRecord = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+type MemberSnapshotInput = {
+  nickname?: string;
+  gender?: string;
+  ageMonths?: number;
+  relation?: string;
+  languagePreference?: string;
+  interests?: string[];
+  fears?: string[];
+  avatarConfig?: unknown;
+};
+
+export class AiToyPartnerAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiToyPartnerAuthError";
+  }
+}
 
 function bindingModel() {
   return (prisma as any).aiToyDeviceBinding;
@@ -51,6 +70,31 @@ async function assertMemberOwnedByUser(userId: string, memberProfileId: string) 
   }
 
   return member;
+}
+
+function extractBearerToken(authHeader: string | null | undefined) {
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+  const token = authHeader.slice("Bearer ".length).trim();
+  return token || null;
+}
+
+export function assertAiToyPartnerToken(authHeader: string | null | undefined) {
+  const expectedToken = process.env.AI_TOY_PARTNER_TOKEN?.trim();
+
+  if (!expectedToken) {
+    throw new AiToyPartnerAuthError("AI toy partner token is not configured");
+  }
+
+  const actualToken = extractBearerToken(authHeader);
+  if (!actualToken) {
+    throw new AiToyPartnerAuthError("Missing AI toy partner token");
+  }
+
+  if (actualToken !== expectedToken) {
+    throw new AiToyPartnerAuthError("Invalid AI toy partner token");
+  }
 }
 
 export async function bindAiToyDevice(input: {
@@ -141,6 +185,76 @@ export async function assertAiToyDeviceBinding(input: {
   }
 
   return binding;
+}
+
+async function loadBindingContext(binding: AiToyDeviceBindingRecord) {
+  const user = await prisma.user.findUnique({
+    where: { id: binding.userId },
+    include: {
+      doctorProfile: true,
+      profiles: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error("AI toy device binding user not found");
+  }
+
+  const profiles = user.profiles || [];
+  const member = profiles.find((profile: any) => profile.id === binding.memberProfileId);
+
+  if (!member) {
+    throw new Error("AI toy device binding member not found");
+  }
+
+  return {
+    binding,
+    user,
+    member,
+    profiles,
+    activeAccountType: (user.accountType || "PATIENT") as "PATIENT" | "DOCTOR",
+  };
+}
+
+export async function ensureAiToyDeviceBindingForDevice(input: {
+  deviceId: string;
+  memberSnapshot?: MemberSnapshotInput;
+}) {
+  const deviceId = normalizeDeviceId(input.deviceId);
+  const existing = await resolveAiToyDeviceBinding(deviceId);
+
+  if (existing?.status === "ACTIVE") {
+    return loadBindingContext(existing);
+  }
+
+  const guestContext = await ensureMemberForDevice({
+    deviceId,
+    memberSnapshot: input.memberSnapshot,
+  });
+
+  const binding = existing
+    ? await bindingModel().update({
+        where: { deviceId },
+        data: {
+          userId: guestContext.user.id,
+          memberProfileId: guestContext.member.id,
+          status: "ACTIVE",
+          boundAt: new Date(),
+          unboundAt: null,
+        },
+      })
+    : await bindingModel().create({
+        data: {
+          deviceId,
+          userId: guestContext.user.id,
+          memberProfileId: guestContext.member.id,
+          status: "ACTIVE",
+        },
+      });
+
+  return loadBindingContext(binding as AiToyDeviceBindingRecord);
 }
 
 export function isAiToyVoiceScale(scaleId: string) {

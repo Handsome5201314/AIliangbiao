@@ -21,6 +21,8 @@ test("AI toy binding service exposes bind, resolve, unbind, and assertion helper
   assert.equal(typeof service.resolveAiToyDeviceBinding, "function");
   assert.equal(typeof service.unbindAiToyDevice, "function");
   assert.equal(typeof service.assertAiToyDeviceBinding, "function");
+  assert.equal(typeof service.assertAiToyPartnerToken, "function");
+  assert.equal(typeof service.ensureAiToyDeviceBindingForDevice, "function");
   assert.ok(Array.isArray(service.AI_TOY_VOICE_SCALE_WHITELIST));
   assert.deepEqual(
     service.AI_TOY_VOICE_SCALE_WHITELIST,
@@ -47,9 +49,139 @@ test("agent session route validates AI toy binding only for AI toy clients", asy
 
   assert.match(source, /clientKind/);
   assert.match(source, /ai_toy/);
+  assert.match(source, /autoCreateBinding/);
+  assert.match(source, /ensureAiToyDeviceBindingForDevice/);
   assert.match(source, /assertAiToyDeviceBinding/);
+  assert.match(source, /AiToyPartnerAuthError/);
   assert.match(source, /entrypoint:\s*body\.entrypoint/);
   assert.match(source, /memberId:\s*member\.id/);
+});
+
+test("AI toy partner token helper accepts only the configured bearer token", async () => {
+  const previous = process.env.AI_TOY_PARTNER_TOKEN;
+  process.env.AI_TOY_PARTNER_TOKEN = "partner-secret";
+
+  try {
+    const service = await import("../lib/services/ai-toy-device-binding");
+
+    assert.doesNotThrow(() => service.assertAiToyPartnerToken("Bearer partner-secret"));
+    assert.throws(
+      () => service.assertAiToyPartnerToken("Bearer wrong-secret"),
+      /Invalid AI toy partner token/
+    );
+    assert.throws(
+      () => service.assertAiToyPartnerToken(null),
+      /Missing AI toy partner token/
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.AI_TOY_PARTNER_TOKEN;
+    } else {
+      process.env.AI_TOY_PARTNER_TOKEN = previous;
+    }
+  }
+});
+
+test("agent session auto-create rejects missing AI toy partner token with 401", async () => {
+  const previous = process.env.AI_TOY_PARTNER_TOKEN;
+  process.env.AI_TOY_PARTNER_TOKEN = "partner-secret";
+
+  try {
+    const { POST } = await import("../app/api/agent/session/route");
+    const request = new Request("http://localhost/api/agent/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "xiaozhi-test-device",
+        entrypoint: "agent",
+        clientKind: "ai_toy",
+        autoCreateBinding: true,
+      }),
+    });
+
+    const response = await POST(request as any);
+    const body = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.match(body.error, /Missing AI toy partner token/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.AI_TOY_PARTNER_TOKEN;
+    } else {
+      process.env.AI_TOY_PARTNER_TOKEN = previous;
+    }
+  }
+});
+
+test("AI toy auto-create reuses an existing active binding without overwriting it", async () => {
+  const service = await import("../lib/services/ai-toy-device-binding");
+  const { prisma } = await import("../lib/db/prisma");
+  const bindingModel = (prisma as any).aiToyDeviceBinding;
+  const userModel = (prisma as any).user;
+
+  const originalBindingFindUnique = bindingModel.findUnique;
+  const originalBindingUpdate = bindingModel.update;
+  const originalBindingCreate = bindingModel.create;
+  const originalUserFindUnique = userModel.findUnique;
+  const calls = { create: 0, update: 0 };
+
+  bindingModel.findUnique = async (args: any) => {
+    assert.deepEqual(args.where, { deviceId: "toy-registered" });
+    return {
+      id: "binding-1",
+      deviceId: "toy-registered",
+      userId: "registered-user",
+      memberProfileId: "member-1",
+      status: "ACTIVE",
+      boundAt: new Date(),
+      unboundAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  };
+  bindingModel.update = async () => {
+    calls.update += 1;
+    throw new Error("existing active binding must not be updated");
+  };
+  bindingModel.create = async () => {
+    calls.create += 1;
+    throw new Error("existing active binding must not be recreated");
+  };
+  userModel.findUnique = async (args: any) => {
+    assert.deepEqual(args.where, { id: "registered-user" });
+    return {
+      id: "registered-user",
+      role: "REGISTERED",
+      isGuest: false,
+      accountType: "PATIENT",
+      doctorProfile: null,
+      profiles: [
+        {
+          id: "member-1",
+          userId: "registered-user",
+          nickname: "本人",
+          relation: "SELF",
+        },
+      ],
+    };
+  };
+
+  try {
+    const resolved = await service.ensureAiToyDeviceBindingForDevice({
+      deviceId: " toy-registered ",
+      memberSnapshot: { nickname: "不应覆盖" },
+    });
+
+    assert.equal(resolved.user.id, "registered-user");
+    assert.equal(resolved.member.id, "member-1");
+    assert.equal(resolved.binding.userId, "registered-user");
+    assert.deepEqual(calls, { create: 0, update: 0 });
+  } finally {
+    bindingModel.findUnique = originalBindingFindUnique;
+    bindingModel.update = originalBindingUpdate;
+    bindingModel.create = originalBindingCreate;
+    userModel.findUnique = originalUserFindUnique;
+  }
 });
 
 test("skill scale list can be filtered to voice-friendly AI toy scales", async () => {
