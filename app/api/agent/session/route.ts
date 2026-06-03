@@ -3,11 +3,13 @@ import { z } from 'zod';
 
 import { issueAgentSessionToken } from '@/lib/assessment-skill/auth';
 import { getAgentToolCapabilities, resolveAgentSessionContext } from '@/lib/services/agent-session';
+import { assertAiToyDeviceBinding } from '@/lib/services/ai-toy-device-binding';
 
 const requestSchema = z.object({
   deviceId: z.string().min(1),
   memberId: z.string().optional(),
   entrypoint: z.enum(['app', 'agent']).optional(),
+  clientKind: z.enum(['app', 'ai_toy']).optional(),
   memberSnapshot: z
     .object({
       nickname: z.string().optional(),
@@ -31,6 +33,13 @@ export async function POST(request: NextRequest) {
       memberId: body.memberId,
       memberSnapshot: body.memberSnapshot,
     });
+    if (body.clientKind === 'ai_toy') {
+      await assertAiToyDeviceBinding({
+        deviceId: body.deviceId,
+        userId: user.id,
+        memberId: member.id,
+      });
+    }
 
     const session = issueAgentSessionToken({
       userId: user.id,

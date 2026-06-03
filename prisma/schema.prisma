@@ -133,6 +133,7 @@ model User {
   doctorProfile           DoctorProfile?
   agentExecutions         AgentExecution[]
   clinicScreenings        ClinicScreeningSubmission[]
+  aiToyDeviceBindings     AiToyDeviceBinding[]
   assignedCareAssignments CareAssignment[]     @relation("CareAssignmentAssignedByPatient")
   researchConsentsGranted ResearchConsent[]    @relation("ResearchConsentGrantedByPatient")
   researchExportsRequested ResearchExportLog[] @relation("ResearchExportRequestedByUser")
@@ -185,12 +186,31 @@ model MemberProfile {
   agentExecutions    AgentExecution[]
   clinicScreenings   ClinicScreeningSubmission[]
   doctorBotChatSessions DoctorBotChatSession[]
+  aiToyDeviceBindings AiToyDeviceBinding[]
 
   @@index([userId, relation])
   @@index([contactPhone])
   @@index([realName, gender])
   @@index([pendingClaim])
   @@map("ChildProfile")
+}
+
+model AiToyDeviceBinding {
+  id              String        @id @default(cuid())
+  deviceId        String
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberProfileId String
+  memberProfile   MemberProfile @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  status          String        @default("ACTIVE")
+  boundAt         DateTime      @default(now())
+  unboundAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([deviceId])
+  @@index([userId, memberProfileId])
+  @@index([status, updatedAt])
 }
 
 model AssessmentHistory {
@@ -340,6 +360,7 @@ model ClinicScreeningPoint {
   id                   String                     @id @default(cuid())
   name                 String
   code                 String                     @unique
+  collectionSource     String                     @default("IN_HOSPITAL")
   locationLabel        String?
   departmentLabel      String?
   ownerDoctorProfileId String
@@ -539,6 +560,14 @@ model ResearchConsent {
   grantedByUserId   String
   grantedByUser     User                  @relation("ResearchConsentGrantedByPatient", fields: [grantedByUserId], references: [id], onDelete: Cascade)
   status            ResearchConsentStatus @default(GRANTED)
+  projectCode       String                @default("CHA-HPI-AI-SCALE-2026")
+  consentVersion    String                @default("2026.05.v1")
+  consentScope      Json?
+  consentTextHash   String?
+  signatureName     String?
+  guardianName      String?
+  guardianRelation  String?
+  consentChannel    String                @default("patient_portal")
   grantedAt         DateTime              @default(now())
   revokedAt         DateTime?
   createdAt         DateTime              @default(now())

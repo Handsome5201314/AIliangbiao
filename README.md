@@ -222,6 +222,25 @@ POST /api/skill/v1/scales/:scaleId/evaluate
 
 详细说明见：`docs/openclaw-mcp-handoff-guide.md`
 
+### 2.5 AI 语音玩具接入
+
+适合“小智式”语音玩具：设备连接合作方后台，合作方后台再调用本系统。
+
+绑定流程：
+
+1. 用户在本系统登录或注册患者账号，并选择默认成员档案
+2. 合作方后台调用 `POST /api/ai-toy/devices` 绑定 `{ deviceId, memberId }`
+3. 每次玩具会话开始时调用 `POST /api/agent/session`，body 带 `deviceId`、`memberId`、`entrypoint: "agent"`、`clientKind: "ai_toy"`，并在请求头带患者账号 token
+4. 后续使用返回的 agent token 调 `/api/skill/v1/*`
+
+量表目录：
+
+- `GET /api/skill/v1/scales?aiToy=voiceFriendly`
+- 或 `GET /api/skill/v1/scales?voiceFriendly=1`
+
+首版只返回语音友好的白名单量表：`PHQ-9`、`GAD-7`、`SSS`、`M_CHAT_R`、`SNAP-IV`。
+评分、会话状态与结果落库仍由本系统完成，玩具后台只负责语音编排和短期会话状态。
+
 ### 3. MCP 接入（可选）
 
 MCP 入口保留，适合原生支持 MCP 协议的 agent runtime：

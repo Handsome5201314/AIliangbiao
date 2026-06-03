@@ -21,6 +21,7 @@ It performs a low-downtime application redeploy:
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import posixpath
 import subprocess
@@ -108,6 +109,20 @@ def should_skip(rel_path: str, is_dir: bool) -> bool:
 
 
 def create_release_tarball(output_path: Path) -> None:
+    def add_file(tar: tarfile.TarFile, path: Path, arcname: str) -> None:
+        stat_result = path.stat()
+        data = path.read_bytes()
+        if path.suffix == ".sh":
+            data = data.replace(b"\r\n", b"\n")
+
+        info = tarfile.TarInfo(name=arcname)
+        info.size = len(data)
+        info.mode = stat_result.st_mode & 0o7777
+        info.mtime = int(stat_result.st_mtime)
+        info.uid = stat_result.st_uid
+        info.gid = stat_result.st_gid
+        tar.addfile(info, io.BytesIO(data))
+
     with tarfile.open(output_path, "w:gz") as tar:
         for root, dirs, files in os.walk(REPO_ROOT):
             rel_root = Path(root).relative_to(REPO_ROOT)
@@ -124,7 +139,7 @@ def create_release_tarball(output_path: Path) -> None:
                 rel_path = rel_path.replace("\\", "/")
                 if should_skip(rel_path, False):
                     continue
-                tar.add(Path(root) / file_name, arcname=rel_path)
+                add_file(tar, Path(root) / file_name, rel_path)
 
 
 def create_ssh_client(config: DeployConfig) -> paramiko.SSHClient:

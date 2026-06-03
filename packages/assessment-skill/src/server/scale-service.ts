@@ -20,6 +20,7 @@ import {
   summarizeEstimatedAnswerDetails,
 } from '@/lib/scales/answer-details';
 import { assertAgentCanStartAssessment } from '@/lib/agent/quota';
+import { isAiToyVoiceScale } from '@/lib/services/ai-toy-device-binding';
 import {
   resolveFallbackExamples,
   resolveLocalizedText,
@@ -634,6 +635,10 @@ export function listSkillScales() {
     requiresConfirmation: scale.requiresConfirmation ?? false,
     questionCount: scale.questions.length,
   }));
+}
+
+export function listAiToyVoiceSkillScales() {
+  return listSkillScales().filter((scale) => isAiToyVoiceScale(scale.id));
 }
 
 export function getSkillScale(scaleId: string) {

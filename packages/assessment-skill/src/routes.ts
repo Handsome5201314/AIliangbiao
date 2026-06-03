@@ -1,5 +1,6 @@
 export const AGENT_SESSION_PATH = '/api/agent/session';
 export const SKILL_ROUTE_PREFIX = '/api/skill/v1';
+export const AI_TOY_DEVICE_BINDINGS_PATH = '/api/ai-toy/devices';
 
 export const skillRoutes = {
   scales: `${SKILL_ROUTE_PREFIX}/scales`,
@@ -31,4 +32,7 @@ export const skillRoutes = {
     `${SKILL_ROUTE_PREFIX}/me/members/${encodeURIComponent(memberId)}/memory-notes`,
   memberAdvice: (memberId: string) =>
     `${SKILL_ROUTE_PREFIX}/me/members/${encodeURIComponent(memberId)}/advice`,
+  aiToyDevices: AI_TOY_DEVICE_BINDINGS_PATH,
+  aiToyDevice: (deviceId: string) =>
+    `${AI_TOY_DEVICE_BINDINGS_PATH}/${encodeURIComponent(deviceId)}`,
 } as const;
