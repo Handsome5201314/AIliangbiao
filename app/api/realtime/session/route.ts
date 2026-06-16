@@ -8,6 +8,7 @@ const requestSchema = z.object({
   deviceId: z.string().min(1),
   memberId: z.string().optional(),
   doctorBotSlug: z.string().optional(),
+  channel: z.string().optional(),
   memberSnapshot: z
     .object({
       nickname: z.string().optional(),
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       deviceId: body.deviceId,
       memberId: body.memberId,
       doctorBotSlug: body.doctorBotSlug,
+      channel: body.channel,
       memberSnapshot: body.memberSnapshot,
     });
 

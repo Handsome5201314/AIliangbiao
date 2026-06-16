@@ -9,12 +9,33 @@ export type AgentScope =
   | 'skill:member:read'
   | 'skill:memory:write';
 
+export type AgentChannel =
+  | 'app_web'
+  | 'agent_web'
+  | 'doctor_workspace'
+  | 'ai_toy'
+  | 'wechat_h5'
+  | 'feishu_bot'
+  | 'wecom_bot'
+  | 'dingtalk_bot'
+  | 'public_share';
+
+export type AgentTenantRole =
+  | 'GUEST_MEMBER'
+  | 'PATIENT_MEMBER'
+  | 'DOCTOR_SELF'
+  | 'ORG_DOCTOR';
+
 export interface AgentSessionPayload {
   sub: string;
   member_id: string;
   role: 'GUEST' | 'REGISTERED' | 'VIP';
   account_type?: 'PATIENT' | 'DOCTOR';
   doctor_profile_id?: string;
+  organization_id?: string;
+  hermes_profile_id?: string;
+  channel?: AgentChannel;
+  tenant_role?: AgentTenantRole;
   entrypoint?: 'app' | 'agent';
   scopes: AgentScope[];
   device_id: string;
@@ -65,6 +86,10 @@ export function issueAgentSessionToken(input: {
   deviceId: string;
   accountType?: 'PATIENT' | 'DOCTOR';
   doctorProfileId?: string;
+  organizationId?: string;
+  hermesProfileId?: string;
+  channel?: AgentChannel;
+  tenantRole?: AgentTenantRole;
   entrypoint?: 'app' | 'agent';
   scopes?: AgentScope[];
   ttlSeconds?: number;
@@ -76,6 +101,10 @@ export function issueAgentSessionToken(input: {
     role: input.role,
     account_type: input.accountType,
     doctor_profile_id: input.doctorProfileId,
+    organization_id: input.organizationId,
+    hermes_profile_id: input.hermesProfileId,
+    channel: input.channel,
+    tenant_role: input.tenantRole,
     entrypoint: input.entrypoint || 'app',
     scopes: input.scopes ?? DEFAULT_AGENT_SCOPES,
     device_id: input.deviceId,

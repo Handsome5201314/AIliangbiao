@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma';
+import { getHermesHealthSnapshot } from '@/lib/realtime/hermes-health';
 
 import { PROVIDER_CONFIGS } from './apiKeyService';
+import { countPendingKnowledgeReviewItems } from './admin-knowledge-reviews';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const MCP_ENTRYPOINTS = [
@@ -43,8 +45,10 @@ export async function getAdminDashboard() {
     registeredPatients,
     doctorUsers,
     pendingDoctors,
+    pendingKnowledgeReviews,
     activeMcpKeyCount,
     aiProviderKeys,
+    hermesHealth,
     recentUsers,
     recentAssessments,
     recentMcpLogs,
@@ -63,6 +67,7 @@ export async function getAdminDashboard() {
     prisma.user.count({ where: { isGuest: false, accountType: 'PATIENT' } }),
     prisma.user.count({ where: { accountType: 'DOCTOR' } }),
     prisma.doctorProfile.count({ where: { verificationStatus: 'PENDING' } }),
+    countPendingKnowledgeReviewItems(),
     prisma.apiKey.count({
       where: {
         isActive: true,
@@ -79,6 +84,7 @@ export async function getAdminDashboard() {
       },
       select: { provider: true },
     }),
+    getHermesHealthSnapshot(),
     prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       take: 6,
@@ -205,6 +211,7 @@ export async function getAdminDashboard() {
       registeredPatients,
       doctorAccounts: doctorUsers,
       pendingDoctors,
+      pendingKnowledgeReviews,
     },
     activityDelta: {
       users: todayUsers - yesterdayUsers,
@@ -214,6 +221,13 @@ export async function getAdminDashboard() {
     recentActivities,
     mcpStatus: {
       databaseHealthy: true,
+      hermes: {
+        status: hermesHealth.status,
+        configured: hermesHealth.configured,
+        upstreamStatus: hermesHealth.upstream.status,
+        checkedAt: hermesHealth.checkedAt,
+        reason: hermesHealth.reason || null,
+      },
       canonicalAuthEnabled: true,
       canonical,
       compatibility,

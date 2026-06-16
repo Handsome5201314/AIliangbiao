@@ -7,6 +7,7 @@ import {
   getAdminSessionCookieOptions,
   issueAdminSessionToken,
 } from '@/lib/auth/admin-session';
+import { ADMIN_ROLE, normalizeAdminRole } from '@/lib/auth/admin-role';
 
 // 简单的token生成（生产环境应使用JWT）
 function generateToken(): string {
@@ -100,7 +101,7 @@ export async function GET() {
           username: adminUsername,
           passwordHash,
           email: `${adminUsername}@example.com`,
-          role: 'superadmin'
+          role: ADMIN_ROLE.SUPER_ADMIN,
         }
       });
       return NextResponse.json({ message: `Admin "${adminUsername}" created from .env` });
@@ -109,7 +110,10 @@ export async function GET() {
       const passwordHash = await bcrypt.hash(adminPassword, 10);
       await prisma.admin.update({
         where: { username: adminUsername },
-        data: { passwordHash }
+        data: {
+          passwordHash,
+          role: normalizeAdminRole(existingAdmin.role) || ADMIN_ROLE.SUPER_ADMIN,
+        }
       });
       return NextResponse.json({ message: `Admin "${adminUsername}" password updated from .env` });
     }

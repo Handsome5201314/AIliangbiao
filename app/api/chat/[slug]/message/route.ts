@@ -23,7 +23,6 @@ export async function POST(
       content: body.content,
       language: body.language,
       requestedBackend: 'hermes',
-      hermesEnabled: false,
     });
 
     return NextResponse.json({

@@ -3,8 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
 import { getAdminSessionTokenFromRequest, verifyAdminSessionToken } from './admin-session';
+import { canAccessAdminRoles, normalizeAdminRole, type AdminRole } from './admin-role';
 
-export async function requireAdminRequest(request: NextRequest) {
+type RequireAdminRequestOptions = {
+  roles?: readonly AdminRole[];
+};
+
+export async function requireAdminRequest(
+  request: NextRequest,
+  options: RequireAdminRequestOptions = {}
+) {
   const token = getAdminSessionTokenFromRequest(request);
   if (!token) {
     throw new Error('Unauthorized');
@@ -31,9 +39,22 @@ export async function requireAdminRequest(request: NextRequest) {
     throw new Error('Unauthorized');
   }
 
+  const normalizedRole = normalizeAdminRole(admin.role);
+  if (!normalizedRole) {
+    throw new Error('Unauthorized');
+  }
+
+  if (!canAccessAdminRoles(normalizedRole, options.roles)) {
+    throw new Error('Unauthorized');
+  }
+
   return {
     session,
-    admin,
+    admin: {
+      ...admin,
+      role: normalizedRole,
+      rawRole: admin.role,
+    },
   };
 }
 

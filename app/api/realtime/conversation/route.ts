@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { sendAgentConversationTurn } from "@/lib/realtime/agent-conversation";
+import {
+  sendAgentConversationTurn,
+} from "@/lib/realtime/agent-conversation";
+import {
+  buildAgentMemberContextSummary,
+  buildAgentTenantContextFromSession,
+} from "@/lib/realtime/agent-request-context";
+import { sendDoctorBotConversationTurn } from "@/lib/realtime/doctor-bot-conversation";
+import {
+  extractBearerToken,
+  requireAgentScope,
+  verifyAgentSessionToken,
+} from "@/lib/assessment-skill/auth";
 
 const requestSchema = z.object({
   surface: z.enum(["agent", "doctor_bot"]),
   conversationBackend: z.enum(["legacy", "hermes"]).default("hermes"),
   voiceMode: z.enum(["stable", "experimental"]).default("stable"),
   language: z.enum(["zh", "en"]).optional(),
+  doctorBotSlug: z.string().optional(),
+  visitorSessionId: z.string().optional(),
   triageContext: z
     .object({
       state: z.enum(["initial", "triage", "consent", "handoff", "assessment", "paused"]).optional(),
@@ -36,20 +50,33 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = requestSchema.parse(await request.json());
+    const content = String(body.input.text || body.input.transcript || "").trim();
 
     if (body.surface === "agent") {
-      const content = String(body.input.text || body.input.transcript || "").trim();
+      const agentSession = verifyAgentSessionToken(extractBearerToken(request));
+      requireAgentScope(agentSession, "skill:voice-intent");
+      const language = body.language || body.triageContext?.language || "zh";
+      const memberContextSummary = await buildAgentMemberContextSummary({
+        userId: agentSession.sub,
+        memberId: agentSession.member_id,
+        language,
+      });
+
       const result = await sendAgentConversationTurn({
         content,
-        language: body.language || body.triageContext?.language || "zh",
+        language,
         triageContext: {
           state: body.triageContext?.state || "triage",
           symptoms: body.triageContext?.symptoms || [],
           conversationHistory: body.triageContext?.conversationHistory || [],
           recommendedScale: body.triageContext?.recommendedScale || undefined,
           consentGiven: Boolean(body.triageContext?.consentGiven),
-          language: body.language || body.triageContext?.language || "zh",
+          language,
         },
+        requestedBackend: body.conversationBackend,
+        conversationId: `agent:${agentSession.session_id}`,
+        memberContextSummary,
+        tenantContext: buildAgentTenantContextFromSession(agentSession),
       });
 
       return NextResponse.json({
@@ -60,25 +87,62 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (!body.doctorBotSlug || !body.visitorSessionId) {
+      return NextResponse.json(
+        { error: "doctorBotSlug and visitorSessionId are required for doctor_bot surface" },
+        { status: 400 }
+      );
+    }
+
+    const doctorBotResult = await sendDoctorBotConversationTurn({
+      slug: body.doctorBotSlug,
+      visitorSessionId: body.visitorSessionId,
+      content,
+      language: body.language,
+      requestedBackend: body.conversationBackend,
+    });
+    const toolCall =
+      "toolCall" in doctorBotResult.reply
+        ? doctorBotResult.reply.toolCall
+        : doctorBotResult.reply.actionCard
+          ? {
+              name: "suggest_assessment",
+              args: {
+                scaleId: doctorBotResult.reply.actionCard.scaleId,
+                reason: doctorBotResult.reply.actionCard.reason,
+                cardTitle: doctorBotResult.reply.actionCard.title,
+                cardBody: doctorBotResult.reply.actionCard.body,
+              },
+            }
+          : null;
+
     return NextResponse.json({
       success: true,
-      backend: body.conversationBackend,
+      backend: doctorBotResult.backend,
       surface: body.surface,
       voiceMode: body.voiceMode,
       message: {
         role: "assistant",
-        content:
-          body.conversationBackend === "hermes"
-            ? "Hermes conversation proxy is ready for this route."
-            : "Legacy conversation backend is selected.",
+        content: doctorBotResult.reply.text,
       },
-      toolCalls: [],
-      fallback: body.conversationBackend !== "hermes",
+      actionCard: doctorBotResult.reply.actionCard,
+      toolCalls: toolCall ? [toolCall] : [],
+      fallback: doctorBotResult.fallback,
+      knowledge: doctorBotResult.knowledge,
+      session: doctorBotResult.session,
       agentAction: null,
       triageSessionPatch: null,
     });
   } catch (error) {
-    const status = error instanceof z.ZodError ? 400 : 422;
+    const status =
+      error instanceof z.ZodError
+        ? 400
+        : error instanceof Error &&
+            /Missing Bearer token|Invalid agent session|signature|expired|required scope/i.test(
+              error.message
+            )
+          ? 401
+          : 422;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to process conversation turn" },
       { status }

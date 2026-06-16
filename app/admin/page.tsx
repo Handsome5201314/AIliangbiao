@@ -1,14 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Activity,
+  Bot,
+  Building2,
   Calendar,
   Clock,
   Database,
   Key,
+  NotebookPen,
+  RadioTower,
+  ScrollText,
+  SlidersHorizontal,
   TrendingUp,
   User,
   Users,
@@ -17,6 +23,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ADMIN_ROLE, canAccessAdminRoles, normalizeAdminRole, type AdminRole } from '@/lib/auth/admin-role';
 
 type ActivityType = 'user' | 'assessment' | 'mcp';
 
@@ -45,6 +52,7 @@ interface DashboardData {
     registeredPatients: number;
     doctorAccounts: number;
     pendingDoctors: number;
+    pendingKnowledgeReviews: number;
   };
   activityDelta: {
     users: number;
@@ -54,6 +62,13 @@ interface DashboardData {
   recentActivities: DashboardActivity[];
   mcpStatus: {
     databaseHealthy: boolean;
+    hermes: {
+      status: 'ok' | 'degraded';
+      configured: boolean;
+      upstreamStatus: number;
+      checkedAt: string;
+      reason: string | null;
+    };
     canonicalAuthEnabled: boolean;
     canonical: {
       key: string;
@@ -74,6 +89,15 @@ interface DashboardData {
   };
 }
 
+type QuickLink = {
+  href: string;
+  title: string;
+  description: string;
+  style: string;
+  icon: ReactNode;
+  roles?: readonly AdminRole[];
+};
+
 const emptyDashboard: DashboardData = {
   summary: {
     totalUsers: 0,
@@ -91,6 +115,7 @@ const emptyDashboard: DashboardData = {
     registeredPatients: 0,
     doctorAccounts: 0,
     pendingDoctors: 0,
+    pendingKnowledgeReviews: 0,
   },
   activityDelta: {
     users: 0,
@@ -100,6 +125,13 @@ const emptyDashboard: DashboardData = {
   recentActivities: [],
   mcpStatus: {
     databaseHealthy: false,
+    hermes: {
+      status: 'degraded',
+      configured: false,
+      upstreamStatus: 0,
+      checkedAt: '',
+      reason: null,
+    },
     canonicalAuthEnabled: false,
     canonical: {
       key: 'canonical',
@@ -125,6 +157,7 @@ function formatDateTime(value: string | null) {
 export default function AdminDashboard() {
   const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
+  const [currentRole, setCurrentRole] = useState<AdminRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,6 +188,15 @@ export default function AdminDashboard() {
 
     void loadDashboard();
   }, [router]);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('admin_user') || '{}') as { role?: string | null };
+      setCurrentRole(normalizeAdminRole(stored.role));
+    } catch {
+      setCurrentRole(null);
+    }
+  }, []);
 
   const statCards = [
     {
@@ -201,13 +243,62 @@ export default function AdminDashboard() {
     },
   ];
 
-  const quickLinks = [
+  const quickLinks: QuickLink[] = [
+    {
+      href: '/admin/organizations',
+      title: '组织管理',
+      description: '开通、停用机构租户并承接医生归属',
+      style: 'from-cyan-600 to-sky-700',
+      icon: <Building2 className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN],
+    },
+    {
+      href: '/admin/hermes-profiles',
+      title: 'Hermes Profile',
+      description: '管理组织级默认 profile 与独立医生 profile 的运行配置',
+      style: 'from-slate-900 to-cyan-700',
+      icon: <Bot className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN],
+    },
     {
       href: '/admin/users',
       title: '成员管理',
       description: '查看用户、成员档案与评估关系',
       style: 'from-blue-500 to-blue-600',
       icon: <Users className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN],
+    },
+    {
+      href: '/admin/audits',
+      title: '审计日志',
+      description: '复核知识解释、敏感访问与治理动作',
+      style: 'from-amber-500 to-orange-600',
+      icon: <ScrollText className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.AUDITOR],
+    },
+    {
+      href: '/admin/knowledge/reviews',
+      title: '知识审核',
+      description: '审核知识文档与题目解释，决定是否进入平台知识库',
+      style: 'from-indigo-500 to-fuchsia-600',
+      icon: <NotebookPen className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.KB_REVIEWER, ADMIN_ROLE.ORG_REVIEWER],
+    },
+    {
+      href: '/admin/channels',
+      title: '渠道接入',
+      description: '维护 Web/H5、机器人和 AI 玩具入口的启用状态与网关路径',
+      style: 'from-teal-500 to-cyan-700',
+      icon: <RadioTower className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.OPS],
+    },
+    {
+      href: '/admin/policies',
+      title: '治理策略',
+      description: '固化敏感访问、知识审核、Hermes 降级与统一限流规则',
+      style: 'from-slate-800 to-violet-700',
+      icon: <SlidersHorizontal className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN],
     },
     {
       href: '/admin/mcp',
@@ -215,6 +306,7 @@ export default function AdminDashboard() {
       description: '查看 canonical MCP 与兼容入口',
       style: 'from-emerald-500 to-emerald-600',
       icon: <Database className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.OPS],
     },
     {
       href: '/admin/mcpkeys',
@@ -222,8 +314,10 @@ export default function AdminDashboard() {
       description: '管理外部智能体访问量表服务的凭证',
       style: 'from-slate-700 to-slate-900',
       icon: <Key className="mb-3 h-8 w-8" />,
+      roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.OPS],
     },
   ];
+  const visibleQuickLinks = quickLinks.filter((item) => canAccessAdminRoles(currentRole, item.roles));
 
   return (
     <div className="space-y-6">
@@ -277,6 +371,10 @@ export default function AdminDashboard() {
                 <p className="text-sm text-slate-500">待审核医生</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">{dashboard.userBreakdown.pendingDoctors}</p>
               </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">待审核知识</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">{dashboard.userBreakdown.pendingKnowledgeReviews}</p>
+              </div>
             </div>
           </Card>
 
@@ -328,11 +426,29 @@ export default function AdminDashboard() {
                 </Badge>
               </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                <div>
+                  <span className="text-sm font-medium text-slate-700">Hermes Runtime</span>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {dashboard.mcpStatus.hermes.configured
+                      ? `上游状态 ${dashboard.mcpStatus.hermes.upstreamStatus || '未知'}`
+                      : '尚未配置'}
+                  </p>
+                </div>
+                <Badge variant={dashboard.mcpStatus.hermes.status === 'ok' ? 'success' : 'warning'}>
+                  {dashboard.mcpStatus.hermes.status === 'ok' ? '健康' : '降级'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-sm font-medium text-slate-700">canonical MCP 鉴权</span>
                 <Badge variant={dashboard.mcpStatus.canonicalAuthEnabled ? 'success' : 'warning'}>
                   {dashboard.mcpStatus.canonicalAuthEnabled ? '已启用' : '未启用'}
                 </Badge>
               </div>
+              {dashboard.mcpStatus.hermes.reason ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                  Hermes 降级原因：{dashboard.mcpStatus.hermes.reason}
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-slate-200 px-4 py-4">
                 <p className="text-sm font-semibold text-slate-900">{dashboard.mcpStatus.canonical.label}</p>
                 <p className="mt-1 text-sm text-slate-500">24h 调用 {dashboard.mcpStatus.canonical.callsLast24h}</p>
@@ -384,7 +500,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {quickLinks.map((link) => (
+        {visibleQuickLinks.map((link) => (
           <Link
             key={link.href}
             href={link.href}

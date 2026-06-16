@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getRealtimeRuntimeConfig, type RealtimeSurface } from "@/lib/realtime/config";
 import { listRealtimeToolDescriptors } from "@/lib/realtime/tools";
 import { createDoctorBotBootstrapState } from "@/lib/realtime/doctor-bot-bootstrap";
-import { resolveAgentSessionContext } from "@/lib/services/agent-session";
+import { resolveAgentChannel, resolveAgentSessionContext } from "@/lib/services/agent-session";
 import { issueAgentSessionToken } from "@/lib/assessment-skill/auth";
 import { getLatestActiveAssessmentSession } from "@/lib/assessment-skill/scale-service";
 import { getMemberAssessmentSummary, getMemberContext } from "@/lib/assessment-skill/member-service";
@@ -20,12 +20,42 @@ type MemberSnapshotInput = {
   avatarConfig?: unknown;
 };
 
+type KnowledgeDefaultMode = "platform_proxy" | "direct_fastgpt";
+
+function readHermesProfileRuntimeConfig(configJson: unknown) {
+  const raw =
+    configJson && typeof configJson === "object" && !Array.isArray(configJson)
+      ? (configJson as Record<string, unknown>)
+      : {};
+
+  return {
+    knowledgeDefaultMode:
+      raw.knowledgeDefaultMode === "direct_fastgpt"
+        ? ("direct_fastgpt" as const)
+        : ("platform_proxy" as const),
+    doctorBotFallbackEnabled: raw.doctorBotFallbackEnabled !== false,
+  };
+}
+
+function resolveKnowledgeDefaultMode(input: {
+  surface: RealtimeSurface;
+  hermesProfileConfig?: unknown;
+  doctorBotConfig?: { knowledgeMode?: KnowledgeDefaultMode | null } | null;
+}) {
+  if (input.surface === "doctor_bot") {
+    return input.doctorBotConfig?.knowledgeMode || "platform_proxy";
+  }
+
+  return readHermesProfileRuntimeConfig(input.hermesProfileConfig).knowledgeDefaultMode;
+}
+
 export type RealtimeSessionBootstrapInput = {
   request: NextRequest;
   surface: RealtimeSurface;
   deviceId: string;
   memberId?: string;
   doctorBotSlug?: string;
+  channel?: string;
   memberSnapshot?: MemberSnapshotInput;
 };
 
@@ -49,7 +79,16 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
     role: resolved.user.role,
     deviceId: input.deviceId,
     accountType: resolved.activeAccountType,
-    doctorProfileId: resolved.user.doctorProfile?.id,
+    doctorProfileId: resolved.activeAccountType === "DOCTOR" ? resolved.activeDoctorProfile?.id : undefined,
+    organizationId: resolved.organization?.id || undefined,
+    hermesProfileId: resolved.hermesProfile?.id || undefined,
+    tenantRole: resolved.tenantRole,
+    channel: resolveAgentChannel({
+      channel: input.channel,
+      clientKind: "app",
+      entrypoint: input.surface === "doctor_bot" ? "app" : "agent",
+      accountType: resolved.activeAccountType,
+    }),
     entrypoint: input.surface === "doctor_bot" ? "app" : "agent",
   });
 
@@ -89,6 +128,20 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
         : "self_service";
 
   const voiceMode = runtime.fallbacks.voiceIntent ? "stable" : "experimental";
+  const hermesProfileRuntime = readHermesProfileRuntimeConfig(
+    resolved.hermesProfile?.configJson || null
+  );
+  const knowledgeDefaultMode = resolveKnowledgeDefaultMode({
+    surface: input.surface,
+    hermesProfileConfig: resolved.hermesProfile?.configJson || null,
+    doctorBotConfig: doctorBotPublic?.config as
+      | { knowledgeMode?: KnowledgeDefaultMode | null }
+      | null
+      | undefined,
+  });
+  const fastgptAvailable = Boolean(doctorBotPublic?.config.fastgptBaseUrl);
+  const doctorBotFallbackEnabled =
+    runtime.fallbacks.doctorBot && hermesProfileRuntime.doctorBotFallbackEnabled;
 
   return {
     runtime,
@@ -105,6 +158,9 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
       accountType: resolved.activeAccountType,
       isAuthenticated: !resolved.user.isGuest,
       doctorProfileId: resolved.user.doctorProfile?.id || null,
+      tenantRole: resolved.tenantRole,
+      organization: resolved.organization,
+      hermesProfile: resolved.hermesProfile,
     },
     member: {
       id: resolved.member.id,
@@ -121,9 +177,10 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
     activeAssessment,
     tools: toolDescriptors,
     knowledge: {
-      defaultMode: "platform_proxy",
-      fastgptAvailable: Boolean(doctorBotPublic?.config.fastgptBaseUrl),
-      directModeEnabled: false,
+      defaultMode: knowledgeDefaultMode,
+      fastgptAvailable,
+      directModeEnabled:
+        knowledgeDefaultMode === "direct_fastgpt" && fastgptAvailable,
     },
     doctorBot: doctorBot
       ? {
@@ -131,8 +188,8 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
           bot: doctorBot.bot,
           enabledScales: doctorBot.enabledScales,
           fallback: {
-            enabled: runtime.fallbacks.doctorBot,
-            provider: doctorBotPublic?.config.fastgptBaseUrl ? "fastgpt" : null,
+            enabled: doctorBotFallbackEnabled,
+            provider: fastgptAvailable ? "fastgpt" : null,
           },
         }
       : null,

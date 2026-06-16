@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { resolveAgentSessionContext } from '@/lib/services/agent-session';
 import { createFastgptEmbedSession } from '@/lib/services/fastgpt-embed';
 
+const LEGACY_FASTGPT_EMBED_SESSION_ROUTE = true;
+
 const requestSchema = z.object({
   deviceId: z.string().min(1),
   memberId: z.string().optional(),
@@ -24,6 +26,7 @@ const requestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    void LEGACY_FASTGPT_EMBED_SESSION_ROUTE;
     const body = requestSchema.parse(await request.json());
     const { user, member, activeAccountType } = await resolveAgentSessionContext({
       request,

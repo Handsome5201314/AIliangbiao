@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Bot, Eye, GraduationCap, Home, Loader2, MessageCircleHeart, MousePointer2, Pause, PlayCircle, RefreshCw, Square } from 'lucide-react';
+import { ArrowRight, Bot, Eye, GraduationCap, Home, Loader2, Maximize2, MessageCircleHeart, Minimize2, MousePointer2, Pause, PlayCircle, RefreshCw, Square } from 'lucide-react';
 
 import { useAuthSession } from '@/contexts/AuthSessionContext';
 import { useProfile } from '@/contexts/ProfileContext';
-import FastgptKnowledgePanel from '@/components/FastgptKnowledgePanel';
+import PlatformKnowledgePanel from '@/components/PlatformKnowledgePanel';
 import InviteQrCard from '@/components/InviteQrCard';
 import { QuestionnaireOptionButton } from '@/components/questionnaire/Shared';
 import dynamic from 'next/dynamic';
@@ -119,6 +119,172 @@ type RealtimeBootstrapResponse = {
   activeAssessment: AgentAssessmentSession | null;
 };
 
+type PlatformAgentStreamActionPayload = {
+  agentAction?: string;
+  actionCard?: {
+    scaleId?: string;
+  } | null;
+  triageSessionPatch?: {
+    status: string;
+    symptoms: string[];
+    conversationHistory: Array<{
+      role: 'user' | 'assistant';
+      content: string;
+      timestamp: number;
+    }>;
+    recommendedScale: string | null;
+  } | null;
+  backend?: string;
+  fallback?: boolean;
+};
+
+type PlatformAgentStreamMetaPayload = {
+  backend?: string;
+  fallback?: boolean;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function consumePlatformAgentChatStream(input: {
+  agentToken: string;
+  language: 'zh' | 'en';
+  triageContext: TriageContext;
+  content: string;
+  onAssistantDelta: (content: string) => void;
+}): Promise<{
+  replyText: string;
+  meta: PlatformAgentStreamMetaPayload | null;
+  action: PlatformAgentStreamActionPayload | null;
+}> {
+  const response = await fetch('/api/platform/v1/ai/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${input.agentToken}`,
+    },
+    body: JSON.stringify({
+      conversationBackend: 'hermes',
+      language: input.language,
+      triageContext: input.triageContext,
+      input: {
+        type: 'text',
+        text: input.content,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || 'Failed to continue triage');
+  }
+
+  if (!response.body) {
+    throw new Error('Platform AI stream is unavailable');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let replyText = '';
+  let metaPayload: PlatformAgentStreamMetaPayload | null = null;
+  let actionPayload: PlatformAgentStreamActionPayload | null = null;
+
+  const handleMessages = (messages: Array<{ event: string; data: unknown }>) => {
+    for (const message of messages) {
+      if (message.event === 'meta' && isPlainRecord(message.data)) {
+        metaPayload = {
+          backend:
+            typeof message.data.backend === 'string' ? message.data.backend : undefined,
+          fallback:
+            typeof message.data.fallback === 'boolean' ? message.data.fallback : undefined,
+        };
+        continue;
+      }
+
+      if (message.event === 'delta' && isPlainRecord(message.data)) {
+        const nextContent =
+          typeof message.data.content === 'string'
+            ? message.data.content
+            : typeof message.data.delta === 'string'
+              ? `${replyText}${message.data.delta}`
+              : replyText;
+        if (nextContent) {
+          replyText = nextContent;
+          input.onAssistantDelta(nextContent);
+        }
+        continue;
+      }
+
+      if (message.event === 'message' && isPlainRecord(message.data)) {
+        if (typeof message.data.content === 'string' && message.data.content) {
+          replyText = message.data.content;
+          input.onAssistantDelta(replyText);
+        }
+        continue;
+      }
+
+      if (message.event === 'action' && isPlainRecord(message.data)) {
+        actionPayload = {
+          agentAction:
+            typeof message.data.agentAction === 'string'
+              ? message.data.agentAction
+              : undefined,
+          actionCard:
+            isPlainRecord(message.data.actionCard)
+              ? (message.data.actionCard as { scaleId?: string })
+              : null,
+          triageSessionPatch:
+            isPlainRecord(message.data.triageSessionPatch)
+              ? (message.data.triageSessionPatch as PlatformAgentStreamActionPayload['triageSessionPatch'])
+              : null,
+          backend:
+            typeof message.data.backend === 'string' ? message.data.backend : undefined,
+          fallback:
+            typeof message.data.fallback === 'boolean' ? message.data.fallback : undefined,
+        };
+        continue;
+      }
+
+      if (message.event === 'error') {
+        if (typeof message.data === 'string') {
+          throw new Error(message.data);
+        }
+        if (isPlainRecord(message.data) && typeof message.data.message === 'string') {
+          throw new Error(message.data.message);
+        }
+        throw new Error('Failed to continue triage');
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    const parsed = parseAgentLiveSseBuffer(buffer);
+    buffer = parsed.rest;
+    handleMessages(parsed.messages);
+
+    if (done) {
+      break;
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const parsed = parseAgentLiveSseBuffer(`${buffer}\n\n`);
+    handleMessages(parsed.messages);
+  }
+
+  return {
+    replyText,
+    meta: metaPayload,
+    action: actionPayload,
+  };
+}
+
 function getSessionDeviceId(isAuthenticated: boolean) {
   if (isAuthenticated) {
     return peekGuestSessionId() || generateUUID();
@@ -203,7 +369,29 @@ function mergeLiveEvent(live: AgentLiveState | null, event: AgentLiveEvent): Age
   };
 }
 
-export default function AgentWorkspace({ mobile = false }: { mobile?: boolean }) {
+type AgentWorkspaceProps = {
+  mobile?: boolean;
+  mobileShellMode?: 'standalone' | 'drawer' | 'fullscreen';
+  onRequestExpand?: (() => void) | undefined;
+  onRequestCollapse?: (() => void) | undefined;
+  knowledgeOpenOverride?: boolean | undefined;
+  onKnowledgeOpenChange?: ((open: boolean) => void) | undefined;
+  onCurrentQuestionChange?: ((questionId: number | null) => void) | undefined;
+  onCurrentScaleChange?: ((scaleId: string | null) => void) | undefined;
+  renderKnowledgePanel?: boolean | undefined;
+};
+
+export default function AgentWorkspace({
+  mobile = false,
+  mobileShellMode = 'standalone',
+  onRequestExpand,
+  onRequestCollapse,
+  knowledgeOpenOverride,
+  onKnowledgeOpenChange,
+  onCurrentQuestionChange,
+  onCurrentScaleChange,
+  renderKnowledgePanel = true,
+}: AgentWorkspaceProps) {
   const router = useRouter();
   const { authHeaders, isAuthenticated } = useAuthSession();
   const { profile } = useProfile();
@@ -216,7 +404,7 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
   const [activeMemberId, setActiveMemberId] = useState('');
   const [goal, setGoal] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
-  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const [knowledgeOpenState, setKnowledgeOpenState] = useState(false);
   const [latestAssistant, setLatestAssistant] = useState('');
   const [latestUser, setLatestUser] = useState('');
   const [assessmentSummary, setAssessmentSummary] = useState<AssessmentSummaryResponse | null>(null);
@@ -229,6 +417,15 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
   const [liveStreamError, setLiveStreamError] = useState('');
   const [realtimeBootstrap, setRealtimeBootstrap] = useState<RealtimeBootstrapResponse | null>(null);
   const [error, setError] = useState('');
+  const mobileEmbedded = mobile && mobileShellMode !== 'standalone';
+  const showWorkspaceHeader = !mobileEmbedded;
+  const knowledgeOpen = knowledgeOpenOverride ?? knowledgeOpenState;
+  const setKnowledgeOpen = (open: boolean) => {
+    if (knowledgeOpenOverride === undefined) {
+      setKnowledgeOpenState(open);
+    }
+    onKnowledgeOpenChange?.(open);
+  };
 
   const agentToken = bootstrap?.token || '';
   const currentDeviceId = bootstrap?.session?.device_id || getSessionDeviceId(isAuthenticated);
@@ -243,6 +440,14 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
     fears: profile.fears,
     avatarConfig: profile.avatarState,
   }), [profile.nickname, profile.gender, profile.ageMonths, profile.relation, profile.languagePreference, profile.interests, profile.fears, profile.avatarState]);
+
+  useEffect(() => {
+    onCurrentQuestionChange?.(assessmentSession?.currentQuestion?.id || null);
+  }, [assessmentSession?.currentQuestion?.id, onCurrentQuestionChange]);
+
+  useEffect(() => {
+    onCurrentScaleChange?.(assessmentSession?.scaleId || null);
+  }, [assessmentSession?.scaleId, onCurrentScaleChange]);
   const copy = useMemo(() => language === 'en'
     ? {
         title: 'XiaoAn stays with you through screening',
@@ -265,9 +470,11 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
         quickStart: 'Quick Start',
         completed: 'Your result is ready',
         scoreLabel: 'Score',
-        knowledgeTitle: 'Knowledge Copilot',
+        assistantExpand: 'Open full screen',
+        assistantCollapse: 'Back to half-open',
+        knowledgeTitle: 'Question Explanation',
         knowledgeBody:
-          'Use it for literature, guidelines, and scale interpretation. It stays separate from your current assessment flow.',
+          'Open it while answering a question to view the platform-standard explanation and any approved doctor supplement.',
         knowledgeOpen: 'Open Knowledge Panel',
         liveTitle: 'Live Follow',
         liveMirror: 'Current Page',
@@ -306,8 +513,10 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
         quickStart: '快捷开始',
         completed: '筛查结果已经出来了',
         scoreLabel: '得分',
-        knowledgeTitle: '知识副脑',
-        knowledgeBody: '用于查看指南、文献依据和量表解释，不会打断当前量表流程；如果刚做完量表，可手动刷新知识面板同步上下文。',
+        assistantExpand: '切到全屏',
+        assistantCollapse: '回到半展开',
+        knowledgeTitle: '题目解释',
+        knowledgeBody: '在答题过程中打开这里，可以看到当前题的平台标准解释，以及审核通过的医生 / 机构补充说明。',
         knowledgeOpen: '打开知识面板',
         liveTitle: '实时跟随',
         liveMirror: '当前页面',
@@ -825,46 +1034,35 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
         },
       };
 
-      const response = await fetch('/api/realtime/conversation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${agentToken}`,
+      const streamed = await consumePlatformAgentChatStream({
+        agentToken,
+        language,
+        triageContext: currentContext,
+        content,
+        onAssistantDelta: (assistantText) => {
+          setLatestAssistant(assistantText);
         },
-        body: JSON.stringify({
-          surface: 'agent',
-          conversationBackend: 'hermes',
-          voiceMode: 'stable',
-          language,
-          triageContext: currentContext,
-          input: {
-            type: 'text',
-            text: content,
-          },
-        }),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Failed to continue triage');
 
-      const triagePatch = payload.triageSessionPatch;
-      const replyText = payload.message?.content || prompts.bootstrapPatient || '';
+      const triagePatch = streamed.action?.triageSessionPatch || null;
+      const replyText = streamed.replyText || prompts.bootstrapPatient || '';
       const scaleId =
-        typeof payload.actionCard?.scaleId === 'string'
-          ? payload.actionCard.scaleId
+        typeof streamed.action?.actionCard?.scaleId === 'string'
+          ? streamed.action.actionCard.scaleId
           : typeof triagePatch?.recommendedScale === 'string'
             ? triagePatch.recommendedScale
             : undefined;
 
       setLatestAssistant(replyText);
       await appendLiveEvent({
-        type: payload.agentAction === 'start_scale' ? 'action' : 'result',
+        type: streamed.action?.agentAction === 'start_scale' ? 'action' : 'result',
         message: replyText,
         view: buildWorkspaceLiveView(language === 'en' ? 'Agent workspace' : '小安实时工作台'),
         data: {
-          action: payload.agentAction,
+          action: streamed.action?.agentAction,
           scaleId,
-          backend: payload.backend,
-          fallback: payload.fallback,
+          backend: streamed.action?.backend || streamed.meta?.backend,
+          fallback: streamed.action?.fallback ?? streamed.meta?.fallback,
         },
       });
 
@@ -886,7 +1084,7 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
         }
       }
 
-      if (payload.agentAction === 'start_scale' && scaleId) {
+      if (streamed.action?.agentAction === 'start_scale' && scaleId) {
         if (triageSession?.id) {
           await fetch(`/api/skill/v1/me/triage-session?sessionId=${encodeURIComponent(triageSession.id)}`, {
             method: 'DELETE',
@@ -1020,6 +1218,42 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
                 onClick={() => void submitAnswer(option.score)}
               />
             ))}
+            {mobile ? (
+              <div
+                className={`sticky bottom-0 -mx-3 mt-4 grid gap-2 border-t border-indigo-200 bg-white/95 px-3 pt-3 backdrop-blur ${
+                  onRequestExpand || onRequestCollapse ? 'grid-cols-2 pb-[calc(env(safe-area-inset-bottom)+8px)]' : 'grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+8px)]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setKnowledgeOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                >
+                  <GraduationCap className="h-4 w-4" />
+                  <span>{copy.knowledgeOpen}</span>
+                </button>
+                {onRequestExpand ? (
+                  <button
+                    type="button"
+                    onClick={onRequestExpand}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    <span>{copy.assistantExpand}</span>
+                  </button>
+                ) : null}
+                {onRequestCollapse ? (
+                  <button
+                    type="button"
+                    onClick={onRequestCollapse}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Minimize2 className="h-4 w-4" />
+                    <span>{copy.assistantCollapse}</span>
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1093,7 +1327,7 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className={`flex items-center justify-center bg-slate-50 ${mobileEmbedded ? 'h-full min-h-0' : 'min-h-screen'}`}>
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
           <p className="mt-3 text-sm text-slate-500">{copy.preparing}</p>
@@ -1104,8 +1338,8 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
 
   if (bootstrap?.account.accountType === 'DOCTOR') {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className={`mx-auto px-4 py-10 ${mobile ? 'max-w-lg' : 'max-w-3xl'}`}>
+      <div className={`${mobileEmbedded ? 'h-full min-h-0 overflow-y-auto bg-slate-50' : 'min-h-screen bg-slate-50'}`}>
+        <div className={`${mobileEmbedded ? 'px-4 py-6' : `mx-auto px-4 py-10 ${mobile ? 'max-w-lg' : 'max-w-3xl'}`}`}>
           <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm">
             <Bot className="mx-auto h-10 w-10 text-indigo-600" />
             <h1 className="mt-4 text-2xl font-bold text-slate-900">{copy.doctor}</h1>
@@ -1124,23 +1358,31 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#dbeafe,transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
-      <div className={`mx-auto px-4 ${mobile ? 'max-w-lg py-4 pb-[calc(env(safe-area-inset-bottom)+28px)]' : 'max-w-[1500px] py-6 sm:py-8'}`}>
-        <div className={`mb-6 ${mobile ? 'flex items-center justify-between gap-3 rounded-[1.75rem] border border-slate-200 bg-white/85 p-4 shadow-sm backdrop-blur' : 'flex items-start justify-between gap-4'}`}>
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
-              <Bot className="h-5 w-5" />
+    <div className={`${mobileEmbedded ? 'h-full min-h-0 bg-[radial-gradient(circle_at_top,#dbeafe,transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]' : 'min-h-screen bg-[radial-gradient(circle_at_top,#dbeafe,transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]'}`}>
+      <div
+        className={
+          mobileEmbedded
+            ? 'h-full min-h-0 overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+18px)]'
+            : `mx-auto px-4 ${mobile ? 'max-w-lg py-4 pb-[calc(env(safe-area-inset-bottom)+28px)]' : 'max-w-[1500px] py-6 sm:py-8'}`
+        }
+      >
+        {showWorkspaceHeader ? (
+          <div className={`mb-6 ${mobile ? 'flex items-center justify-between gap-3 rounded-[1.75rem] border border-slate-200 bg-white/85 p-4 shadow-sm backdrop-blur' : 'flex items-start justify-between gap-4'}`}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className={mobile ? 'text-lg font-bold text-slate-900' : 'text-2xl font-bold text-slate-900'}>{copy.title}</h1>
+                <p className="text-sm text-slate-500">{copy.subtitle}</p>
+              </div>
             </div>
-            <div>
-              <h1 className={mobile ? 'text-lg font-bold text-slate-900' : 'text-2xl font-bold text-slate-900'}>{copy.title}</h1>
-              <p className="text-sm text-slate-500">{copy.subtitle}</p>
-            </div>
+            <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Home className="h-4 w-4" />
+              <span className={mobile ? 'hidden sm:inline' : ''}>{copy.backHome}</span>
+            </button>
           </div>
-          <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <Home className="h-4 w-4" />
-            <span className={mobile ? 'hidden sm:inline' : ''}>{copy.backHome}</span>
-          </button>
-        </div>
+        ) : null}
 
         {error ? (
           <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -1303,16 +1545,20 @@ export default function AgentWorkspace({ mobile = false }: { mobile?: boolean })
           </aside>
         </div>
       </div>
-      <FastgptKnowledgePanel
-        isOpen={knowledgeOpen}
-        onClose={() => setKnowledgeOpen(false)}
-        authHeaders={authHeaders}
-        deviceId={currentDeviceId}
-        memberId={activeMemberId || bootstrap?.member.id || profile.id}
-        memberSnapshot={memberSnapshot}
-        language={language}
-        mobile={mobile}
-      />
+      {renderKnowledgePanel ? (
+        <PlatformKnowledgePanel
+          isOpen={knowledgeOpen}
+          onClose={() => setKnowledgeOpen(false)}
+          authHeaders={authHeaders}
+          deviceId={currentDeviceId}
+          memberId={activeMemberId || bootstrap?.member.id || profile.id}
+          memberSnapshot={memberSnapshot}
+          language={language}
+          mobile={mobile}
+          scaleId={assessmentSession?.scaleId || ''}
+          questionId={assessmentSession?.currentQuestion?.id || null}
+        />
+      ) : null}
     </div>
   );
 }

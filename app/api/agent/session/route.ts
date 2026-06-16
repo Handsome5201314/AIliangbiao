@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { issueAgentSessionToken } from '@/lib/assessment-skill/auth';
-import { getAgentToolCapabilities, resolveAgentSessionContext } from '@/lib/services/agent-session';
+import {
+  getAgentToolCapabilities,
+  resolveAgentChannel,
+  resolveAgentSessionContext,
+  resolveAgentTenantContext,
+} from '@/lib/services/agent-session';
 import {
   AiToyPartnerAuthError,
   assertAiToyDeviceBinding,
@@ -15,6 +20,7 @@ const requestSchema = z.object({
   memberId: z.string().optional(),
   entrypoint: z.enum(['app', 'agent']).optional(),
   clientKind: z.enum(['app', 'ai_toy']).optional(),
+  channel: z.string().optional(),
   autoCreateBinding: z.boolean().optional(),
   memberSnapshot: z
     .object({
@@ -46,7 +52,15 @@ export async function POST(request: NextRequest) {
           if (body.memberId && body.memberId !== resolved.member.id) {
             throw new Error('AI toy device binding does not match this account member');
           }
-          return resolved;
+          const tenant = await resolveAgentTenantContext({
+            user: resolved.user,
+            member: resolved.member,
+            activeAccountType: resolved.activeAccountType,
+          });
+          return {
+            ...resolved,
+            ...tenant,
+          };
         })()
       : await resolveAgentSessionContext({
           request,
@@ -64,13 +78,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const agentChannel = resolveAgentChannel({
+      channel: body.channel,
+      clientKind: body.clientKind || 'app',
+      entrypoint: body.entrypoint || 'app',
+      accountType: activeAccountType || 'PATIENT',
+    });
+
     const session = issueAgentSessionToken({
       userId: user.id,
       memberId: member.id,
       role: (user.role || 'GUEST') as 'GUEST' | 'REGISTERED' | 'VIP',
       deviceId: body.deviceId,
       accountType: activeAccountType || 'PATIENT',
-      doctorProfileId: user.doctorProfile?.id,
+      doctorProfileId: activeAccountType === 'DOCTOR' ? context.activeDoctorProfile?.id : undefined,
+      organizationId: context.organization?.id || undefined,
+      hermesProfileId: context.hermesProfile?.id || undefined,
+      tenantRole: context.tenantRole,
+      channel: agentChannel,
       entrypoint: body.entrypoint || 'app',
     });
 
@@ -90,6 +115,19 @@ export async function POST(request: NextRequest) {
               verificationStatus: user.doctorProfile.verificationStatus,
             }
           : null,
+        tenant: {
+          channel: agentChannel,
+          tenantRole: context.tenantRole,
+          organization: context.organization,
+          hermesProfile: context.hermesProfile,
+          activeDoctorProfile: context.activeDoctorProfile
+            ? {
+                id: context.activeDoctorProfile.id,
+                realName: context.activeDoctorProfile.realName,
+                organizationId: context.activeDoctorProfile.organizationId || null,
+              }
+            : null,
+        },
         availableTools: getAgentToolCapabilities({
           accountType: activeAccountType || 'PATIENT',
           doctorProfileId: user.doctorProfile?.id,

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, ExternalLink, GraduationCap, RefreshCw, X } from 'lucide-react';
 
+const LEGACY_FASTGPT_KNOWLEDGE_PANEL = true;
+
 type MemberSnapshotInput = {
   nickname?: string;
   gender?: string;
@@ -92,6 +94,7 @@ export default function FastgptKnowledgePanel({
   closeHref = '/agent',
   initialExpertKey = '',
 }: FastgptKnowledgePanelProps) {
+  void LEGACY_FASTGPT_KNOWLEDGE_PANEL;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [session, setSession] = useState<FastgptEmbedSessionResponse['session'] | null>(null);

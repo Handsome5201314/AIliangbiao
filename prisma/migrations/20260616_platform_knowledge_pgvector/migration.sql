@@ -1,0 +1,2 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE "KnowledgeChunk" ADD COLUMN IF NOT EXISTS "embedding" vector;

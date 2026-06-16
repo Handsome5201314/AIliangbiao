@@ -106,6 +106,8 @@ test("realtime bootstrap should include ui mode, voice mode, and knowledge routi
   assert.match(routeSource, /voiceMode/);
   assert.match(routeSource, /knowledge/);
   assert.match(routeSource, /platform_proxy/);
+  assert.match(routeSource, /configJson/);
+  assert.match(routeSource, /knowledgeDefaultMode/);
 });
 
 test("Hermes conversation proxy route should exist for shared conversation turns", async () => {
@@ -116,6 +118,27 @@ test("Hermes conversation proxy route should exist for shared conversation turns
 test("doctor bot public message route should remain available during conversation proxy migration", async () => {
   const route = await import("../app/api/chat/[slug]/message/route");
   assert.equal(typeof route.POST, "function");
+});
+
+test("internal Hermes health route should exist for platform runtime checks", async () => {
+  const route = await import("../app/api/internal/hermes/health/route");
+  assert.equal(typeof route.GET, "function");
+});
+
+test("admin dashboard service should include Hermes runtime health", async () => {
+  const file = await import("node:fs/promises");
+  const source = await file.readFile("lib/services/admin-dashboard.ts", "utf8");
+
+  assert.match(source, /getHermesHealthSnapshot/);
+  assert.match(source, /hermes:/);
+});
+
+test("admin dashboard page should surface Hermes runtime status", async () => {
+  const file = await import("node:fs/promises");
+  const source = await file.readFile("app/admin/page.tsx", "utf8");
+
+  assert.match(source, /Hermes Runtime/);
+  assert.match(source, /Hermes 降级原因/);
 });
 
 test("doctor bot public message route should delegate through shared conversation service", async () => {
@@ -131,11 +154,11 @@ test("doctor workspace route should remain available while Hermes rollout settin
   assert.equal(typeof route.POST, "function");
 });
 
-test("agent workspace should reference the shared realtime conversation entry for text turns", async () => {
+test("agent workspace should reference the platform AI stream entry for text turns", async () => {
   const file = await import("node:fs/promises");
   const source = await file.readFile("components/AgentWorkspace.tsx", "utf8");
 
-  assert.match(source, /\/api\/realtime\/conversation/);
+  assert.match(source, /\/api\/platform\/v1\/ai\/chat\/stream/);
 });
 
 test("agent workspace text flow should stop calling voice-intent directly for text triage", async () => {
@@ -148,7 +171,20 @@ test("agent workspace text flow should stop calling voice-intent directly for te
 
   assert.doesNotMatch(planGoalSection, /\/api\/skill\/v1\/voice-intent/);
   assert.doesNotMatch(planGoalSection, /VOICE_INTENT_API/);
-  assert.match(planGoalSection, /payload\.agentAction/);
+  assert.match(planGoalSection, /streamed\.action\?\.agentAction/);
+});
+
+test("agent workspace text flow should consume the platform SSE chat stream for Hermes triage", async () => {
+  const file = await import("node:fs/promises");
+  const source = await file.readFile("components/AgentWorkspace.tsx", "utf8");
+  const planGoalSectionStart = source.indexOf("const planGoal = useCallback");
+  const planGoalSectionEnd = source.indexOf("const handleVoiceStateChange = useCallback");
+  const planGoalSection = source.slice(planGoalSectionStart, planGoalSectionEnd);
+
+  assert.match(source, /\/api\/platform\/v1\/ai\/chat\/stream/);
+  assert.match(source, /getReader\(\)/);
+  assert.match(source, /parseAgentLiveSseBuffer/);
+  assert.match(planGoalSection, /consumePlatformAgentChatStream/);
 });
 
 test("realtime conversation route should expose agentAction and triageSessionPatch for agent surface", async () => {

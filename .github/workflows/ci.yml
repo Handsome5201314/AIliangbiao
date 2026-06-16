@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - "codex/**"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_DB: ai_scale_db
+          POSTGRES_USER: ai_scale_app
+          POSTGRES_PASSWORD: ci-local-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ai_scale_app -d ai_scale_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      CI: "true"
+      DATABASE_URL: postgresql://ai_scale_app:ci-local-password@127.0.0.1:5432/ai_scale_db
+      DIRECT_URL: postgresql://ai_scale_app:ci-local-password@127.0.0.1:5432/ai_scale_db
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:3000
+      SESSION_SECRET: ci-session-secret
+      APP_SESSION_SECRET: ci-app-session-secret
+      ADMIN_SESSION_SECRET: ci-admin-session-secret
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ci-admin-password
+      ENABLE_VOICE_INTERACTION: "true"
+      ENABLE_MCP_SERVER: "true"
+      LOG_LEVEL: debug
+      HERMES_API_SERVER_BASE_URL: http://127.0.0.1:8642/v1
+      HERMES_API_SERVER_KEY: ci-hermes-key
+      HERMES_API_SERVER_MODEL: hermes-agent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Sync CI database schema
+        run: npx prisma db push --skip-generate
+
+      - name: Run schema validation and tests
+        run: npm run ci:check
+
+      - name: Build application and Next.js type gate
+        run: npm run build
+
+      - name: Start application for smoke check
+        run: |
+          npm run start > next-smoke.log 2>&1 &
+          echo $! > next-smoke.pid
+
+      - name: Wait for local health endpoint
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/health || true)
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Application did not become healthy in time"
+          cat next-smoke.log || true
+          exit 1
+
+      - name: Run local smoke checks
+        run: node scripts/smoke-local.mjs
+
+      - name: Run Playwright browser smoke
+        run: npm run test:e2e:playwright
+
+      - name: Print smoke logs on failure
+        if: failure()
+        run: cat next-smoke.log || true
+
+      - name: Print rollback guidance on failure
+        if: failure()
+        run: |
+          echo "Rollback guidance:"
+          grep -n "Recommended rollback order" -A 6 DEPLOYMENT.md || true
+
+      - name: Stop smoke application
+        if: always()
+        run: |
+          if [ -f next-smoke.pid ]; then
+            kill "$(cat next-smoke.pid)" || true
+          fi

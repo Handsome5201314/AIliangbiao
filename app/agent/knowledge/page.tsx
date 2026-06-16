@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import FastgptKnowledgePanel from '@/components/FastgptKnowledgePanel';
+import PlatformKnowledgePanel from '@/components/PlatformKnowledgePanel';
 import { useAuthSession } from '@/contexts/AuthSessionContext';
 import { useProfile } from '@/contexts/ProfileContext';
 import { getOrCreateGuestSessionId, peekGuestSessionId } from '@/lib/utils/guestSession';
@@ -25,10 +25,14 @@ export default function AgentKnowledgePage() {
 
   const deviceId = useMemo(() => getSessionDeviceId(isAuthenticated), [isAuthenticated]);
   const memberId = searchParams.get('memberId') || profile.id;
-  const initialExpertKey = searchParams.get('expert') || '';
+  const scaleId = searchParams.get('scaleId') || '';
+  const questionIdParam = searchParams.get('questionId') || '';
+  const questionId = Number.isFinite(Number(questionIdParam)) && Number(questionIdParam) > 0
+    ? Number(questionIdParam)
+    : null;
 
   return (
-    <FastgptKnowledgePanel
+    <PlatformKnowledgePanel
       isOpen
       standalone
       onClose={() => {}}
@@ -47,7 +51,8 @@ export default function AgentKnowledgePage() {
       }}
       language={language}
       closeHref="/agent"
-      initialExpertKey={initialExpertKey}
+      scaleId={scaleId}
+      questionId={questionId}
     />
   );
 }

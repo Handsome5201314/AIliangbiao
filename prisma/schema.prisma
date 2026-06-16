@@ -61,6 +61,53 @@ enum DoctorVerificationStatus {
   SUSPENDED
 }
 
+enum OrganizationStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum HermesProfileOwnerType {
+  ORGANIZATION
+  DOCTOR
+}
+
+enum HermesProfileStatus {
+  DRAFT
+  READY
+  DEGRADED
+  DISABLED
+}
+
+enum KnowledgeScopeType {
+  PLATFORM
+  ORGANIZATION
+  DOCTOR
+}
+
+enum KnowledgeReviewStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum AuditActorType {
+  USER
+  DOCTOR
+  ADMIN
+  SYSTEM
+}
+
+enum AuditTargetType {
+  MEMBER_PROFILE
+  KNOWLEDGE_DOC
+  QUESTION_EXPLANATION
+  AGENT_SESSION
+  ORGANIZATION
+  HERMES_PROFILE
+}
+
 enum CareAssignmentStatus {
   ACTIVE
   REVOKED
@@ -296,10 +343,29 @@ model AssessmentCallbackDelivery {
   @@index([status, updatedAt])
 }
 
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  orgCode     String?            @unique
+  status      OrganizationStatus @default(ACTIVE)
+  contactName String?
+  contactPhone String?
+  createdByAdminId String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  doctors      DoctorProfile[]
+  hermesProfiles HermesProfile[]
+
+  @@index([status, createdAt])
+}
+
 model DoctorProfile {
   id                 String                    @id @default(cuid())
   userId             String                    @unique
   user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId     String?
+  organization       Organization?             @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   realName           String
   hospitalName       String
   departmentName     String
@@ -307,6 +373,7 @@ model DoctorProfile {
   licenseNo          String                    @unique
   verificationStatus DoctorVerificationStatus  @default(PENDING)
   reviewNotes        String?
+  isOrganizationOwner Boolean                  @default(false)
   approvedAt         DateTime?
   approvedByAdminId  String?
   approvedByAdmin    Admin?                    @relation("DoctorApprovedByAdmin", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
@@ -328,10 +395,124 @@ model DoctorProfile {
   receivedNeonateAccessGrants NeonateArchiveAccessGrant[] @relation("NeonateAccessTargetDoctor")
   collaborationAuditLogs DoctorCollaborationAuditLog[] @relation("CollaborationAuditActorDoctor")
   collaborationAuditTargets DoctorCollaborationAuditLog[] @relation("CollaborationAuditTargetDoctor")
+  hermesProfile       HermesProfile?
 
   @@index([verificationStatus])
   @@index([realName])
   @@index([hospitalName, departmentName])
+  @@index([organizationId])
+}
+
+model HermesProfile {
+  id              String                  @id @default(cuid())
+  ownerType       HermesProfileOwnerType
+  organizationId  String?                 @unique
+  organization    Organization?           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  doctorProfileId String?                 @unique
+  doctorProfile   DoctorProfile?          @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  displayName     String?
+  status          HermesProfileStatus     @default(READY)
+  policyJson      Json?
+  configJson      Json?
+  lastHealthAt    DateTime?
+  lastHealthStatus String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  knowledgeDocs   KnowledgeDoc[]
+
+  @@index([ownerType, status])
+}
+
+model KnowledgeDoc {
+  id               String                @id @default(cuid())
+  hermesProfileId  String?
+  hermesProfile    HermesProfile?        @relation(fields: [hermesProfileId], references: [id], onDelete: SetNull)
+  scopeType        KnowledgeScopeType    @default(PLATFORM)
+  organizationId   String?
+  doctorProfileId  String?
+  title            String
+  slug             String?
+  sourceType       String                @default("MARKDOWN")
+  summary          String?
+  rawMd            String
+  renderedHtml     String?
+  language         String                @default("zh")
+  status           KnowledgeReviewStatus @default(DRAFT)
+  sourceFileName   String?
+  uploadedByUserId String?
+  reviewedByAdminId String?
+  reviewedAt       DateTime?
+  reviewComment    String?
+  metadataJson     Json?
+  chunkCount       Int                   @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  chunks               KnowledgeChunk[]
+  questionExplanations QuestionExplanation[]
+
+  @@index([scopeType, status, language, createdAt])
+  @@index([organizationId, doctorProfileId, status])
+}
+
+model KnowledgeChunk {
+  id         String   @id @default(cuid())
+  docId      String
+  doc        KnowledgeDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  scaleId    String?
+  questionId String?
+  contentText String
+  searchText String?
+  tokenCount Int?
+  embedding  Unsupported("vector")?
+  metadataJson Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([docId, chunkIndex])
+  @@index([docId, createdAt])
+}
+
+model QuestionExplanation {
+  id              String                @id @default(cuid())
+  sourceDocId     String?
+  sourceDoc       KnowledgeDoc?         @relation(fields: [sourceDocId], references: [id], onDelete: SetNull)
+  scaleId         String
+  questionId      Int
+  lang            String                @default("zh")
+  scopeType       KnowledgeScopeType    @default(PLATFORM)
+  organizationId  String?
+  doctorProfileId String?
+  title           String?
+  contentMd       String
+  status          KnowledgeReviewStatus @default(DRAFT)
+  priority        Int                   @default(100)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([scaleId, questionId, lang, scopeType, status, priority])
+  @@index([organizationId, doctorProfileId, status])
+}
+
+model AuditLog {
+  id                   String          @id @default(cuid())
+  organizationId       String?
+  actorType            AuditActorType
+  actorUserId          String?
+  actorDoctorProfileId String?
+  actorAdminId         String?
+  memberProfileId      String?
+  targetType           AuditTargetType
+  targetId             String?
+  action               String
+  details              Json?
+  createdAt            DateTime        @default(now())
+
+  @@index([memberProfileId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
 }
 
 model DoctorScaleInvite {
