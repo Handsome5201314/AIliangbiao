@@ -1,140 +1,190 @@
-# 外部智能体接入量表系统说明书
+# 外部智能体接入与 Web Handoff 指引
 
-## 目标
+本文面向 OpenClaw、FastGPT、Coze、Dify 或其他外部智能体平台，重点解释：
 
-这份说明书面向 OpenClaw 或其他外部智能体（FastGPT、Coze、Dify 等），说明如何调用当前项目的量表能力。
+- 什么时候应该用用户态 `agent session + /api/skill/v1/*`
+- 什么时候应该用系统态 `/api/mcp`
+- 什么时候应该优先切到 Web Handoff
+- callback / 轮询 / 结果事实源应该怎么处理
 
-推荐把当前项目视为：
-
-- 量表工具执行层
-- 确定性评分引擎
-- 会话状态机
-- 评分与结果落库层
-- handoff 链接 / 二维码分发层
-
-推荐把外部智能体视为：
-
-- 对话主脑
-- 任务编排层
-- 结果解释与知识库分析层
-
-一句话：
-
-- 外部智能体决定何时推荐量表、用自然对话收集用户回答
-- 本项目负责提供标准题目、执行确定性评分、保存结果
-- 外部智能体再拿结构化结果继续分析
+这是一份 how-to 文档，不覆盖部署细节。部署请看 [DEPLOYMENT.md](../DEPLOYMENT.md)。
 
 ---
 
-## 推荐调用方式（按优先级排序）
+## 先选接入模式
 
-### 最推荐：REST API 两步调用
+### 模式 A：用户态 Skill Facade
 
 适合：
 
-- 任何能发 HTTP 请求的平台
-- 不想处理 SSE 长连接或多轮 tool call
-- 希望最快跑通集成
+- 外部智能体挂在已登录患者 / 医生上下文里
+- 需要当前成员、医生租户、AI toy 设备绑定等用户态上下文
+- 希望与 `/agent`、医生工作台、AI toy 共享同一条会话主链
 
-主流程：
+认证方式：
 
-```
-步骤 1：获取量表定义
-GET /api/skill/v1/scales/:scaleId
-Authorization: Bearer <MCP_API_KEY>
-→ 返回题目、选项、评分规则说明
+1. `POST /api/agent/session`
+2. 拿到 `agent session token`
+3. 用 `Authorization: Bearer <agent_session_token>` 调 `/api/skill/v1/*`
 
-步骤 2：提交答案获取评分
-POST /api/skill/v1/scales/:scaleId/evaluate
-Authorization: Bearer <MCP_API_KEY>
+### 模式 B：系统态 MCP
+
+适合：
+
+- 外部平台原生支持 MCP SSE / JSON-RPC
+- 只需要系统级工具接入，不要求绑定某个当前登录用户
+
+认证方式：
+
+- `Authorization: Bearer <MCP_API_KEY>`
+
+主入口：
+
+- `GET /api/mcp`
+- `POST /api/mcp`
+
+兼容入口：
+
+- `/api/mcp/scale`
+- `/api/mcp/memory`
+- `/api/mcp/growth`
+
+### 模式 C：Web Handoff
+
+适合：
+
+- 长表单
+- 移动端扫码填写
+- 聊天线程不适合逐题问答
+- 需要把答题 UI 交给浏览器页面
+
+推荐顺序：
+
+1. 如果要绑定当前用户 / 当前成员上下文，优先 `agent session + /api/skill/v1/*`
+2. 如果要标准 tool 协议，优先 `/api/mcp`
+3. 遇到 `interactionMode = web_handoff` 的量表，优先让用户进入 Handoff 页面
+
+---
+
+## 关键事实源
+
+在这个项目里，有几个边界必须分清：
+
+- `/api/skill/v1/*` 现在使用的是 `agent session token`，不是 `MCP API Key`
+- 默认公开量表目录是儿童临床主流程，不是“所有量表”
+- 探索量表是独立目录
+- AI toy 语音目录当前只包含 `M_CHAT_R` 和 `SNAP-IV`
+- `AssessmentSession` 是会话事实源，`AssessmentHistory` 是最终历史沉淀
+- `resultDeliveryMode = physician_review` 时，填写端不应该假定能直接看到最终结果
+
+本文所有 `PHQ-9`、`VINELAND_3` 等示例都只是调用格式示例，不代表它们属于同一默认公开目录。
+
+---
+
+## 路线 1：用户态 `agent session` 接入
+
+### 第一步：创建 agent session
+
+```http
+POST /api/agent/session
 Content-Type: application/json
-Body: { "answers": [0, 1, 2, 3, ...] }
-→ 返回确定性评分结果
+Authorization: Bearer <context-dependent token>
 ```
 
-外部智能体在自己的对话中用自然语言逐题收集用户回答，映射为选项分数数组，最后一次性提交。
+示例 body：
 
-优势：
-- 只需 2 次 HTTP 调用
-- 不依赖 SSE 长连接
-- 不需要维护 sessionId 状态
-- 任何平台都能接
+```json
+{
+  "deviceId": "external-session-001",
+  "memberId": "optional-member-id",
+  "entrypoint": "agent",
+  "clientKind": "app"
+}
+```
 
-### 推荐：Web Handoff 邀填模式
+返回值里最重要的是：
 
-适合：
+- `token`
+- `session`
+- `account`
+- `member`
+- `members`
 
-- OpenClaw 对外聊天
-- 用户在手机上扫码或点链接填写
-- 希望像“医生邀填”一样稳定
-- 不希望 OpenClaw 逐题调用工具
+这里的 `Authorization` 不是固定必填，取决于你走哪条上下文链路：
 
-主流程：
+- 已登录患者 / 医生上下文：携带 `app session token`
+- AI toy partner 自动建绑：携带 `AI_TOY_PARTNER_TOKEN`
+- 纯访客设备：可以不带 `Authorization`，由服务端按 `deviceId` 创建 guest 上下文
 
-1. OpenClaw 调 `generate_assessment_link`
-2. 把 `handoff.url` 或 `handoff.qrCodeUrl` 发给用户
-3. 用户在 public handoff 页面完成填写
-4. OpenClaw 轮询 `get_assessment_result`
-5. 拿到结构化结果后，再做解释与建议
+### 第二步：调用 skill facade
 
-### 不推荐：MCP 逐题主控模式
+拿到 `token` 后，后续请求统一使用：
 
-虽然当前工具层支持：
+```http
+Authorization: Bearer <agent_session_token>
+```
 
-- `create_assessment_session`
-- `get_current_question`
-- `submit_answer`
-- `get_assessment_result`
+常用请求：
 
-但不建议让 OpenClaw 长时间逐题主控填写，原因是：
+```text
+GET  /api/skill/v1/scales
+GET  /api/skill/v1/scales?category=exploration
+GET  /api/skill/v1/scales/:scaleId
+POST /api/skill/v1/scales/:scaleId/evaluate
+POST /api/skill/v1/scales/:scaleId/sessions
+GET  /api/skill/v1/scales/:scaleId/sessions/:sessionId/result
+POST /api/skill/v1/voice-intent
+```
 
-- 多轮会话更容易漂移
-- 容易丢 `deviceId / sessionId`
-- 用户答非所问时更容易状态错位
-- 长链路工具调用比 handoff 模式更脆弱
+### 最简单的整表评估
 
-如果只是外部智能体集成，优先用 handoff。
+如果你的智能体只需要“读取题目 + 一次性提交答案”：
 
----
+1. `GET /api/skill/v1/scales/:scaleId`
+2. 在自己的对话中收集用户回答
+3. `POST /api/skill/v1/scales/:scaleId/evaluate`
 
-## 接口入口
+示例：
 
-### REST API（主推）
+```http
+GET /api/skill/v1/scales/PHQ-9?category=exploration
+Authorization: Bearer <agent_session_token>
+```
 
-- `GET /api/skill/v1/scales` — 获取所有量表列表
-- `GET /api/skill/v1/scales/:scaleId` — 获取单个量表定义（题目、选项）
-- `POST /api/skill/v1/scales/:scaleId/evaluate` — 提交答案，获取确定性评分
+```http
+POST /api/skill/v1/scales/PHQ-9/evaluate
+Authorization: Bearer <agent_session_token>
+Content-Type: application/json
+```
 
-认证方式：
-
-- `Authorization: Bearer <MCP_API_KEY>`
-
-### MCP 入口（可选）
-
-当前兼容入口：
-
-- `POST /api/mcp/scale`
-- `GET /api/mcp/scale`
-
-其中：
-
-- `GET` 可查看服务状态和工具列表摘要
-- `POST` 用 JSON-RPC 方式调用工具
-
-认证方式：
-
-- `Authorization: Bearer <MCP_API_KEY>`
+```json
+{
+  "answers": [0, 1, 2, 1, 0, 0, 1, 0, 0]
+}
+```
 
 注意：
 
-- 这里的 MCP Key 应和普通 AI Key 分离
-- 外部智能体只应拿 MCP 专用密钥
+- `evaluate` 适合整表一次性提交
+- 如果量表的 `resultDeliveryMode` 不是 `immediate`，返回结果可能为 `null`
+- 不要让模型自己算分，服务端才是评分事实源
 
 ---
 
-## JSON-RPC 基本格式
+## 路线 2：MCP 接入
 
-### 初始化
+### canonical MCP
+
+推荐入口：
+
+- `GET /api/mcp`
+- `POST /api/mcp`
+
+认证：
+
+- `Authorization: Bearer <MCP_API_KEY>`
+
+最小 JSON-RPC 示例：
 
 ```json
 {
@@ -145,8 +195,6 @@ Body: { "answers": [0, 1, 2, 3, ...] }
 }
 ```
 
-### 获取工具列表
-
 ```json
 {
   "jsonrpc": "2.0",
@@ -156,113 +204,59 @@ Body: { "answers": [0, 1, 2, 3, ...] }
 }
 ```
 
-### 调用工具
+### 兼容 MCP 入口
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "call-1",
-  "method": "tools/call",
-  "params": {
-    "name": "generate_assessment_link",
-    "arguments": {
-      "deviceId": "external-session-001",
-      "scaleId": "PHQ-9",
-      "language": "zh"
-    }
-  }
-}
-```
+如果平台更容易对接单一 skill：
+
+- `GET/POST /api/mcp/scale`
+- `GET/POST /api/mcp/memory`
+- `GET/POST /api/mcp/growth`
+
+其中 `scale` skill 适合量表推荐、逐题答题与 handoff 编排。
 
 ---
 
-## OpenClaw 推荐使用的工具
+## Web Handoff 主链
 
-### REST API 模式（最简单）
+### 什么时候应该切到 Handoff
 
-1. `GET /api/skill/v1/scales` — 列出所有可用量表
-2. `GET /api/skill/v1/scales/:scaleId` — 获取量表题目与选项
-3. `POST /api/skill/v1/scales/:scaleId/evaluate` — 提交答案数组，获取评分
+以下情况优先走 Handoff：
 
-### Handoff 模式
+- 量表本身 `interactionMode = web_handoff`
+- 表单太长，不适合在聊天里逐题完成
+- 用户更适合在手机浏览器中完成填写
+- 你希望聊天线程只做推荐、提醒和结果解释
 
-1. `recommend_assessment` — 根据症状推荐量表
-2. `generate_assessment_link` — 生成填写链接/二维码
-3. `get_assessment_result` — 查询结果
+当前典型 `web_handoff` 量表示例：
 
-### MCP 逐题工具（仅备选）
+- `VINELAND_3`
+- `SSS`
 
-用途：
+### 推荐编排
 
-- 根据症状文本推荐适合的量表
+1. 智能体判断需要做量表
+2. 创建会话或生成 handoff link
+3. 将 `handoff.url` 或二维码发给用户
+4. 用户在浏览器完成填写
+5. 智能体通过结果查询继续轮询或在用户说“填完了”后再查询
 
-适用时机：
+### 为什么它更稳
 
-- 用户说“最近总是很焦虑”
-- 用户说“想测抑郁”
-- 用户说“我最近睡不好”
-
-建议：
-
-- 先用它做推荐
-- 再决定是否生成 handoff 链接
-
-### 2. `generate_assessment_link`
-
-用途：
-
-- 生成 public handoff 链接与二维码
-
-必填参数：
-
-- `deviceId`
-- `scaleId`
-
-可选参数：
-
-- `memberId`
-- `language`
-- `memberSnapshot`
-- `callbackUrl`
-- `callbackSecret`
-- `callbackMetadata`
-
-推荐说明：
-
-- `deviceId` 对 OpenClaw 来说应固定为当前外部会话 ID
-- 同一条量表链路中不要更换 `deviceId`
-
-### 3. `get_assessment_result`
-
-用途：
-
-- 查询当前会话结果
-- 判断用户是否已经完成 handoff
-
-必填参数：
-
-- `deviceId`
-- `sessionId`
-
-### 4. 逐题工具（仅备选）
-
-- `create_assessment_session`
-- `get_current_question`
-- `submit_answer`
-- `pause_assessment_session`
-- `resume_assessment_session`
-- `cancel_assessment_session`
-
-说明：
-
-- 这些工具保留
-- 但对 OpenClaw 主链路不建议优先使用
+- 浏览器页面更适合长表单
+- 会话仍落在同一条 `AssessmentSession`
+- 不会因为聊天线程漂移而把答题状态搞乱
+- callback 可选，轮询也有明确状态机
 
 ---
 
-## Handoff 返回结构说明
+## `generate_assessment_link` / `get_assessment_result`
 
-### `generate_assessment_link` 关键返回字段
+如果你通过 MCP `scale` skill 编排 Web Handoff，重点关注这两个工具：
+
+- `generate_assessment_link`
+- `get_assessment_result`
+
+### `generate_assessment_link` 关注字段
 
 - `session`
 - `handoff.url`
@@ -272,85 +266,44 @@ Body: { "answers": [0, 1, 2, 3, ...] }
 - `completion.shouldPollResult`
 - `completion.pollAfterSeconds`
 - `nextAction`
-- `callback`（如果配置了 callback）
+- `callback`
 
-### 关键判断逻辑
+### `completion` 的含义
 
-- `completion.status = pending`
-  说明用户还没完成
-- `completion.status = completed`
-  说明最终结果已生成
-- `completion.status = closed`
-  说明会话已取消或过期
+- `pending`
+  - 用户还没完成提交
+- `completed`
+  - 结果已经生成
+- `closed`
+  - 会话已取消或过期
 
-- `completion.hasFinalResult = true`
-  说明可直接取结果并进入分析
+- `hasFinalResult = true`
+  - 可以把返回结果作为事实源使用
 
-- `completion.shouldPollResult = true`
-  说明外部智能体应按轮询节奏继续查询
+- `shouldPollResult = true`
+  - 应按建议节奏继续查询
 
-- `completion.pollAfterSeconds`
-  建议下一次查询的最短等待秒数
+### 推荐轮询逻辑
 
----
+1. 生成 handoff link
+2. 发给用户
+3. 如果 `completion.shouldPollResult = true`，按 `completion.pollAfterSeconds` 节奏轮询
+4. 直到 `completion.hasFinalResult = true`
+5. 如果 `completion.status = closed`，停止轮询并视为取消或过期
 
-## 推荐的 OpenClaw 编排逻辑
-
-### Flow A：二维码/链接邀填
-
-1. 从用户对话中判断是否要做量表
-2. 如果需要，先调用 `recommend_assessment`
-3. 选择量表后调用 `generate_assessment_link`
-4. 把 `handoff.url` 或二维码发给用户
-5. 提示用户填写完成后返回当前对话
-6. OpenClaw 按 `completion.pollAfterSeconds` 轮询 `get_assessment_result`
-7. 若 `status = pending`
-   继续等待，不要误判为完成
-8. 若 `hasFinalResult = true`
-   将 `result` 作为事实源进入解释分析
-
-### Flow B：用户说“我填完了”
-
-如果你希望更像聊天体验，也可以：
-
-1. 先发 handoff 链接
-2. 用户回来后说“我填完了”
-3. OpenClaw 再调一次 `get_assessment_result`
-4. 如果还是 `pending`
-   回复用户“系统还没收到提交结果，请稍后再试”
-5. 如果是 `completed`
-   进入结果分析
-
-建议：
-
-- 即使支持“我填完了”口令
-- 底层仍然按 `completion` 状态判断
-- 不要只凭用户一句“填完了”就假设结果存在
+不要只凭“用户说填完了”就假设结果已经存在，仍然要以 `completion` 和最终结果响应为准。
 
 ---
 
-## callback / webhook 模式
+## callback / webhook
 
-### 何时使用
-
-适合：
-
-- 你想让项目在用户提交后主动把结果回推给外部系统
-- 不想依赖持续轮询
-
-### 注册参数
+### 可选参数
 
 在 `generate_assessment_link` 或 `create_assessment_session` 中可传：
 
 - `callbackUrl`
 - `callbackSecret`
 - `callbackMetadata`
-
-### 回调时机
-
-- 用户提交 public handoff 表单后
-- 项目完成本地评分并落库后
-- 项目尝试向 `callbackUrl` 发起 `POST`
 
 ### 回调 payload
 
@@ -359,9 +312,9 @@ Body: { "answers": [0, 1, 2, 3, ...] }
   "eventType": "assessment.completed",
   "sessionId": "session id",
   "deviceId": "external session id or null",
-  "scaleId": "PHQ-9",
+  "scaleId": "VINELAND_3",
   "result": {
-    "scaleId": "PHQ-9",
+    "scaleId": "VINELAND_3",
     "totalScore": 12,
     "conclusion": "example",
     "details": {},
@@ -373,7 +326,7 @@ Body: { "answers": [0, 1, 2, 3, ...] }
 }
 ```
 
-### 回调签名头
+### 回调 header
 
 - `X-Ailiangbiao-Timestamp`
 - `X-Ailiangbiao-Signature`
@@ -386,96 +339,67 @@ Body: { "answers": [0, 1, 2, 3, ...] }
 
 - `${timestamp}.${payloadText}`
 
-其中：
+### 可靠性
 
-- `timestamp = X-Ailiangbiao-Timestamp`
-- `payloadText = 原始 JSON 字符串`
+- 提交后立即尝试
+- 最多 3 次
+- 超过上限进入 `DEAD_LETTER`
+- callback 状态可以通过结果查询观察
 
-### 验签建议
+建议：
 
-OpenClaw 外围中转服务收到回调后应：
-
-1. 读取原始 body
-2. 读取时间戳头
-3. 用 `callbackSecret` 做 HMAC-SHA256
-4. 比较 `X-Ailiangbiao-Signature`
-5. 再做时间窗口校验，防止重放
-
-### 可靠性说明
-
-当前实现：
-
-- 提交后立即尝试回调
-- 最多重试 3 次
-- 超过上限会进入 dead-letter 状态
-- callback 状态可通过 `get_assessment_result` 观察
-
-所以建议：
-
-- 轮询作为基线
-- webhook 作为增强
-- 不要只依赖 webhook 单点成功
+- 把轮询作为基线
+- 把 webhook 当作增强
+- 不要把 webhook 单独当成唯一真相来源
 
 ---
 
-## OpenClaw 结果分析规则
+## OpenClaw / 外部智能体推荐流程
 
-拿到最终结果后，OpenClaw / FastGPT 应：
+### Flow A：推荐后直接整表提交
 
-- 只把结果当事实源使用
-- 不要自己重新计算分数
-- 不要重写量表结论
+适合短表、探索量表或你自己的对话足够稳定时：
 
-推荐输入给分析模型的字段：
+1. 创建 `agent session`
+2. `GET /api/skill/v1/scales/:scaleId`
+3. 在对话中逐题收集答案
+4. `POST /api/skill/v1/scales/:scaleId/evaluate`
+5. 使用服务端结果继续解释
 
-- `scaleId`
-- `scaleName`
-- `totalScore`
-- `conclusion`
-- `details`
-- 必要的成员摘要
+### Flow B：推荐后进入 Handoff
 
-推荐输出：
+适合长表、移动端或 `web_handoff` 量表：
 
-- 简短解释
-- 风险点
-- 2 到 5 条建议
-- 是否建议继续做其他量表或联系医生
+1. 推荐量表
+2. 生成 handoff link
+3. 让用户去浏览器完成填写
+4. 轮询结果或等待用户返回
+5. 以服务端结果继续解释
 
----
+### Flow C：原生 MCP tool orchestration
 
-## 数据库与后续能力
+适合原生支持 MCP 的运行时：
 
-这条 handoff 链路不会绕开主系统数据库。
-
-用户提交后：
-
-- 结果仍写回原 `AssessmentSession`
-- 会生成正式 `AssessmentHistory`
-
-因此后续仍可：
-
-- 进入时间线
-- 导出
-- 科研使用
-- 与项目内医生分身 / 主产品链路共用结果
+1. `initialize`
+2. `tools/list`
+3. `tools/call`
+4. 如果量表返回 `web_handoff` 或 handoff payload，切换到 Handoff 逻辑
 
 ---
 
-## 外部智能体端最小实践建议
+## 不要这样做
 
-如果你只是想先跑通：
+- 不要把 `/api/skill/v1/*` 当成 `MCP API Key` 接口
+- 不要把探索量表误写成默认公开目录
+- 不要把 `PHQ-9`、`GAD-7`、`SSS` 当成 AI toy 语音白名单
+- 不要让模型自己计算量表得分
+- 不要在 `web_handoff` 量表上强行继续 `get_current_question -> submit_answer`
+- 不要在 `resultDeliveryMode = physician_review` 时向填写端伪造“已经可见的最终结果”
 
-1. 用 MCP Key 调 `GET /api/skill/v1/scales` 拿到量表列表
-2. 选一个量表，调 `GET /api/skill/v1/scales/:scaleId` 拿到题目
-3. 在自己的对话中逐题收集用户回答
-4. 把答案数组提交到 `POST /api/skill/v1/scales/:scaleId/evaluate`
-5. 拿到结构化评分结果后做解释分析
+---
 
-进阶：
+## 进一步阅读
 
-- 需要移动端扫码填写 → 用 Web Handoff 模式
-- 需要提交后主动回推结果 → 配置 webhook callback
-- 需要原生 MCP 集成 → 用 MCP 入口
-
-这是当前最稳、最不容易出错的外部智能体集成方式。
+- 根文档：[README.md](../README.md)
+- Assessment Skill 包说明：[packages/assessment-skill/README.md](../packages/assessment-skill/README.md)
+- 部署说明：[DEPLOYMENT.md](../DEPLOYMENT.md)
