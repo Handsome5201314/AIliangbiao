@@ -11,6 +11,12 @@
   },
   "source": "manifest",
   "category": "General Health",
+  "audience": "adult",
+  "productGroup": "exploration",
+  "isPediatric": false,
+  "status": "active",
+  "defaultVisible": false,
+  "voiceFriendly": false,
   "tags": [
     "躯体化",
     "躯体症状",

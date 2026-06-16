@@ -23,6 +23,9 @@ export type AdminPolicies = {
     enableDoctorBotFallback: boolean;
     enforceTenantIsolation: boolean;
   };
+  catalog: {
+    doctorExplorationEnabled: boolean;
+  };
   rateLimits: {
     agentSessionPerDevicePerMinute: number;
     questionExplanationPerMinute: number;
@@ -50,6 +53,9 @@ export const DEFAULT_ADMIN_POLICIES: AdminPolicies = {
     hermesDegradeThresholdPercent: 5,
     enableDoctorBotFallback: true,
     enforceTenantIsolation: true,
+  },
+  catalog: {
+    doctorExplorationEnabled: false,
   },
   rateLimits: {
     agentSessionPerDevicePerMinute: 20,
@@ -81,6 +87,7 @@ function normalizePolicies(value: unknown): AdminPolicies {
   const knowledgeReview = isPlainObject(raw.knowledgeReview) ? raw.knowledgeReview : {};
   const explanation = isPlainObject(raw.explanation) ? raw.explanation : {};
   const runtime = isPlainObject(raw.runtime) ? raw.runtime : {};
+  const catalog = isPlainObject(raw.catalog) ? raw.catalog : {};
   const rateLimits = isPlainObject(raw.rateLimits) ? raw.rateLimits : {};
 
   return {
@@ -136,6 +143,12 @@ function normalizePolicies(value: unknown): AdminPolicies {
       enforceTenantIsolation: toBoolean(
         runtime.enforceTenantIsolation,
         DEFAULT_ADMIN_POLICIES.runtime.enforceTenantIsolation
+      ),
+    },
+    catalog: {
+      doctorExplorationEnabled: toBoolean(
+        catalog.doctorExplorationEnabled,
+        DEFAULT_ADMIN_POLICIES.catalog.doctorExplorationEnabled
       ),
     },
     rateLimits: {

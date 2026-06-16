@@ -29,6 +29,9 @@ type PoliciesState = {
     enableDoctorBotFallback: boolean;
     enforceTenantIsolation: boolean;
   };
+  catalog: {
+    doctorExplorationEnabled: boolean;
+  };
   rateLimits: {
     agentSessionPerDevicePerMinute: number;
     questionExplanationPerMinute: number;
@@ -56,6 +59,9 @@ const DEFAULT_POLICIES: PoliciesState = {
     hermesDegradeThresholdPercent: 5,
     enableDoctorBotFallback: true,
     enforceTenantIsolation: true,
+  },
+  catalog: {
+    doctorExplorationEnabled: false,
   },
   rateLimits: {
     agentSessionPerDevicePerMinute: 20,
@@ -129,7 +135,7 @@ export default function AdminPoliciesPage() {
     <div className="space-y-6">
       <PageHeader
         title="治理策略"
-        description="把敏感访问、知识审核、Hermes 降级与统一限流固化成平台级 Source of Truth。"
+        description="把敏感访问、知识审核、Hermes 降级、量表治理与统一限流固化成平台级 Source of Truth。"
       />
 
       <Card className="border-cyan-200 bg-cyan-50 p-6">
@@ -327,6 +333,30 @@ export default function AdminPoliciesPage() {
                   }
                 />
               </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-slate-900">量表治理</h3>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="font-medium text-slate-900">医生端允许探索测试</div>
+                <p className="mt-1 text-xs leading-6 text-slate-500">
+                  关闭时，医生邀填、门诊二维码、医生 AI 分身默认只显示儿童量表；开启后才允许进入探索测试第二层勾选。
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={policies.catalog.doctorExplorationEnabled}
+                    onChange={(event) =>
+                      updateSection('catalog', {
+                        doctorExplorationEnabled: event.target.checked,
+                      })
+                    }
+                  />
+                  <span>{policies.catalog.doctorExplorationEnabled ? '已开启探索测试' : '仅儿童主流程'}</span>
+                </div>
+              </label>
             </div>
           </Card>
 

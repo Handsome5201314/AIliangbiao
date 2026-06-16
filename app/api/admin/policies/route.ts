@@ -27,6 +27,9 @@ const policiesSchema = z.object({
       enableDoctorBotFallback: z.boolean(),
       enforceTenantIsolation: z.boolean(),
     }),
+    catalog: z.object({
+      doctorExplorationEnabled: z.boolean(),
+    }),
     rateLimits: z.object({
       agentSessionPerDevicePerMinute: z.number().int().positive(),
       questionExplanationPerMinute: z.number().int().positive(),

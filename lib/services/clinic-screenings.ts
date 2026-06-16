@@ -5,8 +5,13 @@ import { ClinicScreeningSubmissionStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { QuotaManager } from '@/lib/auth/quotaManager';
 import { assertAccessibleMember, ensureMemberForDevice } from '@/lib/assessment-skill/member-service';
-import { getSerializableScaleById, evaluateScaleAnswers } from '@/lib/scales/catalog';
+import {
+  evaluateScaleAnswers,
+  getDoctorVisibleScaleById,
+  getSerializableScaleById,
+} from '@/lib/scales/catalog';
 import { resolveLocalizedText, resolveQuestionText } from '@/lib/schemas/core/i18n';
+import { getAdminPolicies } from '@/lib/services/admin-policies';
 
 function memberProfileModel() {
   return (prisma as any).memberProfile ?? (prisma as any).childProfile;
@@ -267,9 +272,17 @@ export async function createDoctorOwnedClinicScaleQr(input: {
     throw new Error('Clinic screening point not found or not owned by current doctor');
   }
 
+  const policies = await getAdminPolicies();
+  const scale = getDoctorVisibleScaleById(input.scaleId, {
+    doctorExplorationEnabled: policies.catalog.doctorExplorationEnabled,
+  });
+  if (!scale) {
+    throw new Error(`Scale ${input.scaleId} not found`);
+  }
+
   return createClinicScaleQr({
     pointId: input.pointId,
-    scaleId: input.scaleId,
+    scaleId: scale.id,
   });
 }
 

@@ -5,9 +5,12 @@ import { z } from "zod";
 import { AllScales as builtinScales } from "@/lib/schemas/core/registry";
 import type {
   ExecutableScaleDefinition,
+  ScaleAudience,
+  ScaleProductGroup,
   ScaleDefinition,
   ScaleCategory,
   ScaleResultDeliveryMode,
+  ScaleStatus,
   ScaleManifest,
   ScaleManifestDimension,
   ScaleManifestThreshold,
@@ -46,6 +49,25 @@ const resultDeliveryModeSchema = z.enum([
   "immediate",
   "physician_review",
 ]);
+
+const audienceSchema = z.enum([
+  "child",
+  "adult",
+  "personality",
+  "career",
+]) satisfies z.ZodType<ScaleAudience>;
+
+const productGroupSchema = z.enum([
+  "clinical_child",
+  "exploration",
+  "growth",
+]) satisfies z.ZodType<ScaleProductGroup>;
+
+const statusSchema = z.enum([
+  "active",
+  "disabled",
+  "legacy",
+]) satisfies z.ZodType<ScaleStatus>;
 
 const manifestOptionSchema = z.object({
   label: z.string(),
@@ -129,6 +151,12 @@ const manifestSchema = z.object({
   supportedLanguages: z.array(languageCodeSchema).optional(),
   requiresConfirmation: z.boolean().optional(),
   resultDeliveryMode: resultDeliveryModeSchema.optional(),
+  audience: audienceSchema.optional(),
+  productGroup: productGroupSchema.optional(),
+  isPediatric: z.boolean().optional(),
+  status: statusSchema.optional(),
+  defaultVisible: z.boolean().optional(),
+  voiceFriendly: z.boolean().optional(),
   questions: z.array(manifestQuestionSchema).min(1),
   scoring: z.object({
     method: z.literal("sum"),
@@ -142,6 +170,75 @@ const manifestSchema = z.object({
 
 const manifestsDirectory = path.join(process.cwd(), "data", "scales");
 const legacyManifestFilenames = new Set(["phq-9.json", "gad-7.json", "sss.json"]);
+
+export type ScaleCatalogSelector =
+  | "publicClinicalChild"
+  | "exploration"
+  | "doctorVisible"
+  | "adminAll"
+  | "voiceFriendlyChild";
+
+export type ScaleCatalogCategoryParam = "all_child" | "exploration";
+
+type ScaleCatalogMetadata = Required<
+  Pick<
+    ScaleDefinition,
+    "audience" | "productGroup" | "isPediatric" | "status" | "defaultVisible" | "voiceFriendly"
+  >
+>;
+
+type ScaleCatalogLookupOptions = {
+  selector?: ScaleCatalogSelector;
+  doctorExplorationEnabled?: boolean;
+};
+
+const DEFAULT_CHILD_CLINICAL_METADATA: ScaleCatalogMetadata = {
+  audience: "child",
+  productGroup: "clinical_child",
+  isPediatric: true,
+  status: "active",
+  defaultVisible: true,
+  voiceFriendly: false,
+};
+
+const DEFAULT_EXPLORATION_ADULT_METADATA: ScaleCatalogMetadata = {
+  audience: "adult",
+  productGroup: "exploration",
+  isPediatric: false,
+  status: "active",
+  defaultVisible: false,
+  voiceFriendly: false,
+};
+
+const SCALE_METADATA_OVERRIDES: Record<string, ScaleCatalogMetadata> = {
+  ABC: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  ATEC: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  CARS: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  M_CHAT_R: { ...DEFAULT_CHILD_CLINICAL_METADATA, voiceFriendly: true },
+  SRS: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  "SNAP-IV": { ...DEFAULT_CHILD_CLINICAL_METADATA, voiceFriendly: true },
+  CBCL_113: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  TAS_37: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  VINELAND_3: { ...DEFAULT_CHILD_CLINICAL_METADATA },
+  "PHQ-9": { ...DEFAULT_EXPLORATION_ADULT_METADATA },
+  "GAD-7": { ...DEFAULT_EXPLORATION_ADULT_METADATA },
+  PSQI_18: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
+  SSS: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
+  RSES_10: {
+    ...DEFAULT_EXPLORATION_ADULT_METADATA,
+    audience: "personality",
+  },
+  MBTI: {
+    ...DEFAULT_EXPLORATION_ADULT_METADATA,
+    audience: "personality",
+  },
+  HOLLAND: {
+    ...DEFAULT_EXPLORATION_ADULT_METADATA,
+    audience: "career",
+  },
+  MMSE_30: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
+  MOCA_30: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
+};
 
 function isManifestCandidateFile(entryName: string) {
   return entryName.endsWith(".scale.json") || legacyManifestFilenames.has(entryName.toLowerCase());
@@ -172,12 +269,61 @@ function estimateScaleMinutes(scale: Pick<ScaleDefinition, "questions" | "estima
   return 15;
 }
 
+function inferScaleCatalogMetadata(scale: ScaleDefinition): ScaleCatalogMetadata {
+  switch (scale.category) {
+    case "Child Development":
+      return { ...DEFAULT_CHILD_CLINICAL_METADATA };
+    case "Personality":
+      return {
+        ...DEFAULT_EXPLORATION_ADULT_METADATA,
+        audience: "personality",
+      };
+    case "Career Assessment":
+      return {
+        ...DEFAULT_EXPLORATION_ADULT_METADATA,
+        audience: "career",
+      };
+    case "Cognitive Health":
+    case "General Health":
+      return { ...DEFAULT_EXPLORATION_ADULT_METADATA };
+    case "Mental Health":
+      return scale.source === "manifest"
+        ? { ...DEFAULT_EXPLORATION_ADULT_METADATA }
+        : { ...DEFAULT_CHILD_CLINICAL_METADATA };
+    default:
+      return scale.source === "manifest"
+        ? { ...DEFAULT_EXPLORATION_ADULT_METADATA }
+        : { ...DEFAULT_CHILD_CLINICAL_METADATA };
+  }
+}
+
+function resolveScaleCatalogMetadata(scale: ScaleDefinition): ScaleCatalogMetadata {
+  const override = SCALE_METADATA_OVERRIDES[scale.id.toUpperCase()];
+  const inferred = inferScaleCatalogMetadata(scale);
+
+  return {
+    audience: scale.audience ?? override?.audience ?? inferred.audience,
+    productGroup: scale.productGroup ?? override?.productGroup ?? inferred.productGroup,
+    isPediatric: scale.isPediatric ?? override?.isPediatric ?? inferred.isPediatric,
+    status: scale.status ?? override?.status ?? inferred.status,
+    defaultVisible: scale.defaultVisible ?? override?.defaultVisible ?? inferred.defaultVisible,
+    voiceFriendly: scale.voiceFriendly ?? override?.voiceFriendly ?? inferred.voiceFriendly,
+  };
+}
+
+function withCatalogMetadata<T extends ScaleDefinition>(scale: T): T & ScaleCatalogMetadata {
+  return {
+    ...scale,
+    ...resolveScaleCatalogMetadata(scale),
+  };
+}
+
 function toSerializableScale(scale: ExecutableScaleDefinition): ScaleDefinition {
   const { calculateScore: _ignored, ...serializableScale } = scale;
-  return {
+  return withCatalogMetadata({
     ...serializableScale,
     estimatedMinutes: estimateScaleMinutes(serializableScale),
-  };
+  });
 }
 
 function matchesThreshold(totalScore: number, threshold: ScaleManifestThreshold): boolean {
@@ -307,7 +453,7 @@ function mergeScaleDefinitions(scales: ExecutableScaleDefinition[]): ExecutableS
   const dedupedScales = new Map<string, ExecutableScaleDefinition>();
 
   scales.forEach((scale) => {
-    dedupedScales.set(scale.id.toUpperCase(), scale);
+    dedupedScales.set(scale.id.toUpperCase(), withCatalogMetadata(scale));
   });
 
   return [...dedupedScales.values()];
@@ -321,6 +467,54 @@ export function listSerializableScales(): ScaleDefinition[] {
   return getAllScaleDefinitions().map(toSerializableScale);
 }
 
+function isScaleAvailable(scale: ScaleDefinition) {
+  return scale.status !== "disabled";
+}
+
+function matchesCatalogSelector(
+  scale: ScaleDefinition,
+  selector: ScaleCatalogSelector,
+  options?: ScaleCatalogLookupOptions
+) {
+  switch (selector) {
+    case "publicClinicalChild":
+      return (
+        isScaleAvailable(scale) &&
+        scale.productGroup === "clinical_child" &&
+        scale.isPediatric === true &&
+        scale.defaultVisible !== false
+      );
+    case "exploration":
+      return isScaleAvailable(scale) && scale.productGroup === "exploration";
+    case "doctorVisible":
+      return (
+        (isScaleAvailable(scale) &&
+          scale.productGroup === "clinical_child" &&
+          scale.isPediatric === true) ||
+        (Boolean(options?.doctorExplorationEnabled) &&
+          isScaleAvailable(scale) &&
+          scale.productGroup === "exploration")
+      );
+    case "voiceFriendlyChild":
+      return (
+        isScaleAvailable(scale) &&
+        scale.productGroup === "clinical_child" &&
+        scale.isPediatric === true &&
+        scale.voiceFriendly === true
+      );
+    case "adminAll":
+    default:
+      return true;
+  }
+}
+
+export function listSerializableScalesBySelector(
+  selector: ScaleCatalogSelector,
+  options?: ScaleCatalogLookupOptions
+): ScaleDefinition[] {
+  return listSerializableScales().filter((scale) => matchesCatalogSelector(scale, selector, options));
+}
+
 export function getScaleDefinitionById(scaleId: string): ExecutableScaleDefinition | undefined {
   return getAllScaleDefinitions().find((scale) => scale.id.toUpperCase() === scaleId.toUpperCase());
 }
@@ -328,6 +522,66 @@ export function getScaleDefinitionById(scaleId: string): ExecutableScaleDefiniti
 export function getSerializableScaleById(scaleId: string): ScaleDefinition | undefined {
   const scale = getScaleDefinitionById(scaleId);
   return scale ? toSerializableScale(scale) : undefined;
+}
+
+export function getSerializableScaleByIdForSelector(
+  scaleId: string,
+  selector: ScaleCatalogSelector,
+  options?: ScaleCatalogLookupOptions
+): ScaleDefinition | undefined {
+  const scale = getSerializableScaleById(scaleId);
+  if (!scale || !matchesCatalogSelector(scale, selector, options)) {
+    return undefined;
+  }
+
+  return scale;
+}
+
+export function listPublicClinicalChildScales() {
+  return listSerializableScalesBySelector("publicClinicalChild");
+}
+
+export function listExplorationScales() {
+  return listSerializableScalesBySelector("exploration");
+}
+
+export function listDoctorVisibleScales(options?: { doctorExplorationEnabled?: boolean }) {
+  return listSerializableScalesBySelector("doctorVisible", options);
+}
+
+export function listAdminScales() {
+  return listSerializableScalesBySelector("adminAll");
+}
+
+export function listVoiceFriendlyChildScales() {
+  return listSerializableScalesBySelector("voiceFriendlyChild");
+}
+
+export function getPublicClinicalChildScaleById(scaleId: string) {
+  return getSerializableScaleByIdForSelector(scaleId, "publicClinicalChild");
+}
+
+export function getExplorationScaleById(scaleId: string) {
+  return getSerializableScaleByIdForSelector(scaleId, "exploration");
+}
+
+export function getDoctorVisibleScaleById(
+  scaleId: string,
+  options?: { doctorExplorationEnabled?: boolean }
+) {
+  return getSerializableScaleByIdForSelector(scaleId, "doctorVisible", options);
+}
+
+export function getAdminScaleById(scaleId: string) {
+  return getSerializableScaleByIdForSelector(scaleId, "adminAll");
+}
+
+export function getVoiceFriendlyChildScaleById(scaleId: string) {
+  return getSerializableScaleByIdForSelector(scaleId, "voiceFriendlyChild");
+}
+
+export function normalizeScaleCatalogCategoryParam(category?: string | null): ScaleCatalogCategoryParam {
+  return category === "exploration" ? "exploration" : "all_child";
 }
 
 export function resolveScaleResultDeliveryMode(

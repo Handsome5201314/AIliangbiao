@@ -10,11 +10,12 @@ import {
   submitAssessmentAnswerForDevice,
 } from '@/lib/assessment-skill/scale-service';
 import { resolveUserByDeviceId } from '@/lib/assessment-skill/member-service';
-import { getSerializableScaleById, listSerializableScales } from '@/lib/scales/catalog';
+import { getSerializableScaleById, listDoctorVisibleScales } from '@/lib/scales/catalog';
 import { decryptSecret, encryptSecret } from '@/lib/utils/secretCrypto';
 import { generateUUID } from '@/lib/utils/uuid';
 import { getActiveDoctorAssignment } from '@/lib/services/doctor-care';
 import { analyzeCompletedAssessmentResult } from '@/lib/services/assessment-advice';
+import { getAdminPolicies } from '@/lib/services/admin-policies';
 
 const toolCallArgumentsSchema = z.object({
   scaleId: z.string().min(1),
@@ -110,14 +111,27 @@ function normalizeLanguage(input?: string | null): LanguageCode {
   return String(input || '').toLowerCase() === 'en' ? 'en' : 'zh';
 }
 
+function normalizeScaleId(scaleId: string) {
+  const canonical = getSerializableScaleById(scaleId);
+  return canonical?.id || scaleId.trim().toUpperCase();
+}
+
 function normalizeScaleIdList(scaleIds: string[]) {
-  return Array.from(
-    new Set(
-      scaleIds
-        .map((scaleId) => scaleId.trim().toUpperCase())
-        .filter(Boolean)
-    )
-  );
+  const deduped = new Map<string, string>();
+
+  scaleIds
+    .map((scaleId) => normalizeScaleId(scaleId))
+    .filter(Boolean)
+    .forEach((scaleId) => {
+      deduped.set(scaleId.toUpperCase(), scaleId);
+    });
+
+  return [...deduped.values()];
+}
+
+function hasEnabledScale(enabledScaleIds: string[], scaleId: string) {
+  const normalized = scaleId.trim().toUpperCase();
+  return enabledScaleIds.some((item) => item.toUpperCase() === normalized);
 }
 
 function normalizeChatCompletionUrl(input: string) {
@@ -301,6 +315,20 @@ function filterEligibleScales(scales: ScaleDefinition[]) {
   return scales.filter((scale) => scale.interactionMode !== 'web_handoff');
 }
 
+async function getDoctorBotScaleRegistry() {
+  const policies = await getAdminPolicies();
+  const doctorExplorationEnabled = policies.catalog.doctorExplorationEnabled;
+  const eligibleScales = filterEligibleScales(
+    listDoctorVisibleScales({ doctorExplorationEnabled })
+  );
+
+  return {
+    doctorExplorationEnabled,
+    eligibleScales,
+    eligibleScaleIds: new Set(eligibleScales.map((scale) => scale.id.toUpperCase())),
+  };
+}
+
 function serializeEligibleScale(scale: ScaleDefinition, language: LanguageCode) {
   return {
     id: scale.id,
@@ -314,8 +342,8 @@ function serializeEligibleScale(scale: ScaleDefinition, language: LanguageCode) 
 }
 
 function ensureAllowedScale(scaleId: string, enabledScaleIds: string[]) {
-  const normalized = scaleId.trim().toUpperCase();
-  if (!enabledScaleIds.includes(normalized)) {
+  const normalized = normalizeScaleId(scaleId);
+  if (!hasEnabledScale(enabledScaleIds, normalized)) {
     throw new Error(`Scale ${normalized} is not enabled for this doctor bot`);
   }
 
@@ -666,8 +694,8 @@ function normalizeFastgptReply(input: {
       const args = toolCallArgumentsSchema.parse(
         JSON.parse(firstToolCall.function?.arguments || '{}')
       );
-      const normalizedScaleId = args.scaleId.trim().toUpperCase();
-      if (!input.enabledScaleIds.includes(normalizedScaleId)) {
+      const normalizedScaleId = normalizeScaleId(args.scaleId);
+      if (!hasEnabledScale(input.enabledScaleIds, normalizedScaleId)) {
         return {
           text:
             content ||
@@ -733,7 +761,7 @@ function normalizeFastgptReply(input: {
       (compatAction === 'START_ASSESSMENT' || compatAction === 'RECOMMEND_ASSESSMENT') &&
       compatScaleId
     ) {
-      if (!input.enabledScaleIds.includes(compatScaleId)) {
+      if (!hasEnabledScale(input.enabledScaleIds, compatScaleId)) {
         return {
           text: compatText,
           actionCard: null,
@@ -776,7 +804,9 @@ function normalizeFastgptReply(input: {
 }
 
 export async function listDoctorBotEligibleScales(language: LanguageCode = 'zh') {
-  return filterEligibleScales(listSerializableScales()).map((scale) =>
+  const { eligibleScales } = await getDoctorBotScaleRegistry();
+
+  return eligibleScales.map((scale) =>
     serializeEligibleScale(scale, language)
   );
 }
@@ -804,6 +834,10 @@ export async function getDoctorBotConfigForDoctor(input: {
   const existing = await doctorBotModel().findUnique({
     where: { doctorProfileId: input.doctorProfileId },
   });
+  const { doctorExplorationEnabled, eligibleScaleIds } = await getDoctorBotScaleRegistry();
+  const normalizedEnabledScaleIds = normalizeScaleIdList(
+    Array.isArray(existing?.enabledScaleIds) ? existing.enabledScaleIds : []
+  ).filter((scaleId) => eligibleScaleIds.has(scaleId));
 
   const recentSessions = existing
     ? await doctorBotChatSessionModel().findMany({
@@ -835,7 +869,7 @@ export async function getDoctorBotConfigForDoctor(input: {
           publicSlug: existing.publicSlug,
           fastgptBaseUrl: existing.fastgptBaseUrl,
           fastgptApiKeyConfigured: Boolean(existing.fastgptApiKeyEncrypted),
-          enabledScaleIds: Array.isArray(existing.enabledScaleIds) ? existing.enabledScaleIds : [],
+          enabledScaleIds: normalizedEnabledScaleIds,
           status: existing.status as DoctorBotStatus,
           hermesEnabled: existing.hermesEnabled ?? false,
           knowledgeMode: (existing.knowledgeMode as 'platform_proxy' | 'direct_fastgpt' | null) || 'platform_proxy',
@@ -863,6 +897,7 @@ export async function getDoctorBotConfigForDoctor(input: {
         },
     doctor: doctorProfile,
     sharePath,
+    doctorExplorationEnabled,
     eligibleScales: await listDoctorBotEligibleScales(language),
     recentSessions: recentSessions.map((session: any) => ({
       id: session.id,
@@ -910,10 +945,20 @@ export async function saveDoctorBotConfig(input: {
   config: DoctorBotConfigInput;
 }) {
   const endpoint = normalizeChatCompletionUrl(input.config.fastgptBaseUrl);
+  const { doctorExplorationEnabled, eligibleScaleIds } = await getDoctorBotScaleRegistry();
   const enabledScaleIds = normalizeScaleIdList(input.config.enabledScaleIds);
 
   if (!enabledScaleIds.length) {
     throw new Error('Please enable at least one supported scale');
+  }
+
+  const disallowedScaleId = enabledScaleIds.find((scaleId) => !eligibleScaleIds.has(scaleId));
+  if (disallowedScaleId) {
+    throw new Error(
+      doctorExplorationEnabled
+        ? `Scale ${disallowedScaleId} is not supported in the doctor workspace`
+        : '探索测试尚未在平台治理中开启，医生端当前只能使用儿童量表'
+    );
   }
 
   enabledScaleIds.forEach((scaleId) => ensureAllowedScale(scaleId, enabledScaleIds));
@@ -1052,7 +1097,9 @@ export async function getPublishedDoctorBotBySlug(slug: string) {
   const enabledScaleIds = normalizeScaleIdList(
     Array.isArray(config.enabledScaleIds) ? config.enabledScaleIds : []
   );
+  const { eligibleScaleIds } = await getDoctorBotScaleRegistry();
   const enabledScales = enabledScaleIds
+    .filter((scaleId) => eligibleScaleIds.has(scaleId))
     .map((scaleId) => getSerializableScaleById(scaleId))
     .filter(Boolean)
     .filter((scale) => scale!.interactionMode !== 'web_handoff')
@@ -1060,7 +1107,7 @@ export async function getPublishedDoctorBotBySlug(slug: string) {
 
   return {
     config,
-    enabledScaleIds,
+    enabledScaleIds: enabledScales.map((scale) => scale.id),
     enabledScales,
     publicInfo: {
       id: config.id,

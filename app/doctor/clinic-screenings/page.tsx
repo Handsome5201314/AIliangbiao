@@ -47,7 +47,7 @@ export default function DoctorClinicScreeningsPage() {
       fetch(`/api/doctor/clinic-screenings?${params.toString()}`, { headers: authHeaders }),
       fetch('/api/doctor/clinic-points', { headers: authHeaders }),
       fetch('/api/doctor/clinic-qrs', { headers: authHeaders }),
-      fetch('/api/scales'),
+      fetch('/api/doctor/scales', { headers: authHeaders }),
     ]);
 
     const [screeningsData, pointsData, qrsData, scalesData] = await Promise.all([

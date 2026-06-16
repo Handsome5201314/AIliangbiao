@@ -133,17 +133,11 @@ function detectIntentFromConfig(
 
   const symptoms = extractSymptomsFromTranscript(goal);
   const keywordRecommendedScale =
-    includesAnyKeyword(normalizedGoal, keywords.anxiety)
-      ? 'GAD-7'
-      : includesAnyKeyword(normalizedGoal, keywords.depression)
-        ? 'PHQ-9'
-        : includesAnyKeyword(normalizedGoal, keywords.adhd)
+    includesAnyKeyword(normalizedGoal, keywords.adhd)
           ? 'SNAP-IV'
           : includesAnyKeyword(normalizedGoal, keywords.autism)
             ? 'SRS'
-            : includesAnyKeyword(normalizedGoal, keywords.mbti)
-              ? 'MBTI'
-              : undefined;
+            : undefined;
 
   const recommendedScale =
     explicitScaleId ||

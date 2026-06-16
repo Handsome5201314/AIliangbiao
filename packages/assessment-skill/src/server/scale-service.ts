@@ -9,11 +9,16 @@ import {
 import type { AgentSessionPayload } from './auth';
 import {
   evaluateScaleAnswers,
+  getExplorationScaleById,
+  getPublicClinicalChildScaleById,
   getScaleDefinitionById,
   getSerializableScaleById,
   isRespondentResultVisible,
-  listSerializableScales,
+  listExplorationScales,
+  listPublicClinicalChildScales,
+  listVoiceFriendlyChildScales,
   resolveScaleResultDeliveryMode,
+  type ScaleCatalogCategoryParam,
 } from '@/lib/scales/catalog';
 import {
   normalizeScaleAnswerDetails,
@@ -627,22 +632,32 @@ export async function getLatestActiveAssessmentSession(input: {
   return buildAssessmentSessionState(sessionRecord, scale);
 }
 
-export function listSkillScales() {
-  return listSerializableScales().map((scale: ScaleDefinition & { questions: ScaleQuestion[] }) => ({
+function serializeSkillScale(scale: ScaleDefinition & { questions: ScaleQuestion[] }) {
+  return {
     ...scale,
     interactionMode: scale.interactionMode || 'manual_only',
     supportedLanguages: scale.supportedLanguages || ['zh'],
     requiresConfirmation: scale.requiresConfirmation ?? false,
     questionCount: scale.questions.length,
-  }));
+  };
+}
+
+export function listSkillScales(category: ScaleCatalogCategoryParam = 'all_child') {
+  const scales = category === 'exploration' ? listExplorationScales() : listPublicClinicalChildScales();
+
+  return scales.map((scale: ScaleDefinition & { questions: ScaleQuestion[] }) => serializeSkillScale(scale));
 }
 
 export function listAiToyVoiceSkillScales() {
-  return listSkillScales().filter((scale) => isAiToyVoiceScale(scale.id));
+  return listVoiceFriendlyChildScales()
+    .filter((scale) => isAiToyVoiceScale(scale.id))
+    .map((scale: ScaleDefinition & { questions: ScaleQuestion[] }) => serializeSkillScale(scale));
 }
 
-export function getSkillScale(scaleId: string) {
-  return getSerializableScaleById(scaleId);
+export function getSkillScale(scaleId: string, category: ScaleCatalogCategoryParam = 'all_child') {
+  return category === 'exploration'
+    ? getExplorationScaleById(scaleId)
+    : getPublicClinicalChildScaleById(scaleId);
 }
 
 export async function evaluateSkillScale(input: {

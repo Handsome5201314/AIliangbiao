@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
+import { NextRequest } from "next/server";
+
+import { issueAgentSessionToken } from "../lib/assessment-skill/auth";
+
 test("schema stores AI toy device bindings as one active member binding per device", async () => {
   const schema = await readFile("prisma/schema.prisma", "utf8");
 
@@ -23,13 +27,10 @@ test("AI toy binding service exposes bind, resolve, unbind, and assertion helper
   assert.equal(typeof service.assertAiToyDeviceBinding, "function");
   assert.equal(typeof service.assertAiToyPartnerToken, "function");
   assert.equal(typeof service.ensureAiToyDeviceBindingForDevice, "function");
-  assert.ok(Array.isArray(service.AI_TOY_VOICE_SCALE_WHITELIST));
-  assert.deepEqual(
-    service.AI_TOY_VOICE_SCALE_WHITELIST,
-    ["PHQ-9", "GAD-7", "SSS", "M_CHAT_R", "SNAP-IV"]
-  );
   assert.equal(service.isAiToyVoiceScale("M-CHAT-R"), true);
   assert.equal(service.isAiToyVoiceScale("SNAP"), true);
+  assert.equal(service.isAiToyVoiceScale("PHQ-9"), false);
+  assert.equal(service.isAiToyVoiceScale("GAD-7"), false);
 });
 
 test("AI toy binding routes are available for partner backend binding lifecycle", async () => {
@@ -191,14 +192,67 @@ test("skill scale list can be filtered to voice-friendly AI toy scales", async (
 
   assert.match(routeSource, /aiToy/);
   assert.match(routeSource, /voiceFriendly/);
-  assert.match(bindingSource, /AI_TOY_VOICE_SCALE_WHITELIST/);
+  assert.doesNotMatch(bindingSource, /AI_TOY_VOICE_SCALE_WHITELIST/);
   assert.match(serviceSource, /listAiToyVoiceSkillScales/);
 });
 
-test("AI toy voice scale filtering returns only the configured whitelist", async () => {
+test("AI toy voice scale filtering returns child voice-friendly scales only", async () => {
   const { listAiToyVoiceSkillScales } = await import("../lib/assessment-skill/scale-service");
 
   const scaleIds = listAiToyVoiceSkillScales().map((scale) => scale.id);
 
-  assert.deepEqual(scaleIds, ["M_CHAT_R", "SNAP-IV", "GAD-7", "PHQ-9", "SSS"]);
+  assert.ok(scaleIds.includes("M_CHAT_R"));
+  assert.ok(scaleIds.includes("SNAP-IV"));
+  assert.ok(!scaleIds.includes("PHQ-9"));
+  assert.ok(!scaleIds.includes("GAD-7"));
+  assert.ok(!scaleIds.includes("SSS"));
+});
+
+test("skill scale route defaults to child scales and isolates exploration plus voice-friendly mode", async () => {
+  const { GET } = await import("../app/api/skill/v1/scales/route");
+  const issued = issueAgentSessionToken({
+    userId: "user-1",
+    memberId: "member-1",
+    role: "REGISTERED",
+    deviceId: "device-1",
+    entrypoint: "agent",
+  });
+  const headers = {
+    Authorization: `Bearer ${issued.token}`,
+  };
+
+  const defaultResponse = await GET(
+    new NextRequest("http://localhost/api/skill/v1/scales", { headers })
+  );
+  const defaultPayload = await defaultResponse.json();
+  const defaultIds = new Set(defaultPayload.scales.map((scale: { id: string }) => scale.id));
+  assert.equal(defaultResponse.status, 200);
+  assert.ok(defaultIds.has("ABC"));
+  assert.ok(!defaultIds.has("PHQ-9"));
+  assert.ok(!defaultIds.has("GAD-7"));
+  assert.ok(!defaultIds.has("MBTI"));
+
+  const explorationResponse = await GET(
+    new NextRequest("http://localhost/api/skill/v1/scales?category=exploration", { headers })
+  );
+  const explorationPayload = await explorationResponse.json();
+  const explorationIds = new Set(
+    explorationPayload.scales.map((scale: { id: string }) => scale.id)
+  );
+  assert.equal(explorationResponse.status, 200);
+  assert.ok(explorationIds.has("PHQ-9"));
+  assert.ok(explorationIds.has("GAD-7"));
+  assert.ok(explorationIds.has("MBTI"));
+  assert.ok(!explorationIds.has("ABC"));
+
+  const voiceResponse = await GET(
+    new NextRequest("http://localhost/api/skill/v1/scales?voiceFriendly=1", { headers })
+  );
+  const voicePayload = await voiceResponse.json();
+  const voiceIds = new Set(voicePayload.scales.map((scale: { id: string }) => scale.id));
+  assert.equal(voiceResponse.status, 200);
+  assert.ok(voiceIds.has("M_CHAT_R"));
+  assert.ok(voiceIds.has("SNAP-IV"));
+  assert.ok(!voiceIds.has("PHQ-9"));
+  assert.ok(!voiceIds.has("GAD-7"));
 });

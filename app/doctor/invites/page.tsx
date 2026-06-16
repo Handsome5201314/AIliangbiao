@@ -26,7 +26,7 @@ export default function DoctorInvitesPage() {
   };
 
   useEffect(() => {
-    fetch('/api/scales')
+    fetch('/api/doctor/scales', { headers: authHeaders })
       .then((res) => res.json())
       .then((data) => {
         setScales(data.scales || []);
@@ -35,7 +35,7 @@ export default function DoctorInvitesPage() {
         }
       })
       .catch(console.error);
-  }, []);
+  }, [authHeaders]);
 
   useEffect(() => {
     void loadInvites();

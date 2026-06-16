@@ -34,7 +34,7 @@ export default function AdminClinicPage() {
       fetch('/api/admin/clinic-points'),
       fetch('/api/admin/clinic-qrs'),
       fetch('/api/admin/clinic-screenings'),
-      fetch('/api/scales'),
+      fetch('/api/admin/scales'),
     ]);
 
     const [pointsData, qrsData, screeningsData, scalesData] = await Promise.all([

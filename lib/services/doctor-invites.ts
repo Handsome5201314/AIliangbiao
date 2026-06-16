@@ -2,7 +2,12 @@ import crypto from 'node:crypto';
 
 import { prisma } from '@/lib/db/prisma';
 import { QuotaManager } from '@/lib/auth/quotaManager';
-import { getSerializableScaleById, evaluateScaleAnswers } from '@/lib/scales/catalog';
+import {
+  evaluateScaleAnswers,
+  getDoctorVisibleScaleById,
+  getSerializableScaleById,
+} from '@/lib/scales/catalog';
+import { getAdminPolicies } from '@/lib/services/admin-policies';
 import {
   createPendingMemberProfile,
   ensureDoctorCareAssignment,
@@ -55,7 +60,10 @@ export async function createDoctorScaleInvite(input: {
   doctorProfileId: string;
   scaleId: string;
 }) {
-  const scale = getSerializableScaleById(input.scaleId);
+  const policies = await getAdminPolicies();
+  const scale = getDoctorVisibleScaleById(input.scaleId, {
+    doctorExplorationEnabled: policies.catalog.doctorExplorationEnabled,
+  });
   if (!scale) {
     throw new Error(`Scale ${input.scaleId} not found`);
   }

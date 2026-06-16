@@ -13,7 +13,7 @@ import {
   touchMcpApiKey,
   validateMcpApiKey,
 } from '@/lib/mcp/auth';
-import { listSerializableScales } from '@/lib/scales/catalog';
+import { listPublicClinicalChildScales } from '@/lib/scales/catalog';
 import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 
 export const dynamic = 'force-dynamic';
@@ -146,7 +146,7 @@ function isToolCallError(result: unknown) {
  * GET 处理器 - 返回服务状态
  */
 export async function GET() {
-  const scales = listSerializableScales();
+  const scales = listPublicClinicalChildScales();
 
   return NextResponse.json({
     service: "Scale Assessment Service",

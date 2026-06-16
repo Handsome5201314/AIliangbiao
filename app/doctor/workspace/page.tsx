@@ -73,6 +73,7 @@ type DoctorWorkspaceResponse = {
     departmentName: string;
     title: string;
   };
+  doctorExplorationEnabled: boolean;
   eligibleScales: EligibleScale[];
   recentSessions: RecentSession[];
 };
@@ -106,6 +107,7 @@ export default function DoctorWorkspacePage() {
   const [statusMessage, setStatusMessage] = useState('');
   const [copiedTemplate, setCopiedTemplate] = useState(false);
   const [doctor, setDoctor] = useState<DoctorWorkspaceResponse['doctor'] | null>(null);
+  const [doctorExplorationEnabled, setDoctorExplorationEnabled] = useState(false);
   const [eligibleScales, setEligibleScales] = useState<EligibleScale[]>([]);
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
   const [form, setForm] = useState<WorkspaceConfigForm | null>(null);
@@ -129,6 +131,7 @@ export default function DoctorWorkspacePage() {
 
         if (!cancelled) {
           setDoctor(payload.doctor);
+          setDoctorExplorationEnabled(Boolean(payload.doctorExplorationEnabled));
           setEligibleScales(payload.eligibleScales);
           setRecentSessions(payload.recentSessions || []);
           setForm(buildInitialForm(payload.config));
@@ -305,6 +308,7 @@ export default function DoctorWorkspacePage() {
       const reload = await fetch('/api/doctor/workspace', { headers: authHeaders });
       const reloadPayload = (await reload.json().catch(() => ({}))) as Partial<DoctorWorkspaceResponse>;
       if (reload.ok) {
+        setDoctorExplorationEnabled(Boolean(reloadPayload.doctorExplorationEnabled));
         if (reloadPayload.recentSessions) {
           setRecentSessions(reloadPayload.recentSessions);
         }
@@ -533,6 +537,12 @@ export default function DoctorWorkspacePage() {
                 <h2 className="text-lg font-semibold text-slate-900">工具授权</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-500">患者聊天页里，FastGPT 只能建议和启动你勾选过的量表。</p>
               </div>
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+              {doctorExplorationEnabled
+                ? '平台已开启“探索测试”总开关。除儿童量表外，你现在也可以按需勾选探索测试量表。'
+                : '平台当前仅开放儿童量表主流程。若需要在医生端显示探索测试，请先联系超级管理员到治理策略页开启总开关。'}
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">

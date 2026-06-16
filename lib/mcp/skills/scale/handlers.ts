@@ -22,7 +22,7 @@ import {
   evaluateScaleAnswers,
   getScaleDefinitionById,
   isRespondentResultVisible,
-  listSerializableScales,
+  listPublicClinicalChildScales,
   resolveScaleResultDeliveryMode,
 } from '@/lib/scales/catalog';
 import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
@@ -54,10 +54,9 @@ function estimateScaleTime(questionCount: number, estimatedMinutes?: number): st
 const symptomKeywords: Record<string, string[]> = {
   ABC: ['社交', '不理人', '重复动作', '刻板', '眼神', '自闭'],
   CARS: ['诊断', '严重程度', '模仿', '情感反应', '感官'],
+  M_CHAT_R: ['不会指', '不看人', '叫名没反应', '假装游戏', '共同注意'],
   SRS: ['社交困难', '同伴关系', '眼神接触', '不合群'],
   'SNAP-IV': ['注意力', '多动', '坐不住', '冲动'],
-  'PHQ-9': ['抑郁', '低落', '没兴趣', '绝望', '失眠'],
-  'GAD-7': ['焦虑', '紧张', '担心', '坐立不安', '易怒'],
 };
 
 const recommendScaleTool = {
@@ -478,7 +477,7 @@ async function listScales() {
 }
 
 async function recommendScale(symptoms: string) {
-  const availableScales = listSerializableScales();
+  const availableScales = listPublicClinicalChildScales();
   const matchedScales = availableScales.filter((scale) => {
     const keywords = symptomKeywords[scale.id] || [];
     return keywords.some((keyword) => symptoms.includes(keyword));
@@ -499,7 +498,7 @@ async function getScaleQuestions(input: { scaleId: string; offset?: number; limi
   const scale = getScaleDefinitionById(input.scaleId);
 
   if (!scale) {
-    const availableScaleIds = listSerializableScales().map((item) => item.id).join(', ');
+    const availableScaleIds = listPublicClinicalChildScales().map((item) => item.id).join(', ');
     return {
       success: false,
       error: `量表 ${input.scaleId} 不存在，可用量表：${availableScaleIds}`,

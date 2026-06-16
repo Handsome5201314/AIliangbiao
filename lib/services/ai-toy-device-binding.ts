@@ -1,15 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { ensureMemberForDevice } from "@/lib/assessment-skill/member-service";
-
-export const AI_TOY_VOICE_SCALE_WHITELIST = [
-  "PHQ-9",
-  "GAD-7",
-  "SSS",
-  "M_CHAT_R",
-  "SNAP-IV",
-] as const;
-
-export type AiToyVoiceScaleId = (typeof AI_TOY_VOICE_SCALE_WHITELIST)[number];
+import { getVoiceFriendlyChildScaleById } from "@/lib/scales/catalog";
 
 type AiToyDeviceBindingRecord = {
   id: string;
@@ -266,5 +257,5 @@ export function isAiToyVoiceScale(scaleId: string) {
         ? "SNAP-IV"
         : normalized;
 
-  return AI_TOY_VOICE_SCALE_WHITELIST.includes(canonicalId as AiToyVoiceScaleId);
+  return Boolean(getVoiceFriendlyChildScaleById(canonicalId));
 }

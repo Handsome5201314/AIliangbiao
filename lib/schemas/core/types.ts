@@ -20,6 +20,12 @@ export type ScaleInteractionMode =
 
 export type ScaleResultDeliveryMode = "immediate" | "physician_review";
 
+export type ScaleAudience = "child" | "adult" | "personality" | "career";
+
+export type ScaleProductGroup = "clinical_child" | "exploration" | "growth";
+
+export type ScaleStatus = "active" | "disabled" | "legacy";
+
 export type VoiceState =
   | "idle"
   | "assistant_speaking"
@@ -204,6 +210,18 @@ export interface ScaleDefinition {
   requiresConfirmation?: boolean;
   /** 结果对受测者的交付策略 */
   resultDeliveryMode?: ScaleResultDeliveryMode;
+  /** 目标受众 */
+  audience?: ScaleAudience;
+  /** 产品分组 */
+  productGroup?: ScaleProductGroup;
+  /** 是否儿童量表 */
+  isPediatric?: boolean;
+  /** 目录状态 */
+  status?: ScaleStatus;
+  /** 是否默认展示在主流程 */
+  defaultVisible?: boolean;
+  /** 是否允许进入语音友好量表列表 */
+  voiceFriendly?: boolean;
 }
 
 /** 服务端可执行量表定义 */
