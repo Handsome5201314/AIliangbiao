@@ -179,6 +179,8 @@ model User {
   agentpitIdentities      AgentpitIdentity[]
   doctorProfile           DoctorProfile?
   agentExecutions         AgentExecution[]
+  aiInteractions          AiInteraction[]
+  reportViews             ReportView[]
   clinicScreenings        ClinicScreeningSubmission[]
   aiToyDeviceBindings     AiToyDeviceBinding[]
   assignedCareAssignments CareAssignment[]     @relation("CareAssignmentAssignedByPatient")
@@ -234,6 +236,13 @@ model MemberProfile {
   clinicScreenings   ClinicScreeningSubmission[]
   doctorBotChatSessions DoctorBotChatSession[]
   aiToyDeviceBindings AiToyDeviceBinding[]
+  childBaseline      ChildBaseline?
+  scaleScores        ScaleScore[]
+  followUps          FollowUp[]
+  aiInteractions     AiInteraction[]
+  reportViews        ReportView[]
+  outcome3mRecords   Outcome3m[]
+  inpatientRecords   InpatientRecord[]
 
   @@index([userId, relation])
   @@index([contactPhone])
@@ -284,6 +293,10 @@ model AssessmentHistory {
   doctorNotes         DoctorPatientNote[]
   assessmentSessions  AssessmentSession[]
   clinicScreeningSubmission ClinicScreeningSubmission?
+  scaleScores         ScaleScore[]
+  followUps           FollowUp[]
+  aiInteractions      AiInteraction[]
+  reportViews         ReportView[]
 
   @@index([userId, createdAt])
   @@index([profileId, createdAt])
@@ -313,6 +326,11 @@ model AssessmentSession {
   assessmentHistoryId String?
   assessmentHistory   AssessmentHistory?      @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
   callbackDelivery    AssessmentCallbackDelivery?
+  scaleScores         ScaleScore[]
+  followUps           FollowUp[]
+  aiInteractions      AiInteraction[]
+  reportViews         ReportView[]
+  outcome3mRecords    Outcome3m[]
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   completedAt         DateTime?
@@ -387,6 +405,10 @@ model DoctorProfile {
   clinicScreeningPoints ClinicScreeningPoint[]
   clinicScreenings   ClinicScreeningSubmission[]
   doctorBots         DoctorBotConfig[]
+  followUps          FollowUp[]
+  aiInteractions     AiInteraction[]
+  reportViews        ReportView[]
+  inpatientRecords   InpatientRecord[]
   neonateArchives    DoctorNeonateArchive[]
   careTeamMemberships CareTeamMembership[]
   grantedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessGrantedByDoctor")
@@ -770,6 +792,165 @@ model ResearchExportLog {
 
   @@index([memberProfileId, createdAt])
   @@index([doctorProfileId, createdAt])
+}
+
+model ChildBaseline {
+  id                String        @id @default(cuid())
+  memberProfileId   String        @unique
+  memberProfile     MemberProfile @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  researchSubjectId String        @unique
+  birthYear         Int?
+  birthMonth        Int?
+  sex               String?
+  city              String?
+  chiefComplaint    String?
+  baselineSnapshot  Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([researchSubjectId])
+  @@index([sex, birthYear])
+  @@map("child_baseline")
+}
+
+model ScaleScore {
+  id                  String             @id @default(cuid())
+  memberProfileId      String?
+  memberProfile        MemberProfile?    @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentHistoryId  String?
+  assessmentHistory    AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId  String?
+  assessmentSession    AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  scaleId             String
+  scaleVersion        String             @default("1.0")
+  questionId          String
+  answer              Json
+  score               Float?
+  domainKey           String?
+  createdAt           DateTime           @default(now())
+
+  @@index([memberProfileId, scaleId])
+  @@index([assessmentHistoryId])
+  @@index([assessmentSessionId])
+  @@index([scaleId, questionId])
+  @@map("scale_score")
+}
+
+model FollowUp {
+  id                  String             @id @default(cuid())
+  memberProfileId      String
+  memberProfile        MemberProfile     @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  assessmentHistoryId  String?
+  assessmentHistory    AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId  String?
+  assessmentSession    AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  doctorProfileId      String?
+  doctorProfile        DoctorProfile?    @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  status              String             @default("PENDING")
+  scheduledAt         DateTime?
+  reminderSentAt      DateTime?
+  reminderClickedAt   DateTime?
+  completedAt         DateTime?
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([memberProfileId, status, createdAt])
+  @@index([assessmentSessionId])
+  @@index([assessmentHistoryId])
+  @@index([doctorProfileId, createdAt])
+  @@map("followup")
+}
+
+model AiInteraction {
+  id                  String             @id @default(cuid())
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberProfileId      String?
+  memberProfile        MemberProfile?    @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentHistoryId  String?
+  assessmentHistory    AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId  String?
+  assessmentSession    AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  doctorProfileId      String?
+  doctorProfile        DoctorProfile?    @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  scaleId             String?
+  questionId          String?
+  interactionType     String
+  promptHash          String?
+  responseSummary     String?
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+
+  @@index([userId, createdAt])
+  @@index([memberProfileId, createdAt])
+  @@index([assessmentSessionId, createdAt])
+  @@index([scaleId, questionId, createdAt])
+  @@map("ai_interaction")
+}
+
+model ReportView {
+  id                  String             @id @default(cuid())
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberProfileId      String?
+  memberProfile        MemberProfile?    @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentHistoryId  String?
+  assessmentHistory    AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId  String?
+  assessmentSession    AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  doctorProfileId      String?
+  doctorProfile        DoctorProfile?    @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  viewerRole          String
+  metadata            Json?
+  viewedAt            DateTime           @default(now())
+
+  @@index([userId, viewedAt])
+  @@index([memberProfileId, viewedAt])
+  @@index([assessmentSessionId, viewedAt])
+  @@index([doctorProfileId, viewedAt])
+  @@map("report_view")
+}
+
+model Outcome3m {
+  id                  String             @id @default(cuid())
+  memberProfileId      String
+  memberProfile        MemberProfile     @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  assessmentSessionId  String?
+  assessmentSession    AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  baselineScore       Float?
+  followUpScore       Float?
+  scoreChange         Float?
+  interventionStarted Boolean?
+  measuredAt          DateTime?
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([memberProfileId, measuredAt])
+  @@index([assessmentSessionId])
+  @@map("outcome_3m")
+}
+
+model InpatientRecord {
+  id              String         @id @default(cuid())
+  memberProfileId String
+  memberProfile   MemberProfile  @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  doctorProfileId String?
+  doctorProfile   DoctorProfile? @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  admissionId     String         @unique
+  admissionDate   DateTime?
+  dischargeDate   DateTime?
+  treatmentType   String?
+  hospitalName    String?
+  departmentName  String?
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([memberProfileId, admissionDate])
+  @@index([doctorProfileId, admissionDate])
+  @@map("inpatient_record")
 }
 
 model McpLog {

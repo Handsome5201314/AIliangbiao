@@ -1,5 +1,5 @@
 import type { AssessmentMode, Option, QuickQuestionType } from '@/types';
-import { aiExplanations } from '@/data/mockData';
+import { apiRequest, getAuthHeaders } from '@/services/authService';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -8,11 +8,6 @@ export const DISCLAIMER =
 
 // ─── Question Explanation ──────────────────────────────────────────────────────
 
-/**
- * Get an AI-generated explanation for a specific question.
- * In production this would call the backend AI service.
- * TODO: GET /api/platform/v1/ai/explanations/question
- */
 export async function getQuestionExplanation(params: {
   scaleId: string;
   questionId: string;
@@ -28,12 +23,33 @@ export async function getQuestionExplanation(params: {
   disclaimer: string;
   timestamp: number;
 }> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  const optionText = params.options.length
+    ? `\n\n本题选项包括：${params.options.map((option) => option.label).join('、')}。`
+    : '';
+  const modeHint =
+    params.mode === 'doctor_assisted'
+      ? '可用更口语化的方式向家长确认近一段时间的真实观察，不要诱导家长选择特定答案。'
+      : '请结合孩子近一段时间的日常表现作答，不需要追求某一次事件的绝对准确。';
 
-  const explanation =
-    aiExplanations[params.questionId] ??
-    `这道题（"${params.questionText}"）用于评估孩子在日常生活中的相关行为表现。请根据孩子近6个月的实际情况，选择最符合的选项。如果不确定，可以先跳过，稍后再回来作答。`;
+  const explanation = `这道题关注的是：${params.questionText}\n\n${modeHint}${optionText}`;
+
+  await apiRequest('/api/research/ai-interactions', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      memberProfileId: params.memberId || null,
+      assessmentSessionId: params.sessionId || null,
+      scaleId: params.scaleId,
+      questionId: params.questionId,
+      interactionType: 'QUESTION_EXPLANATION',
+      prompt: params.questionText,
+      responseSummary: explanation,
+      metadata: {
+        mode: params.mode || 'caregiver_self',
+        optionCount: params.options.length,
+      },
+    }),
+  });
 
   return {
     questionId: params.questionId,
@@ -50,17 +66,12 @@ export async function getQuestionExplanation(params: {
  * Get a quick inline explanation based on the user's question type.
  */
 export async function getQuickExplanation(
-  questionId: string,
+  _questionId: string,
   quickType: QuickQuestionType,
 ): Promise<string> {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-
-  const baseExplanation =
-    aiExplanations[questionId] ?? '暂无该题的详细解释。';
-
   switch (quickType) {
     case 'meaning':
-      return `题意说明：${baseExplanation}`;
+      return '题意说明：这类问题用于了解孩子在真实生活场景中的稳定表现，请按最近一段时间的总体情况判断。';
 
     case 'options':
       return (
@@ -88,6 +99,6 @@ export async function getQuickExplanation(
       );
 
     default:
-      return baseExplanation;
+      return '请结合孩子近一段时间的日常表现作答。';
   }
 }

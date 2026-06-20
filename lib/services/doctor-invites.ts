@@ -7,7 +7,6 @@ import {
   getDoctorVisibleScaleById,
   getSerializableScaleById,
 } from '@/lib/scales/catalog';
-import { getAdminPolicies } from '@/lib/services/admin-policies';
 import {
   createPendingMemberProfile,
   ensureDoctorCareAssignment,
@@ -60,10 +59,7 @@ export async function createDoctorScaleInvite(input: {
   doctorProfileId: string;
   scaleId: string;
 }) {
-  const policies = await getAdminPolicies();
-  const scale = getDoctorVisibleScaleById(input.scaleId, {
-    doctorExplorationEnabled: policies.catalog.doctorExplorationEnabled,
-  });
+  const scale = getDoctorVisibleScaleById(input.scaleId);
   if (!scale) {
     throw new Error(`Scale ${input.scaleId} not found`);
   }

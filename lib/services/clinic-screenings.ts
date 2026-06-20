@@ -11,7 +11,6 @@ import {
   getSerializableScaleById,
 } from '@/lib/scales/catalog';
 import { resolveLocalizedText, resolveQuestionText } from '@/lib/schemas/core/i18n';
-import { getAdminPolicies } from '@/lib/services/admin-policies';
 
 function memberProfileModel() {
   return (prisma as any).memberProfile ?? (prisma as any).childProfile;
@@ -272,10 +271,7 @@ export async function createDoctorOwnedClinicScaleQr(input: {
     throw new Error('Clinic screening point not found or not owned by current doctor');
   }
 
-  const policies = await getAdminPolicies();
-  const scale = getDoctorVisibleScaleById(input.scaleId, {
-    doctorExplorationEnabled: policies.catalog.doctorExplorationEnabled,
-  });
+  const scale = getDoctorVisibleScaleById(input.scaleId);
   if (!scale) {
     throw new Error(`Scale ${input.scaleId} not found`);
   }

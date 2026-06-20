@@ -30,6 +30,12 @@ const dimensionLevelColor: Record<Dimension['level'], string> = {
   high: 'bg-red-500',
 };
 
+const genderLabels = {
+  male: '男',
+  female: '女',
+  unknown: '未填写',
+} satisfies Record<DoctorPatient['gender'], string>;
+
 const DoctorReportScreen: React.FC<DoctorReportScreenProps> = ({
   report,
   patient,
@@ -57,7 +63,7 @@ const DoctorReportScreen: React.FC<DoctorReportScreenProps> = ({
           <div className="flex items-center gap-2">
             <span className="font-medium text-foreground">{patient.name}</span>
             <span className="text-sm text-muted">
-              {patient.ageLabel} · {patient.gender === 'male' ? '男' : '女'}
+              {patient.ageLabel} · {genderLabels[patient.gender]}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-2">

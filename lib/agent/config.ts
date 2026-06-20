@@ -34,7 +34,7 @@ export const DEFAULT_AGENT_WORKSPACE_CONFIG = {
     followUpUnknown:
       '我还不能准确判断你的任务。你可以直接说：推荐量表、查看画像、导出快照，或者为某个量表生成医生邀填。',
     followUpDoctorInviteNeedsScale:
-      '我可以帮你生成医生邀填。请直接告诉我量表名称或量表 ID，例如：为 GAD-7 生成邀填。',
+      '我可以帮你生成医生邀填。请直接告诉我量表名称或量表 ID，例如：为 ABC 生成邀填。',
     assessmentPlan:
       '我建议先做 {scaleId}。确认后我会自动读取上下文、推荐量表并启动站内会话。',
     inspectProfilePlan:
@@ -44,7 +44,7 @@ export const DEFAULT_AGENT_WORKSPACE_CONFIG = {
     doctorInvitePlan:
       '我已经整理好一份“医生邀填”计划：为 {scaleId} 生成邀填链接和二维码。确认后我会自动执行。',
     doctorUnknownGoal:
-      '我需要再明确一点你的目标，例如“给 GAD-7 生成邀填”或“看看当前成员画像”。',
+      '我需要再明确一点你的目标，例如“给 ABC 生成邀填”或“看看当前成员画像”。',
     patientUnknownGoal:
       '我需要再明确一点你的目标，例如“我最近很焦虑，帮我推荐量表”或“导出人格快照”。',
     activeAssessmentGuard:
@@ -79,7 +79,7 @@ export const DEFAULT_AGENT_WORKSPACE_CONFIG = {
     patientWorkspaceHeadline: '患者可在这里获得推荐量表、推进会话、更新画像并导出快照',
     availableToolsLabel: '当前可用工具',
     refreshWorkspaceLabel: '刷新工作台',
-    goalPlaceholderDoctor: '例如：为 GAD-7 生成医生邀填；看看当前成员画像；帮我启动一次焦虑量表。',
+    goalPlaceholderDoctor: '例如：为 ABC 生成医生邀填；看看当前成员画像；帮我启动一次 M-CHAT-R。',
     goalPlaceholderPatient: '例如：我最近总是很焦虑；帮我看看画像最近有什么变化；导出人格快照。',
     planningButtonLabel: '生成计划',
     voiceInputTitle: '语音输入通道',

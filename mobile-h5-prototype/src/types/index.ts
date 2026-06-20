@@ -7,7 +7,7 @@ export interface Child {
   name: string;
   age: number;          // months
   ageLabel: string;     // display-friendly
-  gender: 'male' | 'female';
+  gender: 'male' | 'female' | 'unknown';
   avatar: string;       // emoji or url
   latestAssessment?: {
     scaleName: string;
@@ -96,7 +96,7 @@ export interface DoctorPatient {
   name: string;
   age: number;
   ageLabel: string;
-  gender: 'male' | 'female';
+  gender: 'male' | 'female' | 'unknown';
   avatar: string;
   isTemporary: boolean;
   latestAssessment?: {
@@ -134,6 +134,10 @@ export type AutoSaveStatus = 'saving' | 'saved' | 'saved-locally' | 'syncing' | 
 
 /* ===== Screen routing ===== */
 export type ScreenId =
+  | 'login'
+  | 'role-select'
+  | 'doctor-pin-login'
+  | 'lock'
   | 'home'
   | 'children'
   | 'scales'
@@ -168,3 +172,24 @@ export interface AiExplanation {
 }
 
 export type QuickQuestionType = 'meaning' | 'options' | 'example' | 'unsure' | 'explain-to-parent';
+
+/* ===== Auth ===== */
+export type AccountType = 'PATIENT' | 'DOCTOR';
+
+export interface DoctorProfile {
+  id: string;
+  name: string;
+  department?: string;
+  verificationStatus: 'APPROVED' | 'PENDING' | 'REJECTED';
+}
+
+export interface AuthUser {
+  id: string;
+  phone: string;
+  name: string;
+  accountType: AccountType;
+  isDoctor: boolean;
+  isPatient: boolean;
+  email?: string;
+  doctorProfile?: DoctorProfile | null;
+}

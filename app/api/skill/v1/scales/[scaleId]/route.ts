@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { authenticateSkillRequest } from '@/lib/assessment-skill/request-auth';
 import { getSkillScale } from '@/lib/assessment-skill/scale-service';
-import { normalizeScaleCatalogCategoryParam } from '@/lib/scales/catalog';
 
 export async function GET(
   request: NextRequest,
@@ -11,8 +10,7 @@ export async function GET(
   try {
     authenticateSkillRequest(request, 'skill:scales:read');
     const { scaleId } = await context.params;
-    const category = normalizeScaleCatalogCategoryParam(request.nextUrl.searchParams.get('category'));
-    const scale = getSkillScale(scaleId, category);
+    const scale = getSkillScale(scaleId);
 
     if (!scale) {
       return NextResponse.json({ error: 'Scale not found' }, { status: 404 });

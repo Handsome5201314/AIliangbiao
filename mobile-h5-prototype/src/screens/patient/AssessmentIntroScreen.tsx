@@ -20,6 +20,12 @@ interface AssessmentIntroScreenProps {
   onSwitchChild: () => void;
 }
 
+const genderSymbols = {
+  male: <span className="text-xs text-sky-400">&#9794;</span>,
+  female: <span className="text-xs text-pink-400">&#9792;</span>,
+  unknown: <span className="text-xs text-muted">未填写</span>,
+} satisfies Record<Child['gender'], React.ReactNode>;
+
 const AssessmentIntroScreen: React.FC<AssessmentIntroScreenProps> = ({
   child,
   scale,
@@ -64,11 +70,7 @@ const AssessmentIntroScreen: React.FC<AssessmentIntroScreenProps> = ({
               <span className="text-base font-medium text-foreground truncate">
                 {child.name}
               </span>
-              {child.gender === 'male' ? (
-                <span className="text-xs text-sky-400">&#9794;</span>
-              ) : (
-                <span className="text-xs text-pink-400">&#9792;</span>
-              )}
+              {genderSymbols[child.gender]}
             </div>
             <p className="text-sm text-muted">{child.ageLabel}</p>
           </div>

@@ -82,16 +82,13 @@
 
 - `all_child`
   - 默认儿童临床主流程
-- `exploration`
-  - 探索量表
 - `voiceFriendlyChild`
   - AI toy 使用的儿童语音白名单
 
 当前事实：
 
 - 默认公开目录不是“所有量表”，而是 `publicClinicalChild`
-- 探索量表不会默认混入儿童主流程
-- 医生端是否可见探索量表由 `doctorExplorationEnabled` 控制
+- 医生端、Skill Facade、AI toy 均只暴露儿童临床主流程量表
 - AI toy 语音目录当前仅包含 `M_CHAT_R` 与 `SNAP-IV`
 
 ---
@@ -160,7 +157,6 @@ GET /api/skill/v1/scales/:scaleId/sessions/:sessionId/result
 ### Skill Facade
 
 - `GET /api/skill/v1/scales`
-- `GET /api/skill/v1/scales?category=exploration`
 - `GET /api/skill/v1/scales?aiToy=voiceFriendly`
 - `GET /api/skill/v1/scales/:scaleId`
 - `POST /api/skill/v1/scales/:scaleId/evaluate`

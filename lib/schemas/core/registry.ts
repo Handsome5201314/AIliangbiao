@@ -13,12 +13,6 @@ import { SRS_Scale } from "../autism/srs";
 import { SNAP_Scale } from "../adhd/snap-iv";
 import { CBCL_Scale } from "../mental-health/cbcl";
 import { TAS_37_Scale } from "../mental-health/test-anxiety-scale";
-import { PSQI_Scale } from "../general-health/psqi";
-import { RSES_Scale } from "../personality/rses";
-import { MMSE_Scale } from "../cognitive/mmse";
-import { MoCA_Scale } from "../cognitive/moca";
-import { MBTI_Scale } from "../MBTI/mbti";
-import { HOLLAND_Scale } from "../career/holland";
 import { Vineland3_Scale } from "../development/vineland";
 
 /** 所有已激活的量表 */
@@ -31,11 +25,5 @@ export const AllScales: ExecutableScaleDefinition[] = [
   SNAP_Scale,
   CBCL_Scale,
   TAS_37_Scale,
-  PSQI_Scale,
-  RSES_Scale,
-  MMSE_Scale,
-  MoCA_Scale,
-  MBTI_Scale,
-  HOLLAND_Scale,
   Vineland3_Scale,
 ];

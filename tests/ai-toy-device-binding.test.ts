@@ -208,7 +208,7 @@ test("AI toy voice scale filtering returns child voice-friendly scales only", as
   assert.ok(!scaleIds.includes("SSS"));
 });
 
-test("skill scale route defaults to child scales and isolates exploration plus voice-friendly mode", async () => {
+test("skill scale route stays child-only when category is supplied and supports voice-friendly mode", async () => {
   const { GET } = await import("../app/api/skill/v1/scales/route");
   const issued = issueAgentSessionToken({
     userId: "user-1",
@@ -240,10 +240,10 @@ test("skill scale route defaults to child scales and isolates exploration plus v
     explorationPayload.scales.map((scale: { id: string }) => scale.id)
   );
   assert.equal(explorationResponse.status, 200);
-  assert.ok(explorationIds.has("PHQ-9"));
-  assert.ok(explorationIds.has("GAD-7"));
-  assert.ok(explorationIds.has("MBTI"));
-  assert.ok(!explorationIds.has("ABC"));
+  assert.ok(explorationIds.has("ABC"));
+  assert.ok(!explorationIds.has("PHQ-9"));
+  assert.ok(!explorationIds.has("GAD-7"));
+  assert.ok(!explorationIds.has("MBTI"));
 
   const voiceResponse = await GET(
     new NextRequest("http://localhost/api/skill/v1/scales?voiceFriendly=1", { headers })
