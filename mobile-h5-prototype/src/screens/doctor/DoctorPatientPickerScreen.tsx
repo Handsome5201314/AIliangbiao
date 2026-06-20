@@ -11,6 +11,12 @@ export interface DoctorPatientPickerScreenProps {
   onBack: () => void;
 }
 
+const genderLabels = {
+  male: '男',
+  female: '女',
+  unknown: '未填写',
+} satisfies Record<DoctorPatient['gender'], string>;
+
 const DoctorPatientPickerScreen: React.FC<DoctorPatientPickerScreenProps> = ({
   patients,
   onSelectPatient,
@@ -113,7 +119,7 @@ const DoctorPatientPickerScreen: React.FC<DoctorPatientPickerScreenProps> = ({
                   )}
                 </div>
                 <div className="mt-0.5 text-sm text-muted">
-                  {patient.ageLabel} · {patient.gender === 'male' ? '男' : '女'}
+                  {patient.ageLabel} · {genderLabels[patient.gender]}
                 </div>
                 {patient.latestAssessment && (
                   <div className="mt-1 text-sm text-muted truncate">

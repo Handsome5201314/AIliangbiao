@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Home, Users, ClipboardList, Clock, ArrowLeft } from 'lucide-react'
+import { Home, Users, ClipboardList, Clock } from 'lucide-react'
 import type {
   ScreenId,
   ScreenParams,
@@ -13,6 +13,7 @@ import type {
   DoctorHistoryRecord,
   TemporaryPatient,
   Answer,
+  AuthUser,
 } from '@/types'
 import {
   getChildren,
@@ -24,9 +25,14 @@ import {
   getDoctorStats,
   getDoctorHistory,
   createTemporaryPatient,
+  createClinicAssessment,
+  enterCaregiverHandoff,
   submitAnswers,
 } from '@/services/assessmentService'
 import { Button } from '@/components/ui/button'
+
+// Auth
+import { AuthSessionProvider, useAuthSession } from '@/contexts/AuthContext'
 
 // Screens
 import HomeScreen from '@/screens/patient/HomeScreen'
@@ -45,6 +51,12 @@ import CaregiverLockedRunnerScreen from '@/screens/doctor/CaregiverLockedRunnerS
 import CaregiverCompleteScreen from '@/screens/doctor/CaregiverCompleteScreen'
 import DoctorReauthScreen from '@/screens/doctor/DoctorReauthScreen'
 import DoctorReportScreen from '@/screens/doctor/DoctorReportScreen'
+
+// Auth screens
+import LoginScreen from '@/screens/auth/LoginScreen'
+import RoleSelectScreen from '@/screens/auth/RoleSelectScreen'
+import DoctorPinLoginScreen from '@/screens/auth/DoctorPinLoginScreen'
+import LockScreen from '@/screens/auth/LockScreen'
 
 // AI Components
 import AiAssistantFab from '@/screens/ai/AiAssistantFab'
@@ -65,9 +77,30 @@ const TAB_ITEMS = [
 /* Screens that show AI fab */
 const AI_FAB_SCREENS: ScreenId[] = ['questionnaire', 'doctor-assisted-runner']
 
-export default function App() {
+/* Screens that are auth-exempt (auth screens themselves) */
+const AUTH_SCREENS: ScreenId[] = ['login', 'role-select', 'doctor-pin-login', 'lock']
+
+/* Doctor-only screens */
+const DOCTOR_SCREENS: ScreenId[] = [
+  'doctor-home', 'doctor-patient-picker', 'doctor-temp-patient',
+  'doctor-scale-picker', 'doctor-fill-mode', 'doctor-assisted-runner',
+  'caregiver-locked-runner', 'caregiver-complete', 'doctor-reauth', 'doctor-report',
+]
+
+/* Patient-only screens */
+const PATIENT_SCREENS: ScreenId[] = [
+  'home', 'children', 'scales', 'assessment-intro', 'questionnaire', 'report', 'history',
+]
+
+// ─── Inner app (uses auth context) ─────────────────────────────────────────────
+
+function AppInner() {
+  const auth = useAuthSession()
+
   // ---- Mode ----
   const [appMode, setAppMode] = useState<'patient' | 'doctor'>('patient')
+  // Track if role selection is needed after login
+  const [pendingRoleSelect, setPendingRoleSelect] = useState(false)
 
   // ---- Navigation ----
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('home')
@@ -88,6 +121,7 @@ export default function App() {
   const [doctorHistory, setDoctorHistory] = useState<DoctorHistoryRecord[]>([])
   const [selectedPatient, setSelectedPatient] = useState<DoctorPatient | null>(null)
   const [selectedFillMode, setSelectedFillMode] = useState<'doctor_assisted' | 'caregiver_handoff_locked'>('doctor_assisted')
+  const [activeClinicSessionId, setActiveClinicSessionId] = useState<string | null>(null)
 
   // ---- AI state ----
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
@@ -96,25 +130,45 @@ export default function App() {
   const [aiQuestionText, setAiQuestionText] = useState('')
 
   // ---- Loading ----
-  const [loading, setLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(false)
 
   const navigate = useCallback((screen: ScreenId, newParams?: ScreenParams) => {
     setCurrentScreen(screen)
     if (newParams) setParams(prev => ({ ...prev, ...newParams }))
   }, [])
 
-  // ---- Load initial data ----
+  // ---- Load data after authentication ----
   useEffect(() => {
+    if (!auth.isAuthenticated || auth.loading) return
+
+    // Set initial mode based on user role
+    if (auth.isDoctor && !auth.isPatient) {
+      setAppMode('doctor')
+    } else if (auth.isPatient && !auth.isDoctor) {
+      setAppMode('patient')
+    }
+    // If both roles, keep current mode (or wait for role selection)
+
     async function init() {
+      setDataLoading(true)
       try {
-        const [childData, scaleData, histData, patients, stats, docHist] = await Promise.all([
-          getChildren(),
-          getScales(),
-          getHistory(),
-          getDoctorPatients(),
-          getDoctorStats(),
-          getDoctorHistory(),
-        ])
+        const promises: Promise<any>[] = []
+        if (auth.isPatient) {
+          promises.push(getChildren(auth.authHeaders), getScales(), getHistory(undefined, auth.authHeaders))
+        } else {
+          promises.push(Promise.resolve([]), getScales(), Promise.resolve([]))
+        }
+        if (auth.isDoctor) {
+          promises.push(
+            getDoctorPatients(auth.authHeaders),
+            getDoctorStats(auth.authHeaders),
+            getDoctorHistory(auth.authHeaders)
+          )
+        } else {
+          promises.push(Promise.resolve([]), Promise.resolve({ todayCount: 0, monthCount: 0 }), Promise.resolve([]))
+        }
+
+        const [childData, scaleData, histData, patients, stats, docHist] = await Promise.all(promises)
         setChildren(childData)
         setScales(scaleData)
         setHistory(histData)
@@ -125,11 +179,11 @@ export default function App() {
       } catch (e) {
         console.error('Init failed:', e)
       } finally {
-        setLoading(false)
+        setDataLoading(false)
       }
     }
     init()
-  }, [])
+  }, [auth.isAuthenticated, auth.loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Current child ----
   const currentChild = children.find(c => c.id === selectedChildId) || null
@@ -149,8 +203,17 @@ export default function App() {
   }
 
   const handleCompleteQuestionnaire = async (answers: Record<string, Answer>) => {
-    const result = await submitAnswers('session-mock', answers)
-    const rpt = await getReport(result.sessionId)
+    if (!selectedScale) return
+    const sessionId = appMode === 'doctor' && activeClinicSessionId
+      ? activeClinicSessionId
+      : globalThis.crypto.randomUUID()
+    const result = await submitAnswers(sessionId, answers, auth.authHeaders, {
+      scaleId: selectedScale.id,
+      childId: appMode === 'patient' ? selectedChildId : selectedPatient?.id,
+      childName: appMode === 'patient' ? currentChild?.name : selectedPatient?.name,
+      serverSessionId: appMode === 'doctor' ? activeClinicSessionId : null,
+    })
+    const rpt = await getReport(result.reportId, auth.authHeaders)
     setReport(rpt)
     if (appMode === 'patient') {
       navigate('report', { reportEntrySource: 'just-submitted' })
@@ -162,7 +225,7 @@ export default function App() {
   }
 
   const handleViewReport = async (sessionId: string) => {
-    const rpt = await getReport(sessionId)
+    const rpt = await getReport(sessionId, auth.authHeaders)
     setReport(rpt)
     navigate('report', { reportEntrySource: 'history' })
   }
@@ -170,35 +233,48 @@ export default function App() {
   // Doctor handlers
   const handleSelectPatient = (patient: DoctorPatient) => {
     setSelectedPatient(patient)
+    setActiveClinicSessionId(null)
     navigate('doctor-scale-picker')
   }
 
   const handleCreateTempPatient = async (data: TemporaryPatient) => {
-    const newPatient = await createTemporaryPatient(data)
+    const newPatient = await createTemporaryPatient(data, auth.authHeaders)
     setDoctorPatients(prev => [newPatient, ...prev])
     setSelectedPatient(newPatient)
+    setActiveClinicSessionId(null)
     navigate('doctor-scale-picker')
   }
 
   const handleSelectDoctorScale = (scale: Scale) => {
     setSelectedScale(scale)
+    setActiveClinicSessionId(null)
     getQuestions(scale.id).then(qs => {
       setQuestions(qs)
       navigate('doctor-fill-mode')
     })
   }
 
-  const handleSelectFillMode = (mode: 'doctor_assisted' | 'caregiver_handoff_locked') => {
+  const handleSelectFillMode = async (mode: 'doctor_assisted' | 'caregiver_handoff_locked') => {
+    if (!selectedPatient || !selectedScale) return
     setSelectedFillMode(mode)
+    const session = await createClinicAssessment(
+      selectedPatient.id,
+      selectedScale.id,
+      mode,
+      auth.authHeaders,
+    )
+    setActiveClinicSessionId(session.sessionId)
     if (mode === 'doctor_assisted') {
       navigate('doctor-assisted-runner')
     } else {
+      await enterCaregiverHandoff(session.sessionId, auth.authHeaders)
       navigate('caregiver-locked-runner')
     }
   }
 
   const handleDoctorViewReport = async (sessionId?: string) => {
-    const rpt = report || await getReport(sessionId || 'session-mock')
+    const rpt = report || (sessionId ? await getReport(sessionId, auth.authHeaders) : null)
+    if (!rpt) return
     setReport(rpt)
     navigate('doctor-report')
   }
@@ -206,7 +282,7 @@ export default function App() {
   // AI handler
   const handleOpenAi = () => {
     if (questions.length > 0) {
-      const q = questions[0] // simplified for demo
+      const q = questions[0]
       setAiQuestionId(q.id)
       setAiQuestionNumber(1)
       setAiQuestionText(q.text)
@@ -214,9 +290,89 @@ export default function App() {
     setAiDrawerOpen(true)
   }
 
+  // ---- Auth handlers ----
+  const handleLoginSuccess = useCallback((token: string, user: AuthUser) => {
+    auth.login(token, user)
+    // If user has both roles, show role selection
+    if (user.isDoctor && user.isPatient) {
+      setPendingRoleSelect(true)
+      navigate('role-select')
+    } else if (user.isDoctor) {
+      setAppMode('doctor')
+      navigate('doctor-home')
+    } else {
+      setAppMode('patient')
+      navigate('home')
+    }
+  }, [auth, navigate])
+
+  const handleGuestLogin = useCallback(async () => {
+    await auth.loginAsGuest()
+    setAppMode('patient')
+    navigate('home')
+  }, [auth, navigate])
+
+  const handleSelectRole = useCallback((role: 'patient' | 'doctor') => {
+    setPendingRoleSelect(false)
+    setAppMode(role)
+    if (role === 'doctor') {
+      navigate('doctor-home')
+    } else {
+      navigate('home')
+    }
+  }, [navigate])
+
+  const handleLogout = useCallback(() => {
+    auth.logout()
+    setAppMode('patient')
+    navigate('login')
+    // Reset all data
+    setChildren([])
+    setScales([])
+    setHistory([])
+    setDoctorPatients([])
+    setDoctorStats({ todayCount: 0, monthCount: 0 })
+    setDoctorHistory([])
+    setReport(null)
+    setSelectedPatient(null)
+    setSelectedScale(null)
+  }, [auth, navigate])
+
+  const handleSwitchMode = useCallback((mode: 'patient' | 'doctor') => {
+    setAppMode(mode)
+    if (mode === 'patient') {
+      navigate('home')
+    } else {
+      navigate('doctor-home')
+    }
+  }, [navigate])
+
   // ---- Render screen ----
   const renderScreen = () => {
-    if (loading) {
+    // Auth loading
+    if (auth.loading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-sage-400 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-muted">加载中...</span>
+          </div>
+        </div>
+      )
+    }
+
+    // Not authenticated → show login
+    if (!auth.isAuthenticated) {
+      return (
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          onGuestLogin={handleGuestLogin}
+        />
+      )
+    }
+
+    // Data loading
+    if (dataLoading) {
       return (
         <div className="flex items-center justify-center h-full">
           <div className="flex flex-col items-center gap-3">
@@ -228,6 +384,32 @@ export default function App() {
     }
 
     switch (currentScreen) {
+      // ===== Auth screens =====
+      case 'login':
+        return (
+          <LoginScreen
+            onLoginSuccess={handleLoginSuccess}
+            onGuestLogin={handleGuestLogin}
+          />
+        )
+      case 'role-select':
+        return (
+          <RoleSelectScreen
+            userName={auth.user?.name || '用户'}
+            onSelectRole={handleSelectRole}
+          />
+        )
+      case 'doctor-pin-login':
+        return (
+          <DoctorPinLoginScreen
+            doctorName={auth.user?.name || '医生'}
+            onUnlock={() => navigate('doctor-home')}
+            onLogout={handleLogout}
+          />
+        )
+      case 'lock':
+        return null // Lock screen is rendered as overlay
+
       // ===== Patient screens =====
       case 'home':
         return (
@@ -368,6 +550,8 @@ export default function App() {
       case 'doctor-reauth':
         return (
           <DoctorReauthScreen
+            sessionId={activeClinicSessionId}
+            authHeaders={auth.authHeaders}
             onVerifySuccess={() => {
               if (report) {
                 navigate('doctor-report')
@@ -392,42 +576,108 @@ export default function App() {
     }
   }
 
-  // ---- Bottom nav visibility ----
-  const showBottomNav = appMode === 'patient' && TAB_SCREENS.includes(currentScreen)
-  const showAiFab = AI_FAB_SCREENS.includes(currentScreen) && !aiDrawerOpen && currentScreen !== 'caregiver-locked-runner'
+  // ---- Visibility rules ----
+  const isAuthScreen = AUTH_SCREENS.includes(currentScreen)
+  const isDoctorScreen = DOCTOR_SCREENS.includes(currentScreen)
+  const showBottomNav = auth.isAuthenticated && !isAuthScreen && appMode === 'patient' && TAB_SCREENS.includes(currentScreen)
+  const showAiFab = auth.isAuthenticated && !isAuthScreen && AI_FAB_SCREENS.includes(currentScreen) && !aiDrawerOpen && currentScreen !== 'caregiver-locked-runner'
+
+  // Mode switcher: only visible for dual-role users when not on auth screens
+  const showModeSwitcher = auth.isAuthenticated && !isAuthScreen && auth.isDoctor && auth.isPatient
+  // Guest users: show a restricted banner instead of full app
+  const isGuest = auth.isGuest
 
   return (
     <div
       data-component="mobile-app"
       className="w-full max-w-[480px] mx-auto h-[100dvh] flex flex-col bg-cream-100 relative overflow-hidden"
     >
-      {/* Mode switcher - small pill at top */}
-      <div
-        data-component="mode-switcher"
-        className="flex-shrink-0 flex items-center justify-center py-2 px-5 safe-top"
-        data-hide-in-locked
-      >
-        <div className="flex bg-cream-200 rounded-pill p-0.5">
+      {/* Lock screen overlay */}
+      {auth.isAuthenticated && auth.isLocked && (
+        <LockScreen
+          doctorName={auth.user?.name || '医生'}
+          onUnlock={auth.unlockScreen}
+          onLogout={handleLogout}
+        />
+      )}
+
+      {/* Mode switcher — only for dual-role users */}
+      {showModeSwitcher && (
+        <div
+          data-component="mode-switcher"
+          className="flex-shrink-0 flex items-center justify-center py-2 px-5 safe-top"
+          data-hide-in-locked
+        >
+          <div className="flex bg-cream-200 rounded-pill p-0.5">
+            <Button
+              variant="ghost"
+              onClick={() => handleSwitchMode('patient')}
+              className={`px-4 py-1.5 rounded-pill text-xs font-medium transition-smooth ${
+                appMode === 'patient' ? 'bg-white text-foreground shadow-sm' : 'text-muted'
+              }`}
+            >
+              家长端
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => handleSwitchMode('doctor')}
+              className={`px-4 py-1.5 rounded-pill text-xs font-medium transition-smooth ${
+                appMode === 'doctor' ? 'bg-white text-foreground shadow-sm' : 'text-muted'
+              }`}
+            >
+              医生端
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Single-role header — shows user info */}
+      {auth.isAuthenticated && !isAuthScreen && !showModeSwitcher && (
+        <div
+          data-component="user-header"
+          className="flex-shrink-0 flex items-center justify-between py-2 px-5 safe-top"
+          data-hide-in-locked
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-sage-100 flex items-center justify-center">
+              <span className="text-xs font-bold text-sage-600">
+                {auth.user?.name?.charAt(0) || 'U'}
+              </span>
+            </div>
+            <span className="text-xs text-muted">
+              {auth.isGuest ? '游客模式' : auth.user?.name || ''}
+              {auth.isDoctor && !auth.isPatient ? ' · 医生端' : ''}
+              {auth.isPatient && !auth.isDoctor ? ' · 家长端' : ''}
+            </span>
+          </div>
+          {!auth.isGuest && (
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="text-xs text-muted px-2 py-1 h-auto"
+            >
+              退出
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Guest banner */}
+      {isGuest && auth.isAuthenticated && !isAuthScreen && (
+        <div
+          data-component="guest-banner"
+          className="flex-shrink-0 bg-sage-50 border-b border-sage-200 px-5 py-2 flex items-center justify-between"
+        >
+          <span className="text-xs text-sage-700">注册后可保存测评记录并查看完整报告</span>
           <Button
             variant="ghost"
-            onClick={() => { setAppMode('patient'); setCurrentScreen('home') }}
-            className={`px-4 py-1.5 rounded-pill text-xs font-medium transition-smooth ${
-              appMode === 'patient' ? 'bg-white text-foreground shadow-sm' : 'text-muted'
-            }`}
+            onClick={handleLogout}
+            className="text-xs text-sage-600 font-medium px-3 py-1 h-auto"
           >
-            家长端
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => { setAppMode('doctor'); setCurrentScreen('doctor-home') }}
-            className={`px-4 py-1.5 rounded-pill text-xs font-medium transition-smooth ${
-              appMode === 'doctor' ? 'bg-white text-foreground shadow-sm' : 'text-muted'
-            }`}
-          >
-            医生端
+            去注册
           </Button>
         </div>
-      </div>
+      )}
 
       {/* Screen content */}
       <section
@@ -443,7 +693,7 @@ export default function App() {
       </section>
 
       {/* Bottom tab navigation */}
-      {showBottomNav && (
+      {showBottomNav && !auth.isLocked && (
         <nav
           data-component="bottom-tab-nav"
           className="flex-shrink-0 bg-white border-t border-cream-200 safe-bottom"
@@ -472,7 +722,7 @@ export default function App() {
       )}
 
       {/* AI floating action button */}
-      {showAiFab && (
+      {showAiFab && !auth.isLocked && (
         <AiAssistantFab onClick={handleOpenAi} visible={showAiFab} />
       )}
 
@@ -486,5 +736,15 @@ export default function App() {
         mode={currentScreen === 'doctor-assisted-runner' ? 'doctor_assisted' : 'parent_self'}
       />
     </div>
+  )
+}
+
+// ─── Root App (wraps with provider) ────────────────────────────────────────────
+
+export default function App() {
+  return (
+    <AuthSessionProvider>
+      <AppInner />
+    </AuthSessionProvider>
   )
 }

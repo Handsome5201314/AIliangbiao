@@ -38,6 +38,12 @@ const riskLevelLabels: Record<string, string> = {
   high: '高风险',
 };
 
+const genderSymbols = {
+  male: <span className="text-xs text-sky-400">&#9794;</span>,
+  female: <span className="text-xs text-pink-400">&#9792;</span>,
+  unknown: <span className="text-xs text-muted">未填写</span>,
+} satisfies Record<Child['gender'], React.ReactNode>;
+
 const quickActions = [
   {
     key: 'assessment',
@@ -115,11 +121,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
                 <span className="text-lg font-medium text-foreground truncate">
                   {currentChild.name}
                 </span>
-                {currentChild.gender === 'male' ? (
-                  <span className="text-xs text-sky-400">&#9794;</span>
-                ) : (
-                  <span className="text-xs text-pink-400">&#9792;</span>
-                )}
+                {genderSymbols[currentChild.gender]}
               </div>
               <p className="text-sm text-muted">{currentChild.ageLabel}</p>
             </div>

@@ -15,7 +15,6 @@ import { decryptSecret, encryptSecret } from '@/lib/utils/secretCrypto';
 import { generateUUID } from '@/lib/utils/uuid';
 import { getActiveDoctorAssignment } from '@/lib/services/doctor-care';
 import { analyzeCompletedAssessmentResult } from '@/lib/services/assessment-advice';
-import { getAdminPolicies } from '@/lib/services/admin-policies';
 
 const toolCallArgumentsSchema = z.object({
   scaleId: z.string().min(1),
@@ -316,14 +315,9 @@ function filterEligibleScales(scales: ScaleDefinition[]) {
 }
 
 async function getDoctorBotScaleRegistry() {
-  const policies = await getAdminPolicies();
-  const doctorExplorationEnabled = policies.catalog.doctorExplorationEnabled;
-  const eligibleScales = filterEligibleScales(
-    listDoctorVisibleScales({ doctorExplorationEnabled })
-  );
+  const eligibleScales = filterEligibleScales(listDoctorVisibleScales());
 
   return {
-    doctorExplorationEnabled,
     eligibleScales,
     eligibleScaleIds: new Set(eligibleScales.map((scale) => scale.id.toUpperCase())),
   };
@@ -607,9 +601,6 @@ function pickFallbackScaleFromIntent(input: {
 }) {
   const normalized = normalizeIntentText(input.userText);
   const semanticMatches: Array<{ scaleId: string; keywords: string[] }> = [
-    { scaleId: 'PHQ-9', keywords: ['phq', 'phq-9', '抑郁', '低落', '情绪低落'] },
-    { scaleId: 'GAD-7', keywords: ['gad', 'gad-7', '焦虑', '紧张', '担心'] },
-    { scaleId: 'PSQI_18', keywords: ['psqi', '睡眠', '失眠', '睡不好'] },
     { scaleId: 'TAS_37', keywords: ['tas', '考试焦虑', '考试紧张', '考前焦虑'] },
   ];
 
@@ -834,7 +825,7 @@ export async function getDoctorBotConfigForDoctor(input: {
   const existing = await doctorBotModel().findUnique({
     where: { doctorProfileId: input.doctorProfileId },
   });
-  const { doctorExplorationEnabled, eligibleScaleIds } = await getDoctorBotScaleRegistry();
+  const { eligibleScaleIds } = await getDoctorBotScaleRegistry();
   const normalizedEnabledScaleIds = normalizeScaleIdList(
     Array.isArray(existing?.enabledScaleIds) ? existing.enabledScaleIds : []
   ).filter((scaleId) => eligibleScaleIds.has(scaleId));
@@ -897,7 +888,6 @@ export async function getDoctorBotConfigForDoctor(input: {
         },
     doctor: doctorProfile,
     sharePath,
-    doctorExplorationEnabled,
     eligibleScales: await listDoctorBotEligibleScales(language),
     recentSessions: recentSessions.map((session: any) => ({
       id: session.id,
@@ -945,7 +935,7 @@ export async function saveDoctorBotConfig(input: {
   config: DoctorBotConfigInput;
 }) {
   const endpoint = normalizeChatCompletionUrl(input.config.fastgptBaseUrl);
-  const { doctorExplorationEnabled, eligibleScaleIds } = await getDoctorBotScaleRegistry();
+  const { eligibleScaleIds } = await getDoctorBotScaleRegistry();
   const enabledScaleIds = normalizeScaleIdList(input.config.enabledScaleIds);
 
   if (!enabledScaleIds.length) {
@@ -954,11 +944,7 @@ export async function saveDoctorBotConfig(input: {
 
   const disallowedScaleId = enabledScaleIds.find((scaleId) => !eligibleScaleIds.has(scaleId));
   if (disallowedScaleId) {
-    throw new Error(
-      doctorExplorationEnabled
-        ? `Scale ${disallowedScaleId} is not supported in the doctor workspace`
-        : '探索测试尚未在平台治理中开启，医生端当前只能使用儿童量表'
-    );
+    throw new Error(`Scale ${disallowedScaleId} is not supported in the doctor workspace`);
   }
 
   enabledScaleIds.forEach((scaleId) => ensureAllowedScale(scaleId, enabledScaleIds));

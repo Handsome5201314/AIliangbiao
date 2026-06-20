@@ -9,16 +9,13 @@ import {
 import type { AgentSessionPayload } from './auth';
 import {
   evaluateScaleAnswers,
-  getExplorationScaleById,
   getPublicClinicalChildScaleById,
   getScaleDefinitionById,
   getSerializableScaleById,
   isRespondentResultVisible,
-  listExplorationScales,
   listPublicClinicalChildScales,
   listVoiceFriendlyChildScales,
   resolveScaleResultDeliveryMode,
-  type ScaleCatalogCategoryParam,
 } from '@/lib/scales/catalog';
 import {
   normalizeScaleAnswerDetails,
@@ -642,10 +639,10 @@ function serializeSkillScale(scale: ScaleDefinition & { questions: ScaleQuestion
   };
 }
 
-export function listSkillScales(category: ScaleCatalogCategoryParam = 'all_child') {
-  const scales = category === 'exploration' ? listExplorationScales() : listPublicClinicalChildScales();
-
-  return scales.map((scale: ScaleDefinition & { questions: ScaleQuestion[] }) => serializeSkillScale(scale));
+export function listSkillScales() {
+  return listPublicClinicalChildScales().map((scale: ScaleDefinition & { questions: ScaleQuestion[] }) =>
+    serializeSkillScale(scale)
+  );
 }
 
 export function listAiToyVoiceSkillScales() {
@@ -654,10 +651,8 @@ export function listAiToyVoiceSkillScales() {
     .map((scale: ScaleDefinition & { questions: ScaleQuestion[] }) => serializeSkillScale(scale));
 }
 
-export function getSkillScale(scaleId: string, category: ScaleCatalogCategoryParam = 'all_child') {
-  return category === 'exploration'
-    ? getExplorationScaleById(scaleId)
-    : getPublicClinicalChildScaleById(scaleId);
+export function getSkillScale(scaleId: string) {
+  return getPublicClinicalChildScaleById(scaleId);
 }
 
 export async function evaluateSkillScale(input: {

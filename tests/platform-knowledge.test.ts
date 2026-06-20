@@ -29,8 +29,8 @@ test("agent session token carries tenant metadata for platform knowledge routing
 
 test("composeQuestionExplanationView keeps platform standard first and separates doctor and organization supplements", () => {
   const view = composeQuestionExplanationView({
-    scaleId: "GAD-7",
-    scaleTitle: "广泛性焦虑量表 (GAD-7)",
+    scaleId: "ABC",
+    scaleTitle: "孤独症儿童行为检查量表 (ABC)",
     question: {
       id: 1,
       text: "感到紧张、焦虑或急切。",
@@ -63,7 +63,7 @@ test("composeQuestionExplanationView keeps platform standard first and separates
   assert.deepEqual(view.exact.doctor.map((item) => item.id), ["doctor-explanation"]);
   assert.deepEqual(view.exact.organization.map((item) => item.id), ["org-explanation"]);
   assert.equal(view.question.id, 1);
-  assert.equal(view.scale.id, "GAD-7");
+  assert.equal(view.scale.id, "ABC");
   assert.deepEqual(view.retrieval, []);
 });
 
@@ -136,7 +136,7 @@ test("question explanation service should append approved retrieval supplements 
 
   try {
     const explanation = await getQuestionExplanation({
-      scaleId: "GAD-7",
+      scaleId: "ABC",
       questionId: 1,
       language: "zh",
       doctorProfileId: "doctor-1",
@@ -292,7 +292,7 @@ test("platform question explanation GET route should reject missing agent token"
   const route = await import("../app/api/platform/v1/ai/explanations/question/route");
   const response = await route.GET(
     new Request(
-      "http://localhost/api/platform/v1/ai/explanations/question?scaleId=GAD-7&questionId=1"
+      "http://localhost/api/platform/v1/ai/explanations/question?scaleId=ABC&questionId=1"
     ) as any
   );
 

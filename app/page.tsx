@@ -6,9 +6,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Brain,
-  BriefcaseBusiness,
-  ExternalLink,
-  FlaskConical,
   Heart,
   LayoutDashboard,
   LogOut,
@@ -21,7 +18,6 @@ import {
 
 import type { LanguageCode, ScaleDefinition } from '@/lib/schemas/core/types';
 import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
-import { EXPLORE_TESTS } from '@/lib/explore-tests/catalog';
 import Questionnaire from '@/components/Questionnaire';
 import WebHandoffLauncher from '@/components/WebHandoffLauncher';
 import Avatar from '@/components/Avatar';
@@ -48,14 +44,6 @@ const SCALE_CARDS = [
   { id: 'VINELAND_3', icon: <Heart className="h-6 w-6 text-fuchsia-500" />, bgColor: 'bg-fuchsia-50', gradient: 'from-fuchsia-500 to-fuchsia-600', tag: '适应行为' },
   { id: 'CBCL_113', icon: <Eye className="h-6 w-6 text-teal-500" />, bgColor: 'bg-teal-50', gradient: 'from-teal-500 to-teal-600', tag: '行为筛查' },
   { id: 'TAS_37', icon: <Heart className="h-6 w-6 text-orange-500" />, bgColor: 'bg-orange-50', gradient: 'from-orange-500 to-orange-600', tag: '情绪观察' },
-  { id: 'PHQ-9', icon: <Heart className="h-6 w-6 text-rose-500" />, bgColor: 'bg-rose-50', gradient: 'from-rose-500 to-rose-600', tag: '探索自测' },
-  { id: 'GAD-7', icon: <Brain className="h-6 w-6 text-violet-500" />, bgColor: 'bg-violet-50', gradient: 'from-violet-500 to-violet-600', tag: '探索自测' },
-  { id: 'SSS', icon: <Sparkles className="h-6 w-6 text-slate-500" />, bgColor: 'bg-slate-50', gradient: 'from-slate-500 to-slate-600', tag: '躯体化' },
-  { id: 'RSES_10', icon: <Users className="h-6 w-6 text-emerald-500" />, bgColor: 'bg-emerald-50', gradient: 'from-emerald-500 to-emerald-600', tag: '自我探索' },
-  { id: 'MBTI', icon: <Brain className="h-6 w-6 text-indigo-500" />, bgColor: 'bg-indigo-50', gradient: 'from-indigo-500 to-indigo-600', tag: '人格测试' },
-  { id: 'HOLLAND', icon: <BriefcaseBusiness className="h-6 w-6 text-emerald-600" />, bgColor: 'bg-emerald-50', gradient: 'from-emerald-500 to-emerald-600', tag: '职业测评' },
-  { id: 'MMSE_30', icon: <Eye className="h-6 w-6 text-slate-600" />, bgColor: 'bg-slate-50', gradient: 'from-slate-500 to-slate-600', tag: '认知筛查' },
-  { id: 'MoCA_30', icon: <Eye className="h-6 w-6 text-zinc-600" />, bgColor: 'bg-zinc-50', gradient: 'from-zinc-500 to-zinc-600', tag: '认知筛查' },
 ];
 
 const CATEGORY_TABS: Array<{ key: ChildScaleCategoryKey; labels: Record<LanguageCode, string> }> = [
@@ -63,9 +51,6 @@ const CATEGORY_TABS: Array<{ key: ChildScaleCategoryKey; labels: Record<Language
   { key: 'child_development', labels: { zh: '儿童发育', en: 'Child Development' } },
   { key: 'child_clinical', labels: { zh: '儿童临床', en: 'Child Clinical' } },
 ];
-
-const EXPLORATION_NOTICE =
-  '以下测试为探索性自测，不属于儿童发育/行为筛查主流程，结果仅供参考，不作为医学诊断依据。';
 
 function getScaleCardConfig(scaleId: string) {
   return SCALE_CARDS.find((item) => item.id === scaleId);
@@ -135,15 +120,14 @@ export default function Home() {
   const [language, setLanguage] = useState<LanguageCode>('zh');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ChildScaleCategoryKey>('all_child');
-  const [homeSection, setHomeSection] = useState<'clinical' | 'growth' | 'explore'>('clinical');
+  const [homeSection, setHomeSection] = useState<'clinical' | 'growth'>('clinical');
   const [scales, setScales] = useState<ScaleDefinition[]>([]);
-  const [explorationScales, setExplorationScales] = useState<ScaleDefinition[]>([]);
   const [scalesLoading, setScalesLoading] = useState(true);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
-  const loadScaleLibrary = useCallback(async (category: 'all_child' | 'exploration') => {
+  const loadScaleLibrary = useCallback(async () => {
     const params = new URLSearchParams();
-    params.set('category', category);
+    params.set('category', 'all_child');
     const query = `?${params.toString()}`;
 
     if (skillToken) {
@@ -169,14 +153,10 @@ export default function Home() {
     let cancelled = false;
     setScalesLoading(true);
 
-    Promise.allSettled([
-      loadScaleLibrary('all_child'),
-      loadScaleLibrary('exploration'),
-    ])
-      .then(([clinicalResult, explorationResult]) => {
+    loadScaleLibrary()
+      .then((clinicalScales) => {
         if (!cancelled) {
-          setScales(clinicalResult.status === 'fulfilled' ? clinicalResult.value : []);
-          setExplorationScales(explorationResult.status === 'fulfilled' ? explorationResult.value : []);
+          setScales(clinicalScales);
         }
       })
       .finally(() => {
@@ -227,21 +207,6 @@ export default function Home() {
       return haystack.includes(q);
     });
   }, [language, scales, searchQuery, selectedCategory]);
-
-  const filteredExplorationScales = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) {
-      return explorationScales;
-    }
-
-    return explorationScales.filter((scale) => {
-      const title = resolveLocalizedText(scale.title, language);
-      const description = resolveLocalizedText(scale.description, language);
-      const tags = scale.tags ?? [];
-      const haystack = [scale.id, title, description, ...tags].join(' ').toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [explorationScales, language, searchQuery]);
 
   const identityLabel = isDoctor
     ? user?.doctorProfile?.realName || user?.email || '医生账号'
@@ -461,15 +426,6 @@ export default function Home() {
             </button>
             <button
               type="button"
-              onClick={() => setHomeSection('explore')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                homeSection === 'explore' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              探索测试
-            </button>
-            <button
-              type="button"
               onClick={() => setHomeSection('growth')}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 homeSection === 'growth' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -572,7 +528,7 @@ export default function Home() {
               </div>
             ) : null}
           </>
-        ) : homeSection === 'growth' ? (
+        ) : (
           <div className="space-y-6">
             <div className="rounded-3xl border border-indigo-100 bg-white/90 p-5 shadow-sm md:p-6">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -590,149 +546,6 @@ export default function Home() {
             </div>
 
             <NewbornGrowthTracker />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-sm">
-              <div className="flex items-start gap-3">
-                <FlaskConical className="mt-0.5 h-5 w-5 text-emerald-700" />
-                <div className="space-y-2">
-                  <h2 className="text-lg font-semibold text-slate-900">探索测试</h2>
-                  <p className="text-sm leading-7 text-slate-600">{EXPLORATION_NOTICE}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm md:p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Exploration Scales</div>
-                  <h3 className="mt-2 text-xl font-bold text-slate-900">站内探索量表</h3>
-                  <p className="mt-2 text-sm leading-7 text-slate-600">
-                    仅在你主动进入探索测试后展示，用于成人心理、人格、职业与认知方向的探索性自测。
-                  </p>
-                </div>
-                <div className="w-full lg:max-w-md">
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="搜索探索量表或扩展测试"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-emerald-400 focus:bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-5">
-              {filteredExplorationScales.map((scale) => {
-                const cardConfig = getScaleCardConfig(scale.id);
-                const estimatedTime = getEstimatedTime(scale.questions.length, scale.estimatedMinutes);
-                const localizedTitle = resolveLocalizedText(scale.title, language);
-                const localizedDescription = resolveLocalizedText(scale.description, language);
-
-                return (
-                  <div
-                    key={scale.id}
-                    onClick={() => setCurrentScale(scale)}
-                    className="group relative flex h-full cursor-pointer flex-col rounded-2xl border border-slate-200 bg-white p-5 transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300 hover:shadow-xl"
-                  >
-                    {cardConfig?.tag ? (
-                      <span className="absolute right-4 top-4 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700 md:text-xs">
-                        {cardConfig.tag}
-                      </span>
-                    ) : null}
-
-                    <div className="mb-4 flex items-center gap-3 pr-12">
-                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${cardConfig?.bgColor || 'bg-slate-50'} shadow-sm transition-all duration-300 group-hover:bg-gradient-to-br ${cardConfig?.gradient || 'from-slate-400 to-slate-500'} group-hover:text-white`}>
-                        {cardConfig?.icon || <Sparkles className="h-6 w-6 text-slate-500" />}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold leading-tight text-slate-900 transition-colors group-hover:text-emerald-700 md:text-xl">
-                          {scale.id}
-                        </h3>
-                        <p className="mt-0.5 w-32 truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:text-xs">
-                          {localizedTitle}
-                        </p>
-                      </div>
-                    </div>
-
-                    <p className="mb-6 flex-1 line-clamp-3 text-sm leading-relaxed text-slate-600">{localizedDescription}</p>
-
-                    <div className="mt-auto flex flex-col gap-3">
-                      <div className="flex items-center justify-between px-1 text-xs font-medium text-slate-500">
-                        <span>{scale.questions.length} 题</span>
-                        <span>{estimatedTime}</span>
-                      </div>
-                      <button className="flex w-full items-center justify-center space-x-2 rounded-xl bg-slate-900 py-2.5 text-white transition-all hover:bg-emerald-600 hover:shadow-md group-hover:bg-emerald-600 active:scale-95 md:py-3">
-                        <span className="text-sm font-bold md:text-base">进入探索</span>
-                        <Mic className="h-4 w-4 md:h-5 md:w-5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {!scalesLoading && !skillSessionLoading && filteredExplorationScales.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white/80 p-6 text-center text-sm text-slate-500">
-                当前没有可展示的站内探索量表。
-              </div>
-            ) : null}
-
-            <div className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm md:p-5">
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Extension Tools</div>
-              <h3 className="mt-2 text-xl font-bold text-slate-900">扩展探索工具</h3>
-              <p className="mt-2 text-sm leading-7 text-slate-600">
-                以下内容保留外部或扩展体验入口，与站内量表分开展示，避免和儿童筛查主流程混成一个列表。
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-              {EXPLORE_TESTS.map((test) => (
-                <div key={test.id} className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                        <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
-                        <span>{test.tags.join(' · ')}</span>
-                      </div>
-                      <h3 className="mt-4 text-2xl font-bold text-slate-900">{test.title}</h3>
-                      <p className="mt-2 text-sm font-medium text-slate-500">{test.subtitle}</p>
-                    </div>
-                    <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                      <Brain className="h-6 w-6" />
-                    </div>
-                  </div>
-
-                  <p className="mt-4 text-sm leading-7 text-slate-600">{test.description}</p>
-
-                  <div className="mt-5 flex flex-wrap gap-2 text-xs font-medium text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-3 py-1">{test.questionCountLabel}</span>
-                    <span className="rounded-full bg-slate-100 px-3 py-1">{test.dimensionCountLabel}</span>
-                    <span className="rounded-full bg-slate-100 px-3 py-1">{test.resultCountLabel}</span>
-                  </div>
-
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    <p className="font-medium text-slate-800">来源</p>
-                    <p className="mt-1">{test.source.author}</p>
-                    <p className="mt-1 break-all">{test.source.siteUrl}</p>
-                    <p className="mt-2 text-xs leading-6 text-slate-500">{test.source.disclaimer}</p>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href={test.routePath} className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-600">
-                      <span>进入测试</span>
-                      <Sparkles className="h-4 w-4" />
-                    </Link>
-                    <a href={test.source.siteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
-                      <ExternalLink className="h-4 w-4" />
-                      <span>查看原站</span>
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </main>

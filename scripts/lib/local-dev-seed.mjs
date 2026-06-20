@@ -42,15 +42,15 @@ export function buildLocalSeedPlan() {
     },
     assessments: [
       {
-        scaleId: 'PHQ-9',
+        scaleId: 'ABC',
         totalScore: 12,
-        conclusion: '中度抑郁风险',
+        conclusion: '儿童行为筛查需进一步观察',
         profileKey: 'patient',
       },
       {
-        scaleId: 'GAD-7',
+        scaleId: 'M_CHAT_R',
         totalScore: 9,
-        conclusion: '中度焦虑风险',
+        conclusion: '孤独症早期筛查阳性风险',
         profileKey: 'patient',
       },
     ],

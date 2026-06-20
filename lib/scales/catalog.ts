@@ -59,7 +59,6 @@ const audienceSchema = z.enum([
 
 const productGroupSchema = z.enum([
   "clinical_child",
-  "exploration",
   "growth",
 ]) satisfies z.ZodType<ScaleProductGroup>;
 
@@ -169,16 +168,12 @@ const manifestSchema = z.object({
 });
 
 const manifestsDirectory = path.join(process.cwd(), "data", "scales");
-const legacyManifestFilenames = new Set(["phq-9.json", "gad-7.json", "sss.json"]);
 
 export type ScaleCatalogSelector =
   | "publicClinicalChild"
-  | "exploration"
   | "doctorVisible"
   | "adminAll"
   | "voiceFriendlyChild";
-
-export type ScaleCatalogCategoryParam = "all_child" | "exploration";
 
 type ScaleCatalogMetadata = Required<
   Pick<
@@ -189,7 +184,6 @@ type ScaleCatalogMetadata = Required<
 
 type ScaleCatalogLookupOptions = {
   selector?: ScaleCatalogSelector;
-  doctorExplorationEnabled?: boolean;
 };
 
 const DEFAULT_CHILD_CLINICAL_METADATA: ScaleCatalogMetadata = {
@@ -198,15 +192,6 @@ const DEFAULT_CHILD_CLINICAL_METADATA: ScaleCatalogMetadata = {
   isPediatric: true,
   status: "active",
   defaultVisible: true,
-  voiceFriendly: false,
-};
-
-const DEFAULT_EXPLORATION_ADULT_METADATA: ScaleCatalogMetadata = {
-  audience: "adult",
-  productGroup: "exploration",
-  isPediatric: false,
-  status: "active",
-  defaultVisible: false,
   voiceFriendly: false,
 };
 
@@ -220,28 +205,10 @@ const SCALE_METADATA_OVERRIDES: Record<string, ScaleCatalogMetadata> = {
   CBCL_113: { ...DEFAULT_CHILD_CLINICAL_METADATA },
   TAS_37: { ...DEFAULT_CHILD_CLINICAL_METADATA },
   VINELAND_3: { ...DEFAULT_CHILD_CLINICAL_METADATA },
-  "PHQ-9": { ...DEFAULT_EXPLORATION_ADULT_METADATA },
-  "GAD-7": { ...DEFAULT_EXPLORATION_ADULT_METADATA },
-  PSQI_18: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
-  SSS: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
-  RSES_10: {
-    ...DEFAULT_EXPLORATION_ADULT_METADATA,
-    audience: "personality",
-  },
-  MBTI: {
-    ...DEFAULT_EXPLORATION_ADULT_METADATA,
-    audience: "personality",
-  },
-  HOLLAND: {
-    ...DEFAULT_EXPLORATION_ADULT_METADATA,
-    audience: "career",
-  },
-  MMSE_30: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
-  MOCA_30: { ...DEFAULT_EXPLORATION_ADULT_METADATA },
 };
 
 function isManifestCandidateFile(entryName: string) {
-  return entryName.endsWith(".scale.json") || legacyManifestFilenames.has(entryName.toLowerCase());
+  return entryName.endsWith(".scale.json");
 }
 
 function logManifestSkip(filePath: string, reason: string, error?: unknown) {
@@ -273,27 +240,14 @@ function inferScaleCatalogMetadata(scale: ScaleDefinition): ScaleCatalogMetadata
   switch (scale.category) {
     case "Child Development":
       return { ...DEFAULT_CHILD_CLINICAL_METADATA };
-    case "Personality":
-      return {
-        ...DEFAULT_EXPLORATION_ADULT_METADATA,
-        audience: "personality",
-      };
-    case "Career Assessment":
-      return {
-        ...DEFAULT_EXPLORATION_ADULT_METADATA,
-        audience: "career",
-      };
-    case "Cognitive Health":
-    case "General Health":
-      return { ...DEFAULT_EXPLORATION_ADULT_METADATA };
     case "Mental Health":
-      return scale.source === "manifest"
-        ? { ...DEFAULT_EXPLORATION_ADULT_METADATA }
-        : { ...DEFAULT_CHILD_CLINICAL_METADATA };
+      return { ...DEFAULT_CHILD_CLINICAL_METADATA };
     default:
-      return scale.source === "manifest"
-        ? { ...DEFAULT_EXPLORATION_ADULT_METADATA }
-        : { ...DEFAULT_CHILD_CLINICAL_METADATA };
+      return {
+        ...DEFAULT_CHILD_CLINICAL_METADATA,
+        status: "disabled",
+        defaultVisible: false,
+      };
   }
 }
 
@@ -471,11 +425,7 @@ function isScaleAvailable(scale: ScaleDefinition) {
   return scale.status !== "disabled";
 }
 
-function matchesCatalogSelector(
-  scale: ScaleDefinition,
-  selector: ScaleCatalogSelector,
-  options?: ScaleCatalogLookupOptions
-) {
+function matchesCatalogSelector(scale: ScaleDefinition, selector: ScaleCatalogSelector) {
   switch (selector) {
     case "publicClinicalChild":
       return (
@@ -484,16 +434,11 @@ function matchesCatalogSelector(
         scale.isPediatric === true &&
         scale.defaultVisible !== false
       );
-    case "exploration":
-      return isScaleAvailable(scale) && scale.productGroup === "exploration";
     case "doctorVisible":
       return (
-        (isScaleAvailable(scale) &&
-          scale.productGroup === "clinical_child" &&
-          scale.isPediatric === true) ||
-        (Boolean(options?.doctorExplorationEnabled) &&
-          isScaleAvailable(scale) &&
-          scale.productGroup === "exploration")
+        isScaleAvailable(scale) &&
+        scale.productGroup === "clinical_child" &&
+        scale.isPediatric === true
       );
     case "voiceFriendlyChild":
       return (
@@ -510,9 +455,9 @@ function matchesCatalogSelector(
 
 export function listSerializableScalesBySelector(
   selector: ScaleCatalogSelector,
-  options?: ScaleCatalogLookupOptions
+  _options?: ScaleCatalogLookupOptions
 ): ScaleDefinition[] {
-  return listSerializableScales().filter((scale) => matchesCatalogSelector(scale, selector, options));
+  return listSerializableScales().filter((scale) => matchesCatalogSelector(scale, selector));
 }
 
 export function getScaleDefinitionById(scaleId: string): ExecutableScaleDefinition | undefined {
@@ -527,10 +472,10 @@ export function getSerializableScaleById(scaleId: string): ScaleDefinition | und
 export function getSerializableScaleByIdForSelector(
   scaleId: string,
   selector: ScaleCatalogSelector,
-  options?: ScaleCatalogLookupOptions
+  _options?: ScaleCatalogLookupOptions
 ): ScaleDefinition | undefined {
   const scale = getSerializableScaleById(scaleId);
-  if (!scale || !matchesCatalogSelector(scale, selector, options)) {
+  if (!scale || !matchesCatalogSelector(scale, selector)) {
     return undefined;
   }
 
@@ -541,12 +486,8 @@ export function listPublicClinicalChildScales() {
   return listSerializableScalesBySelector("publicClinicalChild");
 }
 
-export function listExplorationScales() {
-  return listSerializableScalesBySelector("exploration");
-}
-
-export function listDoctorVisibleScales(options?: { doctorExplorationEnabled?: boolean }) {
-  return listSerializableScalesBySelector("doctorVisible", options);
+export function listDoctorVisibleScales() {
+  return listSerializableScalesBySelector("doctorVisible");
 }
 
 export function listAdminScales() {
@@ -561,15 +502,8 @@ export function getPublicClinicalChildScaleById(scaleId: string) {
   return getSerializableScaleByIdForSelector(scaleId, "publicClinicalChild");
 }
 
-export function getExplorationScaleById(scaleId: string) {
-  return getSerializableScaleByIdForSelector(scaleId, "exploration");
-}
-
-export function getDoctorVisibleScaleById(
-  scaleId: string,
-  options?: { doctorExplorationEnabled?: boolean }
-) {
-  return getSerializableScaleByIdForSelector(scaleId, "doctorVisible", options);
+export function getDoctorVisibleScaleById(scaleId: string) {
+  return getSerializableScaleByIdForSelector(scaleId, "doctorVisible");
 }
 
 export function getAdminScaleById(scaleId: string) {
@@ -578,10 +512,6 @@ export function getAdminScaleById(scaleId: string) {
 
 export function getVoiceFriendlyChildScaleById(scaleId: string) {
   return getSerializableScaleByIdForSelector(scaleId, "voiceFriendlyChild");
-}
-
-export function normalizeScaleCatalogCategoryParam(category?: string | null): ScaleCatalogCategoryParam {
-  return category === "exploration" ? "exploration" : "all_child";
 }
 
 export function resolveScaleResultDeliveryMode(

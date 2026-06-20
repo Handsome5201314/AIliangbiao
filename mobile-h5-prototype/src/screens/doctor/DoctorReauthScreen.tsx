@@ -1,16 +1,20 @@
 import React from 'react';
-import { Lock, KeyRound } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { verifyDoctorPin } from '@/services/assessmentService';
 
 export interface DoctorReauthScreenProps {
   onVerifySuccess: () => void;
+  sessionId?: string | null;
+  authHeaders?: HeadersInit;
 }
 
 const PIN_LENGTH = 6;
 
 const DoctorReauthScreen: React.FC<DoctorReauthScreenProps> = ({
   onVerifySuccess,
+  sessionId,
+  authHeaders,
 }) => {
   const [pin, setPin] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -44,7 +48,7 @@ const DoctorReauthScreen: React.FC<DoctorReauthScreenProps> = ({
     setError(null);
 
     try {
-      const result = await verifyDoctorPin(pin);
+      const result = await verifyDoctorPin(pin, sessionId, authHeaders);
       if (result.success) {
         onVerifySuccess();
       } else {
@@ -121,15 +125,9 @@ const DoctorReauthScreen: React.FC<DoctorReauthScreenProps> = ({
         {verifying ? '验证中...' : '确认身份'}
       </button>
 
-      {/* Password alternative */}
-      <button className="mt-4 text-sm text-sage-500 active:opacity-70 transition-smooth flex items-center gap-1">
-        <KeyRound className="w-3.5 h-3.5" />
-        使用密码验证
-      </button>
-
       {/* Hint */}
       <p className="mt-6 text-xs text-muted">
-        提示：演示环境PIN码为任意6位数字
+        提示：请输入医生端已配置的 6 位 PIN 码
       </p>
     </section>
   );

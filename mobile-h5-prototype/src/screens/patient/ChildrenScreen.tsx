@@ -29,6 +29,12 @@ const riskLevelLabels: Record<string, string> = {
   high: '高风险',
 };
 
+const genderSymbols = {
+  male: <span className="text-xs text-sky-400">&#9794;</span>,
+  female: <span className="text-xs text-pink-400">&#9792;</span>,
+  unknown: <span className="text-xs text-muted">未填写</span>,
+} satisfies Record<Child['gender'], React.ReactNode>;
+
 const ChildrenScreen: React.FC<ChildrenScreenProps> = ({
   children: childList,
   selectedChildId,
@@ -85,11 +91,7 @@ const ChildrenScreen: React.FC<ChildrenScreenProps> = ({
                     <span className="text-base font-medium text-foreground truncate">
                       {child.name}
                     </span>
-                    {child.gender === 'male' ? (
-                      <span className="text-xs text-sky-400">&#9794;</span>
-                    ) : (
-                      <span className="text-xs text-pink-400">&#9792;</span>
-                    )}
+                    {genderSymbols[child.gender]}
                   </div>
                   <p className="text-sm text-muted mt-0.5">{child.ageLabel}</p>
                   {child.latestAssessment && (

@@ -149,57 +149,6 @@ export const scales: Scale[] = [
 
 // ─── Exploration Scales (adult, not shown in children clinical flow) ────────────
 
-export const explorationScales: Scale[] = [
-  {
-    id: 'phq-9',
-    name: 'PHQ-9 抑郁症筛查量表',
-    shortName: 'PHQ-9',
-    category: 'all',
-    ageRange: '18岁以上',
-    duration: '3-5分钟',
-    questionCount: 9,
-    tags: ['抑郁', '情绪'],
-    description: '广泛使用的成人抑郁症状快速筛查工具，评估过去两周的情绪状态。',
-    recommended: false,
-  },
-  {
-    id: 'gad-7',
-    name: 'GAD-7 广泛性焦虑量表',
-    shortName: 'GAD-7',
-    category: 'all',
-    ageRange: '18岁以上',
-    duration: '3-5分钟',
-    questionCount: 7,
-    tags: ['焦虑', '情绪'],
-    description: '成人广泛性焦虑障碍的快速筛查工具，评估焦虑症状的频率与严重程度。',
-    recommended: false,
-  },
-  {
-    id: 'mbti',
-    name: 'MBTI 性格类型指标',
-    shortName: 'MBTI',
-    category: 'all',
-    ageRange: '16岁以上',
-    duration: '15-25分钟',
-    questionCount: 93,
-    tags: ['性格', '探索'],
-    description: '探索个人性格偏好与行为风格的经典人格类型评估工具。',
-    recommended: false,
-  },
-  {
-    id: 'holland',
-    name: 'Holland 霍兰德职业兴趣量表',
-    shortName: 'HOLLAND',
-    category: 'all',
-    ageRange: '16岁以上',
-    duration: '10-20分钟',
-    questionCount: 60,
-    tags: ['职业', '兴趣'],
-    description: '基于霍兰德职业兴趣理论，帮助了解个人职业倾向与兴趣类型。',
-    recommended: false,
-  },
-];
-
 // ─── Questions (keyed by scale ID) ─────────────────────────────────────────────
 
 export const questions: Record<string, Question[]> = {

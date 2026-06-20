@@ -269,16 +269,16 @@ test("policies admin page should call the policies API", async () => {
   assert.match(source, /敏感访问/);
 });
 
-test("admin policies should default doctor exploration visibility to disabled", async () => {
+test("admin policies should not expose adult exploration catalog governance", async () => {
   const { DEFAULT_ADMIN_POLICIES } = await import("../lib/services/admin-policies");
 
-  assert.equal(DEFAULT_ADMIN_POLICIES.catalog?.doctorExplorationEnabled, false);
+  assert.doesNotMatch(JSON.stringify(DEFAULT_ADMIN_POLICIES), /doctorExplorationEnabled|exploration/i);
 });
 
-test("policies admin page should expose the doctor exploration governance switch", async () => {
+test("policies admin page should not expose the doctor exploration governance switch", async () => {
   const file = await import("node:fs/promises");
   const source = await file.readFile("app/admin/policies/page.tsx", "utf8");
 
-  assert.match(source, /doctorExplorationEnabled/);
-  assert.match(source, /探索测试/);
+  assert.doesNotMatch(source, /doctorExplorationEnabled/);
+  assert.doesNotMatch(source, /探索测试/);
 });

@@ -18,3 +18,12 @@ test("CI workflow should start the app and run smoke checks after build", async 
   assert.match(source, /Run local smoke checks/);
   assert.match(source, /scripts\/smoke-local\.mjs/);
 });
+
+test("root TypeScript config should not type-check the independent H5 Vite project", async () => {
+  const file = await import("node:fs/promises");
+  const source = await file.readFile("tsconfig.json", "utf8");
+  const config = JSON.parse(source);
+
+  assert.ok(Array.isArray(config.exclude));
+  assert.ok(config.exclude.includes("mobile-h5-prototype"));
+});

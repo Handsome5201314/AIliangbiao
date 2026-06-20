@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   ChevronLeft,
   Search,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -16,7 +14,7 @@ interface ScalesScreenProps {
 }
 
 const tabs: { key: ScaleCategory | 'all'; label: string }[] = [
-  { key: 'all', label: '全部' },
+  { key: 'all', label: '全部儿童' },
   { key: 'autism', label: '孤独症相关' },
   { key: 'attention_behavior', label: '注意力行为' },
   { key: 'development', label: '发育适应' },
@@ -29,7 +27,6 @@ const ScalesScreen: React.FC<ScalesScreenProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<ScaleCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showExploration, setShowExploration] = useState(false);
 
   const filteredScales = useMemo(() => {
     let result = scales;
@@ -47,9 +44,6 @@ const ScalesScreen: React.FC<ScalesScreenProps> = ({
     }
     return result;
   }, [scales, activeTab, searchQuery]);
-
-  const recommendedScales = filteredScales.filter((s) => s.recommended);
-  const explorationScales = filteredScales.filter((s) => !s.recommended);
 
   return (
     <section data-component="scales-screen" className="px-5 py-4">
@@ -99,59 +93,15 @@ const ScalesScreen: React.FC<ScalesScreenProps> = ({
 
       {/* Scale cards */}
       <div className="mt-4 flex flex-col gap-3">
-        {recommendedScales.length > 0 || explorationScales.length > 0 ? (
+        {filteredScales.length > 0 ? (
           <>
-            {recommendedScales.map((scale) => (
+            {filteredScales.map((scale) => (
               <ScaleCard
                 key={scale.id}
                 scale={scale}
                 onStart={() => onSelectScale(scale)}
               />
             ))}
-
-            {/* Exploration section */}
-            {explorationScales.length > 0 && (
-              <div className="mt-3">
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowExploration((v) => !v)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-muted min-h-touch"
-                >
-                  {showExploration ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                  探索更多测试
-                </Button>
-
-                {showExploration && (
-                  <div className="mt-3 flex flex-col gap-2">
-                    {explorationScales.map((scale) => (
-                      <Button
-                        key={scale.id}
-                        onClick={() => onSelectScale(scale)}
-                        className="bg-white rounded-card p-3 flex items-center justify-between text-left min-h-touch"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-foreground truncate">
-                              {scale.name}
-                            </span>
-                            <span className="bg-sage-50 text-sage-600 text-xs px-2 py-0.5 rounded-pill flex-shrink-0">
-                              {scale.shortName}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted mt-1">
-                            {scale.ageRange} · {scale.duration} · {scale.questionCount}题
-                          </p>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center py-16">
