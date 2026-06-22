@@ -24,6 +24,8 @@ dist/
 # Logs
 logs/
 *.log
+*.err
+*.out
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -54,6 +56,7 @@ Desktop.ini
 
 # Testing
 coverage/
+test-results/
 *.lcov
 .nyc_output/
 lib-cov/
@@ -88,6 +91,13 @@ temp/
 *.old
 Userslishuaishuai.claudeplans*
 
+# Local research/source-material notes kept out of the deployment repo
+/AI量表健康促进项目申报研究交付.md
+/deep-research-report.md
+/吕军 重症数据库与SCI自由.md
+/开发提示词.md
+/研究提示词.md
+
 # Compiled files
 *.com
 *.class
@@ -102,6 +112,8 @@ Userslishuaishuai.claudeplans*
 *.gz
 *.iso
 *.jar
+*.docx
+/*.pdf
 *.rar
 *.tar
 *.zip
