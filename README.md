@@ -13,6 +13,7 @@
 - OpenClaw / 外部智能体 Handoff 指引：[docs/openclaw-mcp-handoff-guide.md](./docs/openclaw-mcp-handoff-guide.md)
 - 生产部署说明：[DEPLOYMENT.md](./DEPLOYMENT.md)
 - 配置化量表 Manifest 说明：[docs/scale-manifest.md](./docs/scale-manifest.md)
+- 儿童发育行为健康促进闭环 Phase 0 文档包：[docs/developmental-behavior-closure/00_PROJECT_BRIEF.md](./docs/developmental-behavior-closure/00_PROJECT_BRIEF.md)
 
 ---
 
