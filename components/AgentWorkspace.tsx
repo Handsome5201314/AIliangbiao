@@ -1139,23 +1139,23 @@ export default function AgentWorkspace({
 
   const renderAssessmentPanel = () => (
     assessmentSession && !assessmentSession.result ? (
-      <div id="agent-assessment-session" className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div id="agent-assessment-session" className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-indigo-600">
+            <p className="text-xs font-semibold uppercase text-primary">
               {copy.currentScale}
             </p>
-            <h2 className="mt-2 text-xl font-bold text-slate-900">
+            <h2 className="mt-2 text-xl font-bold text-foreground">
               {currentScaleTitle || assessmentSession.scaleId}
             </h2>
           </div>
-          <button onClick={() => void cancelAssessment()} disabled={busy} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+          <button onClick={() => void cancelAssessment()} disabled={busy} className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50">
             <Square className="h-3.5 w-3.5" />
             <span>{copy.stopAssessment}</span>
           </button>
         </div>
 
-        <div className="mb-4 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <div className="mb-4 rounded-md bg-muted/50 px-4 py-3 text-sm text-foreground">
           <div className="flex items-center justify-between gap-3">
             <span>
               {assessmentSession.interactionMode === 'web_handoff'
@@ -1163,18 +1163,18 @@ export default function AgentWorkspace({
                 : assessmentSession.progress.answered + 1}{' '}
               / {assessmentSession.progress.total}
             </span>
-            <span className="font-semibold text-slate-900">{Math.round(assessmentSession.progress.ratio * 100)}%</span>
+            <span className="font-semibold text-foreground">{Math.round(assessmentSession.progress.ratio * 100)}%</span>
           </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-            <div className="h-full rounded-full bg-indigo-600 transition-all duration-500" style={{ width: `${assessmentSession.progress.ratio * 100}%` }} />
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${assessmentSession.progress.ratio * 100}%` }} />
           </div>
         </div>
 
         {assessmentSession.interactionMode === 'web_handoff' && assessmentSession.handoff ? (
-          <div id="agent-handoff-link" className="space-y-4 rounded-md border-2 border-indigo-200 bg-indigo-50/50 p-3">
-            <div className="rounded-md border border-indigo-100 bg-indigo-50 px-4 py-4">
-              <div className="text-sm font-semibold text-indigo-900">{handoffCopy.pending}</div>
-              <p className="mt-2 text-sm leading-7 text-indigo-800">{handoffCopy.pendingBody}</p>
+          <div id="agent-handoff-link" className="space-y-4 rounded-md border-2 border-primary/30 bg-primary/10 p-3">
+            <div className="rounded-md border border-primary/20 bg-primary/10 px-4 py-4">
+              <div className="text-sm font-semibold text-primary">{handoffCopy.pending}</div>
+              <p className="mt-2 text-sm leading-7 text-primary">{handoffCopy.pendingBody}</p>
             </div>
             <InviteQrCard
               url={assessmentSession.handoff.url}
@@ -1185,19 +1185,19 @@ export default function AgentWorkspace({
               href={assessmentSession.handoff.url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600"
+              className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-primary"
             >
               <span>{handoffCopy.open}</span>
               <ArrowRight className="h-4 w-4" />
             </a>
           </div>
         ) : assessmentSession.currentQuestion ? (
-          <div id={`agent-question-${assessmentSession.currentQuestion.id}`} className="space-y-3 rounded-md border-2 border-indigo-200 bg-indigo-50/30 p-3">
-            <div className="mb-4 text-lg font-semibold leading-8 text-slate-900">
+          <div id={`agent-question-${assessmentSession.currentQuestion.id}`} className="space-y-3 rounded-md border-2 border-primary/30 bg-primary/5 p-3">
+            <div className="mb-4 text-lg font-semibold leading-8 text-foreground">
               {assessmentSession.currentQuestion.text}
             </div>
             {assessmentSession.currentQuestion.imageUrl ? (
-              <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+              <div className="overflow-hidden rounded-md border border-border bg-card">
                 <img
                   src={assessmentSession.currentQuestion.imageUrl}
                   alt={assessmentSession.currentQuestion.imageAlt || assessmentSession.currentQuestion.text}
@@ -1220,14 +1220,14 @@ export default function AgentWorkspace({
             ))}
             {mobile ? (
               <div
-                className={`sticky bottom-0 -mx-3 mt-4 grid gap-2 border-t border-indigo-200 bg-white/95 px-3 pt-3 backdrop-blur ${
+                className={`sticky bottom-0 -mx-3 mt-4 grid gap-2 border-t border-primary/30 bg-card/95 px-3 pt-3 backdrop-blur ${
                   onRequestExpand || onRequestCollapse ? 'grid-cols-2 pb-[calc(env(safe-area-inset-bottom)+8px)]' : 'grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+8px)]'
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => setKnowledgeOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/15"
                 >
                   <GraduationCap className="h-4 w-4" />
                   <span>{copy.knowledgeOpen}</span>
@@ -1236,7 +1236,7 @@ export default function AgentWorkspace({
                   <button
                     type="button"
                     onClick={onRequestExpand}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted"
                   >
                     <Maximize2 className="h-4 w-4" />
                     <span>{copy.assistantExpand}</span>
@@ -1246,7 +1246,7 @@ export default function AgentWorkspace({
                   <button
                     type="button"
                     onClick={onRequestCollapse}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted"
                   >
                     <Minimize2 className="h-4 w-4" />
                     <span>{copy.assistantCollapse}</span>
@@ -1262,18 +1262,18 @@ export default function AgentWorkspace({
 
   const renderWorkspacePanel = () => (
     <div id="agent-live-workspace" className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
-          <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-md bg-indigo-50 text-indigo-600">
+          <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
             <MessageCircleHeart className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-semibold uppercase text-slate-500">{copy.latestReply}</div>
-            <div className="mt-2 text-lg font-semibold leading-8 text-slate-900">
+            <div className="text-xs font-semibold uppercase text-muted-foreground">{copy.latestReply}</div>
+            <div className="mt-2 text-lg font-semibold leading-8 text-foreground">
               {latestAssistant || prompts.bootstrapPatient}
             </div>
             {latestUser ? (
-              <div className="mt-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <div className="mt-3 rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
                 {copy.youSaid}：{latestUser}
               </div>
             ) : null}
@@ -1281,7 +1281,7 @@ export default function AgentWorkspace({
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <TriageVoiceRecorder
           onStartScale={(scaleId) => void startAssessmentSession(scaleId)}
           onInterceptMessage={(message) => interceptHandoffDone(message)}
@@ -1293,8 +1293,8 @@ export default function AgentWorkspace({
         />
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <button onClick={() => setComposerOpen((prev) => !prev)} className="rounded-md border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+        <button onClick={() => setComposerOpen((prev) => !prev)} className="rounded-md border border-border bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted">
           {composerOpen ? copy.hideTyping : copy.typingEntry}
         </button>
         {composerOpen ? (
@@ -1303,9 +1303,9 @@ export default function AgentWorkspace({
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               placeholder={language === 'en' ? 'For example: my child avoids eye contact and does not speak much.' : '比如：孩子不爱看人，也不太爱说话。'}
-              className="min-h-[110px] w-full rounded-md border border-slate-200 bg-white px-4 py-4 text-base text-slate-800 outline-none focus:border-indigo-400"
+              className="min-h-[110px] w-full rounded-md border border-border bg-card px-4 py-4 text-base text-foreground outline-none focus:border-primary/50"
             />
-            <button disabled={busy || !goal.trim() || !agentToken} onClick={() => void planGoal()} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-400">
+            <button disabled={busy || !goal.trim() || !agentToken} onClick={() => void planGoal()} className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background hover:bg-foreground/80 disabled:bg-muted">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               <span>{copy.send}</span>
             </button>
@@ -1314,12 +1314,12 @@ export default function AgentWorkspace({
       </div>
 
       {lastCompletedResult ? (
-        <div id="agent-assessment-result" className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-5 shadow-sm">
-          <div className="text-xs font-semibold uppercase text-emerald-700">
+        <div id="agent-assessment-result" className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+          <div className="text-xs font-semibold uppercase text-emerald-600">
             {copy.completed}
           </div>
-          <div className="mt-3 text-xl font-bold text-emerald-950">{lastCompletedResult.conclusion}</div>
-          <div className="mt-2 text-sm text-emerald-800">{copy.scoreLabel}：{lastCompletedResult.totalScore}</div>
+          <div className="mt-3 text-xl font-bold text-foreground">{lastCompletedResult.conclusion}</div>
+          <div className="mt-2 text-sm text-emerald-600">{copy.scoreLabel}：{lastCompletedResult.totalScore}</div>
         </div>
       ) : null}
     </div>
@@ -1327,10 +1327,10 @@ export default function AgentWorkspace({
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center bg-slate-50 ${mobileEmbedded ? 'h-full min-h-0' : 'min-h-screen'}`}>
+      <div className={`flex items-center justify-center bg-muted/50 ${mobileEmbedded ? 'h-full min-h-0' : 'min-h-screen'}`}>
         <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
-          <p className="mt-3 text-sm text-slate-500">{copy.preparing}</p>
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">{copy.preparing}</p>
         </div>
       </div>
     );
@@ -1338,16 +1338,16 @@ export default function AgentWorkspace({
 
   if (bootstrap?.account.accountType === 'DOCTOR') {
     return (
-      <div className={`${mobileEmbedded ? 'h-full min-h-0 overflow-y-auto bg-slate-50' : 'min-h-screen bg-slate-50'}`}>
+      <div className={`${mobileEmbedded ? 'h-full min-h-0 overflow-y-auto bg-muted/50' : 'min-h-screen bg-muted/50'}`}>
         <div className={`${mobileEmbedded ? 'px-4 py-6' : `mx-auto px-4 py-10 ${mobile ? 'max-w-lg' : 'max-w-3xl'}`}`}>
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <Bot className="mx-auto h-10 w-10 text-indigo-600" />
-            <h1 className="mt-4 text-2xl font-bold text-slate-900">{copy.doctor}</h1>
+          <div className="rounded-[2rem] border border-border bg-card p-8 text-center shadow-sm">
+            <Bot className="mx-auto h-10 w-10 text-primary" />
+            <h1 className="mt-4 text-2xl font-bold text-foreground">{copy.doctor}</h1>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <button onClick={() => router.push('/doctor')} className="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800">
+              <button onClick={() => router.push('/doctor')} className="rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background hover:bg-foreground/80">
                 {copy.doctorPrimary}
               </button>
-              <button onClick={() => router.push('/doctor/invites')} className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <button onClick={() => router.push('/doctor/invites')} className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground hover:bg-muted">
                 {copy.doctorSecondary}
               </button>
             </div>
@@ -1358,7 +1358,7 @@ export default function AgentWorkspace({
   }
 
   return (
-    <div className={`${mobileEmbedded ? 'h-full min-h-0 bg-[radial-gradient(circle_at_top,#dbeafe,transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]' : 'min-h-screen bg-[radial-gradient(circle_at_top,#dbeafe,transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]'}`}>
+    <div className={`${mobileEmbedded ? 'h-full min-h-0 bg-background' : 'min-h-screen bg-background'}`}>
       <div
         className={
           mobileEmbedded
@@ -1367,17 +1367,17 @@ export default function AgentWorkspace({
         }
       >
         {showWorkspaceHeader ? (
-          <div className={`mb-6 ${mobile ? 'flex items-center justify-between gap-3 rounded-[1.75rem] border border-slate-200 bg-white/85 p-4 shadow-sm backdrop-blur' : 'flex items-start justify-between gap-4'}`}>
+          <div className={`mb-6 ${mobile ? 'flex items-center justify-between gap-3 rounded-[1.75rem] border border-border bg-card/85 p-4 shadow-sm backdrop-blur' : 'flex items-start justify-between gap-4'}`}>
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
                 <Bot className="h-5 w-5" />
               </div>
               <div>
-                <h1 className={mobile ? 'text-lg font-bold text-slate-900' : 'text-2xl font-bold text-slate-900'}>{copy.title}</h1>
-                <p className="text-sm text-slate-500">{copy.subtitle}</p>
+                <h1 className={mobile ? 'text-lg font-bold text-foreground' : 'text-2xl font-bold text-foreground'}>{copy.title}</h1>
+                <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
               </div>
             </div>
-            <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted">
               <Home className="h-4 w-4" />
               <span className={mobile ? 'hidden sm:inline' : ''}>{copy.backHome}</span>
             </button>
@@ -1385,19 +1385,19 @@ export default function AgentWorkspace({
         ) : null}
 
         {error ? (
-          <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
             {error}
           </div>
         ) : null}
 
         {realtimeBootstrap ? (
-          <div className="mb-5 rounded-[1.5rem] border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 shadow-sm">
+          <div className="mb-5 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-foreground shadow-sm">
             Hermes 实时层已就绪，当前仍保留 `voice-intent` 与现有语音链路作为兜底。已开放工具数：{realtimeBootstrap.tools.length}。
           </div>
         ) : null}
 
-        <div className={`mb-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm ${mobile ? 'space-y-3' : 'flex items-center justify-between'}`}>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+        <div className={`mb-5 rounded-[2rem] border border-border bg-card p-4 shadow-sm ${mobile ? 'space-y-3' : 'flex items-center justify-between'}`}>
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium text-foreground">
             {copy.currentProfile}：{bootstrap?.member.nickname || profile.nickname}
           </span>
           <div className={`flex items-center gap-2 ${mobile ? 'justify-between' : ''}`}>
@@ -1405,7 +1405,7 @@ export default function AgentWorkspace({
               <select
                 value={activeMemberId}
                 onChange={(e) => void bootstrapAgent(e.target.value)}
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 outline-none"
+                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground outline-none"
               >
                 {(bootstrap?.members || []).map((m) => (
                   <option key={m.id} value={m.id}>
@@ -1414,23 +1414,23 @@ export default function AgentWorkspace({
                 ))}
               </select>
             ) : null}
-            <button onClick={() => void bootstrapAgent(activeMemberId)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
+            <button onClick={() => void bootstrapAgent(activeMemberId)} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted">
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        <div className={`mb-5 rounded-[2rem] border border-cyan-200 bg-cyan-50/70 p-5 shadow-sm ${mobile ? 'space-y-4' : 'flex items-center justify-between gap-6'}`}>
+        <div className={`mb-5 rounded-[2rem] border border-accent/30 bg-accent/10 p-5 shadow-sm ${mobile ? 'space-y-4' : 'flex items-center justify-between gap-6'}`}>
           <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+            <div className="inline-flex items-center gap-2 rounded-full bg-card px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-accent">
               <GraduationCap className="h-3.5 w-3.5" />
               <span>{copy.knowledgeTitle}</span>
             </div>
-            <div className="mt-3 text-sm leading-7 text-cyan-950">{copy.knowledgeBody}</div>
+            <div className="mt-3 text-sm leading-7 text-foreground">{copy.knowledgeBody}</div>
           </div>
           <button
             onClick={() => setKnowledgeOpen(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-cyan-700"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-background hover:bg-accent"
           >
             <GraduationCap className="h-4 w-4" />
             <span>{copy.knowledgeOpen}</span>
@@ -1438,49 +1438,49 @@ export default function AgentWorkspace({
         </div>
 
         <div className={`${mobile ? 'space-y-4' : 'grid grid-cols-[300px_minmax(0,1fr)_300px] gap-4'}`}>
-          <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <aside className="rounded-lg border border-border bg-card p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Eye className="h-4 w-4 text-indigo-600" />
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Eye className="h-4 w-4 text-primary" />
                 <span>{copy.liveTitle}</span>
               </div>
-              <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{liveStatusLabel}</span>
+              <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{liveStatusLabel}</span>
             </div>
             {liveStreamError ? (
-              <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-600">
                 {liveStreamError}
               </div>
             ) : null}
             <div className="max-h-[620px] space-y-2 overflow-y-auto pr-1">
               {liveState?.events?.length ? (
                 liveState.events.slice(-30).map((event) => (
-                  <div key={event.seq} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div key={event.seq} className="rounded-md border border-border bg-muted/50 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold uppercase text-indigo-600">{event.type}</span>
-                      <span className="text-[11px] text-slate-400">#{event.seq}</span>
+                      <span className="text-xs font-semibold uppercase text-primary">{event.type}</span>
+                      <span className="text-[11px] text-muted-foreground">#{event.seq}</span>
                     </div>
-                    <div className="mt-1 text-sm leading-6 text-slate-800">{event.message}</div>
+                    <div className="mt-1 text-sm leading-6 text-foreground">{event.message}</div>
                     {event.view?.pendingAction ? (
-                      <div className="mt-1 text-xs text-slate-500">{event.view.pendingAction}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{event.view.pendingAction}</div>
                     ) : null}
                   </div>
                 ))
               ) : (
-                <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-md border border-dashed border-border bg-muted/50 px-3 py-8 text-center text-sm text-muted-foreground">
                   {copy.liveEmpty}
                 </div>
               )}
             </div>
           </aside>
 
-          <main className="min-w-0 rounded-lg border border-slate-200 bg-white/70 p-4 shadow-sm">
+          <main className="min-w-0 rounded-lg border border-border bg-card/70 p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-slate-900">{copy.liveMirror}</div>
-                <div className="mt-1 text-xs text-slate-500">{liveState?.currentView?.title || copy.liveStatusIdle}</div>
+                <div className="text-sm font-semibold text-foreground">{copy.liveMirror}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{liveState?.currentView?.title || copy.liveStatusIdle}</div>
               </div>
               {liveState?.currentView?.href ? (
-                <a href={liveState.currentView.href} target={liveState.currentView.href.startsWith('/agent') ? undefined : '_blank'} rel="noreferrer" className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <a href={liveState.currentView.href} target={liveState.currentView.href.startsWith('/agent') ? undefined : '_blank'} rel="noreferrer" className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
                   <span>{copy.liveOpen}</span>
                   <ArrowRight className="h-4 w-4" />
                 </a>
@@ -1490,54 +1490,54 @@ export default function AgentWorkspace({
           </main>
 
           <aside className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 text-sm font-semibold text-slate-900">{copy.liveControl}</div>
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="mb-3 text-sm font-semibold text-foreground">{copy.liveControl}</div>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => void controlLive('pause')} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <button onClick={() => void controlLive('pause')} className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
                   <Pause className="h-4 w-4" />
                   <span>{copy.livePause}</span>
                 </button>
-                <button onClick={() => void controlLive('takeover')} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                <button onClick={() => void controlLive('takeover')} className="inline-flex items-center justify-center gap-2 rounded-md bg-foreground px-3 py-2 text-sm font-semibold text-background hover:bg-primary/90">
                   <MousePointer2 className="h-4 w-4" />
                   <span>{copy.liveTakeover}</span>
                 </button>
-                <button onClick={() => void controlLive('resume')} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <button onClick={() => void controlLive('resume')} className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
                   <PlayCircle className="h-4 w-4" />
                   <span>{copy.liveResume}</span>
                 </button>
-                <button onClick={() => void controlLive('manual_complete')} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <button onClick={() => void controlLive('manual_complete')} className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
                   <Square className="h-4 w-4" />
                   <span>{copy.liveManualDone}</span>
                 </button>
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-4 text-sm font-semibold text-slate-900">{copy.quickStart}</div>
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="mb-4 text-sm font-semibold text-foreground">{copy.quickStart}</div>
               <div className="space-y-2">
                 {scaleLibrary.slice(0, 4).map((scale) => (
-                  <button key={scale.id} onClick={() => void startAssessmentSession(scale.id)} disabled={busy} className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-medium text-slate-700 hover:border-indigo-300 hover:bg-white disabled:opacity-50">
+                  <button key={scale.id} onClick={() => void startAssessmentSession(scale.id)} disabled={busy} className="flex w-full items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2 text-left text-sm font-medium text-foreground hover:border-primary/40 hover:bg-card disabled:opacity-50">
                     <span className="pr-3">{formatScaleTitle(scale.title, language)}</span>
-                    <PlayCircle className="h-4 w-4 shrink-0 text-slate-400" />
+                    <PlayCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-4 text-sm font-semibold text-slate-900">{copy.results}</div>
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="mb-4 text-sm font-semibold text-foreground">{copy.results}</div>
               {assessmentSummary?.items?.length ? (
                 <div className="space-y-2">
                   {assessmentSummary.items.slice(0, 3).map((item) => (
-                    <div key={item.id} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="text-sm font-semibold text-slate-900">{item.scaleId}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.conclusion}</div>
-                      <div className="mt-1 text-xs text-slate-500">{formatDate(item.createdAt, language)} · {copy.scoreLabel}：{item.totalScore}</div>
+                    <div key={item.id} className="rounded-md border border-border bg-muted/50 px-3 py-2">
+                      <div className="text-sm font-semibold text-foreground">{item.scaleId}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{item.conclusion}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{formatDate(item.createdAt, language)} · {copy.scoreLabel}：{item.totalScore}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                <div className="rounded-md border border-dashed border-border bg-muted/50 px-3 py-6 text-center text-sm text-muted-foreground">
                   {copy.noResults}
                 </div>
               )}

@@ -21,6 +21,7 @@ import { resolveLocalizedText } from '@/lib/schemas/core/i18n';
 import Questionnaire from '@/components/Questionnaire';
 import WebHandoffLauncher from '@/components/WebHandoffLauncher';
 import Avatar from '@/components/Avatar';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
 import AccountOnboardingModal from '@/components/AccountOnboardingModal';
 import PatientDoctorPanel from '@/components/PatientDoctorPanel';
 import PatientAgentEntryCard from '@/components/PatientAgentEntryCard';
@@ -70,7 +71,7 @@ function SettingsButton() {
   return (
     <Link
       href="/admin"
-      className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-200/50 hover:text-slate-800"
+      className="relative flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       title="管理后台"
     >
       <LayoutDashboard className="h-5 w-5" />
@@ -86,12 +87,12 @@ function LanguageSwitcher({
   onChange: (language: LanguageCode) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+    <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
       <button
         type="button"
         onClick={() => onChange('zh')}
         className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-          language === 'zh' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-800'
+          language === 'zh' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         中
@@ -100,7 +101,7 @@ function LanguageSwitcher({
         type="button"
         onClick={() => onChange('en')}
         className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-          language === 'en' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-800'
+          language === 'en' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         EN
@@ -223,21 +224,22 @@ export default function Home() {
   if (currentScale) {
     const cardConfig = getScaleCardConfig(currentScale.id);
     return (
-      <div className="min-h-screen bg-slate-50">
-        <nav className="sticky top-0 z-10 flex items-center border-b border-slate-100 bg-white px-6 py-4">
-          <button onClick={resetAssessment} className="group flex items-center text-slate-500 transition-colors hover:text-slate-900">
+      <div className="min-h-screen bg-background">
+        <nav className="sticky top-0 z-10 flex items-center border-b border-border bg-card px-6 py-4">
+          <button onClick={resetAssessment} className="group flex items-center text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="mr-2 h-5 w-5 transition-transform group-hover:-translate-x-1" />
             <span className="text-sm font-medium">返回量表大厅</span>
           </button>
-          <div className="ml-8 h-4 w-px bg-slate-200" />
+          <div className="ml-8 h-4 w-px bg-border" />
           <div className="ml-4 flex items-center gap-2">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${cardConfig?.bgColor || 'bg-slate-100'}`}>
-              {cardConfig?.icon || <Sparkles className="h-4 w-4 text-slate-500" />}
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${cardConfig?.bgColor || 'bg-muted'}`}>
+              {cardConfig?.icon || <Sparkles className="h-4 w-4 text-muted-foreground" />}
             </div>
-            <span className="font-semibold text-slate-800">{resolveLocalizedText(currentScale.title, language)}</span>
+            <span className="font-semibold text-foreground">{resolveLocalizedText(currentScale.title, language)}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher language={language} onChange={setLanguage} />
+            <ThemeSwitcher />
             <SettingsButton />
           </div>
         </nav>
@@ -254,19 +256,17 @@ export default function Home() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-slate-50">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-indigo-100/40 via-cyan-50/20 to-transparent" />
-
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <header className="relative z-50 mx-auto flex w-full max-w-[1400px] flex-col justify-between gap-4 px-6 py-5 md:flex-row md:items-center md:py-6">
         <div>
-          <div className="mb-1.5 inline-flex items-center text-xs font-bold tracking-wider text-indigo-600">
+          <div className="mb-1.5 inline-flex items-center text-xs font-bold tracking-wider text-primary">
             <Sparkles className="mr-1 h-3.5 w-3.5" />
             AI 临床辅助评估系统 · BYOK 模式
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground md:text-3xl">
             {isDoctor ? '医生工作入口' : profile.relation === 'self' ? '我的健康筛查空间' : `${profile.nickname} 的健康档案`}
           </h1>
-          <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
             {isDoctor
               ? '当前登录的是医生账号，患者侧模块已自动切换为医生视角。'
@@ -280,23 +280,23 @@ export default function Home() {
           {!authLoading && isAuthenticated && isDoctor ? (
             <Link
               href="/doctor"
-              className="rounded-full bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-cyan-700"
+              className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90"
             >
               进入医生后台
             </Link>
           ) : null}
-          <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+          <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
             <button
               type="button"
               onClick={() => goToLogin('PATIENT')}
-              className="rounded-full px-3 py-1 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              className="rounded-full px-3 py-1 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               患者登录
             </button>
             <button
               type="button"
               onClick={() => goToLogin('DOCTOR')}
-              className="rounded-full px-3 py-1 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              className="rounded-full px-3 py-1 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               医生登录
             </button>
@@ -309,14 +309,14 @@ export default function Home() {
                   {isDoctor ? '医生已登录' : '患者已登录'}
                 </span>
               </div>
-              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5">
-                <Avatar state={profile.avatarState} gender={profile.gender} className="h-6 w-6" />
-                <span className="hidden text-sm font-medium text-slate-700 sm:inline">{identityLabel}</span>
+              <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5">
+                <Avatar nickname={profile.nickname} className="h-6 w-6" />
+                <span className="hidden text-sm font-medium text-foreground sm:inline">{identityLabel}</span>
               </div>
               <button
                 type="button"
                 onClick={logout}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
               >
                 <LogOut className="h-4 w-4" />
                 <span>退出登录</span>
@@ -324,6 +324,7 @@ export default function Home() {
             </>
           ) : null}
           <LanguageSwitcher language={language} onChange={setLanguage} />
+          <ThemeSwitcher />
           <SettingsButton />
         </div>
       </header>
@@ -331,37 +332,37 @@ export default function Home() {
       {!isDoctor ? (
         <>
           <div className="relative z-10 mx-auto mb-6 w-full max-w-[1400px] px-4 md:px-6">
-            <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm">
+            <div className="overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-sm">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-5">
                   <div className="relative">
-                    <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-cyan-50 p-1.5">
-                      <Avatar state={profile.avatarState} gender={profile.gender} className="h-16 w-16 shrink-0 rounded-xl" />
+                    <div className="rounded-2xl bg-primary/10 p-1.5">
+                      <Avatar nickname={profile.nickname} className="h-16 w-16 shrink-0 rounded-xl" />
                     </div>
-                    <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white">
+                    <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-card">
                       <span className="h-2 w-2 rounded-full bg-white" />
                     </span>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-bold text-slate-900">{profile.nickname}</h2>
-                      <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600">
+                      <h2 className="text-2xl font-bold text-foreground">{profile.nickname}</h2>
+                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
                         {isGuest ? '游客' : '已认证'}
                       </span>
                     </div>
-                    <p className="mt-1.5 max-w-md text-sm leading-6 text-slate-500">
+                    <p className="mt-1.5 max-w-md text-sm leading-6 text-muted-foreground">
                       默认从量表大厅开始，按需绑定医生、进入医生智能体，或继续使用自助智能体。
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-                    <span className="text-xs font-medium text-slate-500">家庭成员</span>
+                  <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/50 px-4 py-2.5">
+                    <span className="text-xs font-medium text-muted-foreground">家庭成员</span>
                     <select
                       value={profile.id}
                       onChange={(event) => selectProfile(event.target.value)}
-                      className="min-w-[120px] rounded-lg border-0 bg-transparent py-0 text-sm font-semibold text-slate-800 outline-none"
+                      className="min-w-[120px] rounded-lg border-0 bg-transparent py-0 text-sm font-semibold text-foreground outline-none"
                     >
                       {profiles.map((member) => (
                         <option key={member.id} value={member.id}>
@@ -373,7 +374,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setIsOnboardingOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
                   >
                     <UserPlus className="h-4 w-4" />
                     <span>新增成员</span>
@@ -392,18 +393,18 @@ export default function Home() {
         </>
       ) : (
         <div className="relative z-10 mx-auto mb-6 w-full max-w-[1400px] px-4 md:px-6">
-          <div className="rounded-3xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/5 to-card p-6 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-700">Doctor Mode</div>
-                <h2 className="mt-2 text-2xl font-bold text-slate-900">{user?.doctorProfile?.realName || user?.email || '医生账号'}</h2>
-                <p className="mt-2 text-sm text-slate-600">患者大厅模块已折叠，请从医生工作台进入患者管理、AI 分身和邀请功能。</p>
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-primary">Doctor Mode</div>
+                <h2 className="mt-2 text-2xl font-bold text-foreground">{user?.doctorProfile?.realName || user?.email || '医生账号'}</h2>
+                <p className="mt-2 text-sm text-muted-foreground">患者大厅模块已折叠，请从医生工作台进入患者管理、AI 分身和邀请功能。</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Link href="/doctor" className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
+                <Link href="/doctor" className="rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background hover:bg-primary">
                   进入医生工作台
                 </Link>
-                <Link href="/doctor/invites" className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <Link href="/doctor/invites" className="rounded-full border border-border bg-card px-5 py-2.5 text-sm font-semibold text-foreground hover:bg-muted">
                   打开医生邀请
                 </Link>
               </div>
@@ -413,13 +414,13 @@ export default function Home() {
       )}
 
       <main className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-1 flex-col justify-center px-4 pb-16 md:px-6 md:pb-24">
-        <div className="mb-6 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm md:p-5">
+        <div className="mb-6 rounded-3xl border border-border bg-card p-4 shadow-sm md:p-5">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setHomeSection('clinical')}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                homeSection === 'clinical' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                homeSection === 'clinical' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
               临床量表
@@ -428,7 +429,7 @@ export default function Home() {
               type="button"
               onClick={() => setHomeSection('growth')}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                homeSection === 'growth' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                homeSection === 'growth' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
               生长曲线
@@ -439,12 +440,12 @@ export default function Home() {
         {homeSection === 'clinical' ? (
           <>
             {isGuest ? (
-              <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-7 text-amber-900 shadow-sm">
+              <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-900 shadow-sm">
                 游客自测结果仅供参考，不具有医疗法律效应；如涉及临床判断，请由医生或专业评估人员进一步确认。
               </div>
             ) : null}
 
-            <div className="mb-6 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-sm md:p-5">
+            <div className="mb-6 rounded-3xl border border-border bg-card p-4 shadow-sm md:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex-1">
                   <input
@@ -452,7 +453,7 @@ export default function Home() {
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="搜索量表名称、标签或关键字"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-indigo-400 focus:bg-white"
+                    className="w-full rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:bg-card"
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -462,7 +463,7 @@ export default function Home() {
                       type="button"
                       onClick={() => setSelectedCategory(tab.key)}
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                        selectedCategory === tab.key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        selectedCategory === tab.key ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80'
                       }`}
                     >
                       {tab.labels[language]}
@@ -483,36 +484,36 @@ export default function Home() {
                   <div
                     key={scale.id}
                     onClick={() => setCurrentScale(scale)}
-                    className="group relative flex h-full cursor-pointer flex-col rounded-2xl border border-slate-200 bg-white p-5 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl"
+                    className="group relative flex h-full cursor-pointer flex-col rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl"
                   >
                     {cardConfig?.tag ? (
-                      <span className="absolute right-4 top-4 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-600 md:text-xs">
+                      <span className="absolute right-4 top-4 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary md:text-xs">
                         {cardConfig.tag}
                       </span>
                     ) : null}
 
                     <div className="mb-4 flex items-center gap-3 pr-12">
-                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${cardConfig?.bgColor || 'bg-slate-50'} shadow-sm transition-all duration-300 group-hover:bg-gradient-to-br ${cardConfig?.gradient || 'from-slate-400 to-slate-500'} group-hover:text-white`}>
-                        {cardConfig?.icon || <Sparkles className="h-6 w-6 text-slate-500" />}
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${cardConfig?.bgColor || 'bg-muted'} shadow-sm transition-all duration-300 group-hover:bg-gradient-to-br ${cardConfig?.gradient || 'from-primary to-primary/80'} group-hover:text-white`}>
+                        {cardConfig?.icon || <Sparkles className="h-6 w-6 text-muted-foreground" />}
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold leading-tight text-slate-900 transition-colors group-hover:text-indigo-600 md:text-xl">
+                        <h3 className="text-lg font-bold leading-tight text-foreground transition-colors group-hover:text-primary md:text-xl">
                           {scale.id}
                         </h3>
-                        <p className="mt-0.5 w-32 truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:text-xs">
+                        <p className="mt-0.5 w-32 truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground md:text-xs">
                           {localizedTitle}
                         </p>
                       </div>
                     </div>
 
-                    <p className="mb-6 flex-1 line-clamp-3 text-sm leading-relaxed text-slate-600">{localizedDescription}</p>
+                    <p className="mb-6 flex-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{localizedDescription}</p>
 
                     <div className="mt-auto flex flex-col gap-3">
-                      <div className="flex items-center justify-between px-1 text-xs font-medium text-slate-500">
+                      <div className="flex items-center justify-between px-1 text-xs font-medium text-muted-foreground">
                         <span>{scale.questions.length} 题</span>
                         <span>{estimatedTime}</span>
                       </div>
-                      <button className="flex w-full items-center justify-center space-x-2 rounded-xl bg-slate-900 py-2.5 text-white transition-all hover:bg-indigo-600 hover:shadow-md group-hover:bg-indigo-600 active:scale-95 md:py-3">
+                      <button className="flex w-full items-center justify-center space-x-2 rounded-xl bg-foreground py-2.5 text-background transition-all hover:bg-primary hover:shadow-md group-hover:bg-primary active:scale-95 md:py-3">
                         <span className="text-sm font-bold md:text-base">开始评估</span>
                         <Mic className="h-4 w-4 md:h-5 md:w-5" />
                       </button>
@@ -523,23 +524,23 @@ export default function Home() {
             </div>
 
             {!scalesLoading && !skillSessionLoading && filteredScales.length === 0 ? (
-              <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white/80 p-6 text-center text-sm text-slate-500">
+              <div className="mt-6 rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
                 暂时没有符合条件的量表，请调整搜索或筛选条件。
               </div>
             ) : null}
           </>
         ) : (
           <div className="space-y-6">
-            <div className="rounded-3xl border border-indigo-100 bg-white/90 p-5 shadow-sm md:p-6">
+            <div className="rounded-3xl border border-border bg-card p-5 shadow-sm md:p-6">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">Growth Tracking</div>
-                  <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">新生儿生长曲线追踪</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Growth Tracking</div>
+                  <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground">新生儿生长曲线追踪</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
                     在同一视图中查看胎龄 24-42 周的体重、身长、头围常模百分位，并叠加宝宝自己的历史轨迹与最新记录。
                   </p>
                 </div>
-                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
                   支持男 / 女切换、三围切换、动态录入与即时摘要
                 </div>
               </div>

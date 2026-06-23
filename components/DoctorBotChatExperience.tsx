@@ -320,41 +320,41 @@ function AssessmentSheet({
   });
 
   return (
-    <div className="fixed inset-0 z-[160] flex h-[100dvh] flex-col overflow-hidden bg-slate-950/55 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[160] flex h-[100dvh] flex-col overflow-hidden bg-foreground/55 backdrop-blur-sm">
       <div className="flex min-h-0 flex-1 items-end justify-center">
-        <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[92dvh] sm:max-w-2xl sm:rounded-t-[2rem]">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+        <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-card sm:h-[92dvh] sm:max-w-2xl sm:rounded-t-[2rem]">
+          <div className="flex items-center justify-between border-b border-border px-4 py-4">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Assessment</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{session.scaleId}</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">Assessment</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">{session.scaleId}</div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted/50"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <div className="border-b border-border bg-muted/50 px-4 py-3 text-sm text-foreground">
             <div className="flex items-center justify-between gap-3">
               <span>
                 {session.progress.answered + (session.currentQuestion ? 1 : 0)} / {session.progress.total}
               </span>
-              <span className="font-semibold text-slate-900">{Math.round(session.progress.ratio * 100)}%</span>
+              <span className="font-semibold text-foreground">{Math.round(session.progress.ratio * 100)}%</span>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-cyan-600 transition-all duration-500" style={{ width: `${session.progress.ratio * 100}%` }} />
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${session.progress.ratio * 100}%` }} />
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+24px)]">
             {session.currentQuestion ? (
               <div className="space-y-4">
-                <div className="text-lg font-semibold leading-8 text-slate-900">{session.currentQuestion.text}</div>
+                <div className="text-lg font-semibold leading-8 text-foreground">{session.currentQuestion.text}</div>
                 {isSupported ? (
-                  <div className="rounded-[1.5rem] border border-cyan-100 bg-cyan-50/70 p-4">
+                  <div className="rounded-[1.5rem] border border-primary/20 bg-accent/10 p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -363,8 +363,8 @@ function AssessmentSheet({
                         className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition-colors ${
                           voiceSession.isRecording
                             ? 'bg-rose-600 hover:bg-rose-700'
-                            : 'bg-cyan-600 hover:bg-cyan-700'
-                        } disabled:bg-slate-400`}
+                            : 'bg-accent hover:bg-accent'
+                        } disabled:bg-muted-foreground`}
                       >
                         {voiceSession.isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                         <span>
@@ -376,7 +376,7 @@ function AssessmentSheet({
                       <button
                         type="button"
                         onClick={speakCurrentQuestion}
-                        className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-4 py-2 text-sm font-semibold text-cyan-800 hover:bg-cyan-50"
+                        className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-card px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/10"
                       >
                         <Volume2 className="h-4 w-4" />
                         <span>{language === 'en' ? 'Repeat question' : '重播题目'}</span>
@@ -384,7 +384,7 @@ function AssessmentSheet({
                       <button
                         type="button"
                         onClick={speakExplanation}
-                        className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50"
+                        className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-card px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50"
                       >
                         <Sparkles className="h-4 w-4" />
                         <span>{language === 'en' ? 'Explain question' : '解释题意'}</span>
@@ -392,13 +392,13 @@ function AssessmentSheet({
                       <button
                         type="button"
                         onClick={togglePause}
-                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/50"
                       >
                         {voiceSession.state === 'paused' ? <PlayCircle className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                         <span>{voiceSession.state === 'paused' ? (language === 'en' ? 'Resume' : '继续') : (language === 'en' ? 'Pause' : '暂停')}</span>
                       </button>
                     </div>
-                    <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">
+                    <div className="mt-3 rounded-2xl bg-card px-4 py-3 text-sm text-muted-foreground">
                       {voiceSession.statusText ||
                         (language === 'en'
                           ? 'You can answer by voice or tap an option below.'
@@ -416,14 +416,14 @@ function AssessmentSheet({
                         <button
                           type="button"
                           onClick={() => void confirmPendingAnswer(false)}
-                          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          className="rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/50"
                         >
                           {language === 'en' ? 'No, ask again' : '不对，请再问一遍'}
                         </button>
                       </div>
                     ) : null}
                     {voiceSession.error ? (
-                      <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
                         {voiceSession.error}
                       </div>
                     ) : null}
@@ -436,26 +436,26 @@ function AssessmentSheet({
                       type="button"
                       disabled={submitting}
                       onClick={() => onSubmitAnswer(option.score)}
-                      className="w-full rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm text-slate-700 hover:border-cyan-300 hover:bg-white disabled:opacity-50"
+                      className="w-full rounded-[1.5rem] border border-border bg-muted/50 px-4 py-4 text-left text-sm text-foreground hover:border-accent/50 hover:bg-card disabled:opacity-50"
                     >
-                      <div className="font-semibold text-slate-900">{option.label}</div>
-                      {option.description ? <div className="mt-1 text-slate-500">{option.description}</div> : null}
+                      <div className="font-semibold text-foreground">{option.label}</div>
+                      {option.description ? <div className="mt-1 text-muted-foreground">{option.description}</div> : null}
                     </button>
                   ))}
                 </div>
               </div>
             ) : session.result ? (
               <div className="rounded-[1.75rem] border border-emerald-200 bg-emerald-50 px-5 py-5">
-                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-600">
                   {language === 'en' ? 'Completed' : '已完成'}
                 </div>
                 <div className="mt-3 text-xl font-bold text-emerald-950">{session.result.conclusion}</div>
-                <div className="mt-2 text-sm text-emerald-800">
+                <div className="mt-2 text-sm text-emerald-600">
                   {language === 'en' ? 'Score' : '得分'}: {session.result.totalScore}
                 </div>
               </div>
             ) : (
-              <div className="text-sm text-slate-500">{language === 'en' ? 'Loading assessment...' : '正在载入量表...'}</div>
+              <div className="text-sm text-muted-foreground">{language === 'en' ? 'Loading assessment...' : '正在载入量表...'}</div>
             )}
           </div>
         </div>
@@ -978,10 +978,10 @@ export default function DoctorBotChatExperience({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#cffafe,transparent_34%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-cyan-600" />
-          <p className="mt-3 text-sm text-slate-500">正在加载医生分身...</p>
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-accent" />
+          <p className="mt-3 text-sm text-muted-foreground">正在加载医生分身...</p>
         </div>
       </div>
     );
@@ -989,29 +989,29 @@ export default function DoctorBotChatExperience({
 
   if (pageError && !bot) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-slate-900">当前分身不可用</h1>
-          <p className="mt-3 text-sm leading-7 text-slate-500">{pageError}</p>
+      <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+        <div className="w-full max-w-xl rounded-[2rem] border border-border bg-card p-8 shadow-sm">
+          <h1 className="text-2xl font-bold text-foreground">当前分身不可用</h1>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">{pageError}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#cffafe,transparent_34%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+20px)] sm:px-6">
-        <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur">
+        <div className="rounded-[2rem] border border-border bg-card/90 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center gap-4">
             {showBackToHall ? (
               <a
                 href="/"
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted/50"
               >
                 <ArrowLeft className="h-4 w-4" />
               </a>
             ) : null}
-            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-cyan-50 text-cyan-700">
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-accent/10 text-accent">
               {bot?.avatarUrl ? (
                 <img src={bot.avatarUrl} alt={bot.assistantName} className="h-full w-full object-cover" />
               ) : (
@@ -1019,14 +1019,14 @@ export default function DoctorBotChatExperience({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+              <div className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-accent">
                 <Sparkles className="h-3.5 w-3.5" />
                 <span>{bot?.assistantName}</span>
               </div>
-              <div className="mt-2 text-lg font-semibold text-slate-900">
+              <div className="mt-2 text-lg font-semibold text-foreground">
                 {bot?.doctor.realName} · {bot?.doctor.title}
               </div>
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-muted-foreground">
                 {bot?.doctor.hospitalName} · {bot?.doctor.departmentName}
               </div>
             </div>
@@ -1044,7 +1044,7 @@ export default function DoctorBotChatExperience({
                   speakText(lastAssistantContent, language);
                 }
               }}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted/50"
             >
               <Volume2 className="h-4 w-4" />
             </button>
@@ -1052,27 +1052,27 @@ export default function DoctorBotChatExperience({
         </div>
 
         {realtimeBootstrap?.doctorBot ? (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-600">
             Hermes 实时医生分身会话已准备就绪；当前公开聊天页仍保留 {realtimeBootstrap.doctorBot.fallback.provider || '旧链路'} 作为受控兜底。
           </div>
         ) : null}
 
         {pageError ? (
-          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
             {pageError}
           </div>
         ) : null}
 
         {bindStatus ? (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-600">
             {bindStatus}
           </div>
         ) : null}
 
         {bindPromptOpen ? (
-          <div className="mt-4 rounded-[1.75rem] border border-cyan-200 bg-cyan-50 px-4 py-4">
-            <div className="text-sm font-semibold text-cyan-900">绑定该医生后，量表大厅可直接进入医生智能体</div>
-            <p className="mt-1 text-sm text-cyan-800">
+          <div className="mt-4 rounded-[1.75rem] border border-accent/30 bg-accent/10 px-4 py-4">
+            <div className="text-sm font-semibold text-accent">绑定该医生后，量表大厅可直接进入医生智能体</div>
+            <p className="mt-1 text-sm text-accent">
               你当前正在体验 {bot?.doctor.realName} 的智能体分身。绑定后，后续从 `/agent` 进入会默认加载该医生分身。
             </p>
             <div className="mt-3 flex flex-wrap gap-3">
@@ -1080,7 +1080,7 @@ export default function DoctorBotChatExperience({
                 type="button"
                 onClick={() => void bindCurrentDoctor()}
                 disabled={bindBusy}
-                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:bg-slate-400"
+                className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-white hover:bg-accent disabled:bg-muted-foreground"
               >
                 {bindBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                 <span>{bindBusy ? '绑定中...' : '绑定当前医生'}</span>
@@ -1088,7 +1088,7 @@ export default function DoctorBotChatExperience({
               <button
                 type="button"
                 onClick={() => setBindPromptOpen(false)}
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted/50"
               >
                 暂不绑定
               </button>
@@ -1097,13 +1097,13 @@ export default function DoctorBotChatExperience({
         ) : null}
 
         {assessmentSession && !assessmentOpen && !assessmentSession.result ? (
-          <div className="mt-4 rounded-[1.75rem] border border-cyan-200 bg-cyan-50 px-4 py-4">
-            <div className="text-sm font-semibold text-cyan-900">当前有一份进行中的量表</div>
-            <p className="mt-1 text-sm text-cyan-800">{assessmentSession.scaleId} 尚未完成，你可以继续填写。</p>
+          <div className="mt-4 rounded-[1.75rem] border border-accent/30 bg-accent/10 px-4 py-4">
+            <div className="text-sm font-semibold text-accent">当前有一份进行中的量表</div>
+            <p className="mt-1 text-sm text-accent">{assessmentSession.scaleId} 尚未完成，你可以继续填写。</p>
             <button
               type="button"
               onClick={() => setAssessmentOpen(true)}
-              className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+              className="mt-3 inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-white hover:bg-accent"
             >
               <PlayCircle className="h-4 w-4" />
               <span>继续评估</span>
@@ -1121,8 +1121,8 @@ export default function DoctorBotChatExperience({
                 <div
                   className={`max-w-[85%] rounded-[1.75rem] px-4 py-3 text-sm leading-7 shadow-sm ${
                     message.role === 'user'
-                      ? 'bg-slate-900 text-white'
-                      : 'border border-slate-200 bg-white text-slate-800'
+                      ? 'bg-foreground text-white'
+                      : 'border border-border bg-card text-foreground'
                   }`}
                 >
                   {message.content || (typingMessageId === message.id ? '...' : '')}
@@ -1130,21 +1130,21 @@ export default function DoctorBotChatExperience({
               </div>
             ) : (
               <div key={message.id} className="flex justify-start">
-                <div className="w-full max-w-[92%] rounded-[1.75rem] border border-cyan-200 bg-white px-5 py-5 shadow-sm">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+                <div className="w-full max-w-[92%] rounded-[1.75rem] border border-accent/30 bg-card px-5 py-5 shadow-sm">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-accent">
                     <ShieldCheck className="h-3.5 w-3.5" />
                     <span>Action Card</span>
                   </div>
-                  <div className="mt-3 text-lg font-semibold text-slate-900">{message.action.title}</div>
-                  <p className="mt-2 text-sm leading-7 text-slate-600">{message.action.body}</p>
-                  <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <div className="mt-3 text-lg font-semibold text-foreground">{message.action.title}</div>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">{message.action.body}</p>
+                  <div className="mt-3 rounded-2xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
                     推荐原因：{message.action.reason}
                   </div>
                   <button
                     type="button"
                     disabled={assessmentBusy}
                     onClick={() => void startAssessment(message.action.scaleId)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-cyan-700 disabled:bg-slate-400"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-white hover:bg-accent disabled:bg-muted-foreground"
                   >
                     {assessmentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                     <span>开始评估</span>
@@ -1156,8 +1156,8 @@ export default function DoctorBotChatExperience({
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="sticky bottom-0 rounded-[2rem] border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur">
-          <div className="mb-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <div className="sticky bottom-0 rounded-[2rem] border border-border bg-card/95 p-4 shadow-sm backdrop-blur">
+          <div className="mb-3 rounded-2xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
             {assessmentInProgress
               ? '当前已进入量表模式，请直接在量表面板内继续语音或点击作答。'
               : '你可以直接描述情况，也可以按住语音按钮说给医生分身听。'}
@@ -1169,13 +1169,13 @@ export default function DoctorBotChatExperience({
               onClick={() => void handleRecordToggle()}
               disabled={transcribing || sending}
               className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full ${
-                recording ? 'bg-rose-600 text-white' : 'bg-cyan-600 text-white'
+                recording ? 'bg-rose-600 text-white' : 'bg-accent text-accent-foreground'
               }`}
             >
               {recording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
             </button>
 
-            <div className="min-w-0 flex-1 rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="min-w-0 flex-1 rounded-[1.5rem] border border-border bg-muted/50 px-4 py-3">
               <textarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -1186,7 +1186,7 @@ export default function DoctorBotChatExperience({
                     : '例如：王医生，我家宝宝最近晚上老是哭醒，是不是缺钙啊？'
                 }
                 disabled={assessmentInProgress}
-                className="min-h-[56px] w-full resize-none bg-transparent text-sm leading-7 text-slate-800 outline-none"
+                className="min-h-[56px] w-full resize-none bg-transparent text-sm leading-7 text-foreground outline-none"
               />
             </div>
 
@@ -1194,7 +1194,7 @@ export default function DoctorBotChatExperience({
               type="button"
               onClick={() => void sendMessage(draft, true)}
               disabled={!draft.trim() || sending || transcribing || assessmentInProgress}
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-400"
+              className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-semibold text-white hover:bg-foreground disabled:bg-muted-foreground"
             >
               {sending || transcribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               <span>{sending ? '发送中...' : transcribing ? '识别中...' : '发送'}</span>

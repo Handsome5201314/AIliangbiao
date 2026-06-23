@@ -8,6 +8,8 @@ export type { UserProfile, AvatarState } from './ProfileContext';
 export { ConversationHistoryProvider, useConversationHistory } from './ConversationHistoryContext';
 export { SkillSessionProvider, useSkillSession } from './SkillSessionContext';
 export { AuthSessionProvider, useAuthSession } from './AuthSessionContext';
+export { ThemeProvider, useTheme } from './ThemeContext';
+export type { ThemeName, ThemeInfo } from './ThemeContext';
 
 
 

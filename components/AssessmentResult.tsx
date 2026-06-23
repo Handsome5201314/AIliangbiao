@@ -275,11 +275,7 @@ export default function AssessmentResult({
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 relative">
         <div className="mb-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:hidden">
-          <Avatar
-            state={profile.avatarState}
-            gender={profile.gender}
-            className="w-14 h-14"
-          />
+          <Avatar nickname={profile.nickname} className="w-14 h-14" />
           <div>
             <div className="text-sm font-semibold text-slate-900">{profile.nickname}</div>
             <div className="text-xs text-slate-500">当前受测对象</div>
@@ -287,11 +283,7 @@ export default function AssessmentResult({
         </div>
 
         <div className="fixed top-4 left-4 z-10 hidden md:block">
-          <Avatar
-            state={profile.avatarState}
-            gender={profile.gender}
-            className="w-20 h-20 drop-shadow-lg"
-          />
+          <Avatar nickname={profile.nickname} className="w-20 h-20 drop-shadow-lg" />
           <div className="text-center mt-1 text-xs font-medium text-slate-600">
             {profile.nickname}
           </div>
@@ -329,11 +321,7 @@ export default function AssessmentResult({
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 relative">
       <div className="mb-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:hidden">
-        <Avatar
-          state={profile.avatarState}
-          gender={profile.gender}
-          className="w-14 h-14"
-        />
+        <Avatar nickname={profile.nickname} className="w-14 h-14" />
         <div>
           <div className="text-sm font-semibold text-slate-900">{profile.nickname}</div>
           <div className="text-xs text-slate-500">当前受测对象</div>
@@ -341,11 +329,7 @@ export default function AssessmentResult({
       </div>
       {/* 左上角小人 */}
       <div className="fixed top-4 left-4 z-10 hidden md:block">
-        <Avatar 
-          state={profile.avatarState}
-          gender={profile.gender}
-          className="w-20 h-20 drop-shadow-lg"
-        />
+        <Avatar nickname={profile.nickname} className="w-20 h-20 drop-shadow-lg" />
         <div className="text-center mt-1 text-xs font-medium text-slate-600">
           {profile.nickname}
         </div>

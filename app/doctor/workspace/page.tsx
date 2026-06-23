@@ -379,7 +379,7 @@ export default function DoctorWorkspacePage() {
         <div className="space-y-6">
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-start gap-4">
-              <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+              <div className="rounded-2xl bg-muted p-3 text-slate-700">
                 <Bot className="h-5 w-5" />
               </div>
               <div>
@@ -408,7 +408,7 @@ export default function DoctorWorkspacePage() {
               <div className="md:col-span-2">
                 <span className="mb-2 block text-sm font-medium text-slate-700">头像</span>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-slate-50">
+                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-muted/50">
                     {form.avatarUrl ? (
                       <img src={form.avatarUrl} alt={form.assistantName} className="h-full w-full object-cover" />
                     ) : (
@@ -432,7 +432,7 @@ export default function DoctorWorkspacePage() {
                   value={form.welcomeMessage}
                   onChange={(event) => updateField('welcomeMessage', event.target.value)}
                   rows={4}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 leading-6 outline-none focus:border-cyan-400"
+                  className="w-full rounded-2xl border border-slate-200 bg-muted/50 px-4 py-3 leading-6 outline-none focus:border-cyan-400"
                 />
               </label>
             </div>
@@ -440,7 +440,7 @@ export default function DoctorWorkspacePage() {
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-start gap-4">
-              <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+              <div className="rounded-2xl bg-muted p-3 text-slate-700">
                 <PlugZap className="h-5 w-5" />
               </div>
               <div>
@@ -526,7 +526,7 @@ export default function DoctorWorkspacePage() {
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-start gap-4">
-              <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+              <div className="rounded-2xl bg-muted p-3 text-slate-700">
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
@@ -537,7 +537,7 @@ export default function DoctorWorkspacePage() {
 
             <div className="grid gap-3 md:grid-cols-2">
               {eligibleScales.map((scale) => (
-                <label key={scale.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                <label key={scale.id} className="rounded-2xl border border-slate-200 bg-muted/50 px-4 py-4 text-sm text-slate-700">
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -567,7 +567,7 @@ export default function DoctorWorkspacePage() {
               <h2 className="text-lg font-semibold">分发矩阵</h2>
             </div>
             <div className="space-y-4 text-sm text-slate-600">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="rounded-2xl border border-slate-200 bg-muted/50 px-4 py-3">
                 <div className="font-medium text-slate-900">当前医生</div>
                 <div className="mt-1">{doctor?.realName} · {doctor?.title}</div>
                 <div>{doctor?.hospitalName} · {doctor?.departmentName}</div>
@@ -578,7 +578,7 @@ export default function DoctorWorkspacePage() {
                 <select
                   value={form.status}
                   onChange={(event) => updateField('status', event.target.value as WorkspaceConfigForm['status'])}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-cyan-400"
+                  className="w-full rounded-2xl border border-slate-200 bg-muted/50 px-4 py-3 outline-none focus:border-cyan-400"
                 >
                   <option value="draft">草稿</option>
                   <option value="published">已发布</option>
@@ -586,7 +586,7 @@ export default function DoctorWorkspacePage() {
                 </select>
               </label>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="rounded-2xl border border-slate-200 bg-muted/50 px-4 py-3">
                 <div className="font-medium text-slate-900">公开 Web 链接</div>
                 <div className="mt-1 break-all">{shareUrl || '保存并发布后生成'}</div>
               </div>
@@ -658,7 +658,7 @@ export default function DoctorWorkspacePage() {
             {recentSessions.length ? (
               <div className="space-y-3">
                 {recentSessions.map((session) => (
-                  <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                  <div key={session.id} className="rounded-2xl border border-slate-200 bg-muted/50 px-4 py-4 text-sm text-slate-700">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <div className="font-semibold text-slate-900">
@@ -685,7 +685,7 @@ export default function DoctorWorkspacePage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-muted/50 px-4 py-8 text-center text-sm text-slate-500">
                 还没有公开聊天会话，发布后把链接发给患者就会在这里看到活跃记录。
               </div>
             )}

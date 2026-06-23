@@ -39,7 +39,7 @@ export default function ProfileSetupModal() {
       ageMonths: formData.ageMonths,
     });
 
-    // 2. 根据性别初始化一个可爱的国风头像状态
+    // 2. 保留画像状态给既有流程使用，头像展示统一使用首字母。
     updateAvatar({
       clothing: formData.gender === 'boy' ? 'tang_suit' : 'hanfu_blue',
       mood: 'happy',
@@ -61,18 +61,9 @@ export default function ProfileSetupModal() {
         {/* 顶部装饰背景 */}
         <div className="h-32 bg-gradient-to-br from-indigo-500 via-purple-500 to-rose-400 relative">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-          {/* 实时预览的国风小人 (绝对定位突破边界) */}
+          {/* 首字母头像预览 */}
           <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 bg-white p-2 rounded-full shadow-lg border-4 border-white">
-            <Avatar 
-              gender={formData.gender} 
-              state={{ 
-                baseModel: 'default', 
-                clothing: formData.gender === 'boy' ? 'tang_suit' : 'hanfu_blue', 
-                headwear: 'none', 
-                mood: 'happy' 
-              }} 
-              className="w-20 h-20"
-            />
+            <Avatar nickname={formData.nickname || '宝宝'} className="w-20 h-20" />
           </div>
         </div>
 
@@ -81,10 +72,10 @@ export default function ProfileSetupModal() {
           <div className="text-center mb-6">
             <h2 className="text-2xl font-extrabold text-slate-800 flex items-center justify-center gap-2">
               <Sparkles className="w-6 h-6 text-amber-500" />
-              定制专属小守护者
+              创建健康档案
             </h2>
             <p className="text-sm text-slate-500 mt-2">
-              告诉我们宝宝的基本信息，系统将为TA生成专属的陪伴伙伴。
+              告诉我们受测对象的基本信息，系统会用首字母头像标识这份档案。
             </p>
           </div>
 
@@ -165,7 +156,7 @@ export default function ProfileSetupModal() {
               disabled={!formData.nickname.trim()}
               className="mt-6 w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-3.5 px-4 rounded-xl hover:bg-indigo-600 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
             >
-              生成专属守护者
+              创建健康档案
               <ArrowRight className="w-5 h-5" />
             </button>
           </form>

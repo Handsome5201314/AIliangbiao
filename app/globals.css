@@ -6,26 +6,49 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 238.7 83.5% 66.7%;
+    /* ── Seed Tokens（主题切换只改这一层） ── */
+    --seed-bg: 210 40% 98%;
+    --seed-surface: 0 0% 100%;
+    --seed-fg: 222.2 84% 4.9%;
+    --seed-muted: 215.4 16.3% 46.9%;
+    --seed-border: 214.3 31.8% 91.4%;
+    --seed-primary: 238.7 83.5% 66.7%;
+    --seed-accent: 187.2 85.7% 53.3%;
+    --seed-radius: 0.75rem;
+
+    /* ── shadcn 语义 Token（引用 seed，不直接改） ── */
+    --background: var(--seed-bg);
+    --foreground: var(--seed-fg);
+    --card: var(--seed-surface);
+    --card-foreground: var(--seed-fg);
+    --popover: var(--seed-surface);
+    --popover-foreground: var(--seed-fg);
+    --primary: var(--seed-primary);
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary-foreground: var(--seed-fg);
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 187.2 85.7% 53.3%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --muted-foreground: var(--seed-muted);
+    --accent: var(--seed-accent);
+    --accent-foreground: var(--seed-fg);
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 238.7 83.5% 66.7%;
-    --radius: 1rem;
+    --border: var(--seed-border);
+    --input: var(--seed-border);
+    --ring: var(--seed-primary);
+    --radius: var(--seed-radius);
+  }
+
+  /* ── 温暖医疗主题 ── */
+  [data-theme="warm"] {
+    --seed-bg: 40 33% 98%;
+    --seed-surface: 40 20% 99%;
+    --seed-fg: 200 20% 15%;
+    --seed-muted: 200 10% 50%;
+    --seed-border: 35 25% 90%;
+    --seed-primary: 172 50% 40%;
+    --seed-accent: 172 50% 40%;
+    --seed-radius: 1rem;
   }
 }
 
@@ -36,5 +59,6 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }

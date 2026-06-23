@@ -130,22 +130,22 @@ export default function MobileAgentWorkspace() {
   ];
 
   const historyPanel = (
-    <div className="h-full overflow-y-auto bg-slate-50 px-4 py-4">
+    <div className="h-full overflow-y-auto bg-muted/50 px-4 py-4">
       {messages.length ? (
         <div className="space-y-3">
           {messages.slice(-12).reverse().map((message) => (
-            <div key={message.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <div key={message.id} className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 {message.role === 'user' ? copy.historyRoleUser : copy.historyRoleAssistant}
               </div>
-              <div className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+              <div className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">
                 {message.content}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-sm leading-7 text-slate-500">
+        <div className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-sm leading-7 text-muted-foreground">
           {copy.historyEmpty}
         </div>
       )}
@@ -153,20 +153,20 @@ export default function MobileAgentWorkspace() {
   );
 
   return (
-    <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#dbeafe,transparent_42%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
+    <div className="min-h-[100dvh] bg-background">
       <div className="px-4 pb-[calc(env(safe-area-inset-bottom)+132px)] pt-6">
-        <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
-          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-700">
+        <div className="rounded-[2rem] border border-border bg-card/90 p-5 shadow-sm backdrop-blur">
+          <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
             <Sparkles className="h-3.5 w-3.5" />
             <span>Mobile AI</span>
           </div>
           <div className="mt-4 flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
               <Bot className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">{copy.heroTitle}</h1>
-              <p className="mt-2 text-sm leading-7 text-slate-600">{copy.heroBody}</p>
+              <h1 className="text-xl font-bold text-foreground">{copy.heroTitle}</h1>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">{copy.heroBody}</p>
             </div>
           </div>
         </div>
@@ -175,7 +175,7 @@ export default function MobileAgentWorkspace() {
           {[copy.featureOne, copy.featureTwo, copy.featureThree].map((item) => (
             <div
               key={item}
-              className="flex items-start gap-3 rounded-[1.5rem] border border-slate-200 bg-white/80 p-4 text-sm leading-6 text-slate-600 shadow-sm backdrop-blur"
+              className="flex items-start gap-3 rounded-[1.5rem] border border-border bg-card/80 p-4 text-sm leading-6 text-muted-foreground shadow-sm backdrop-blur"
             >
               <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                 <ShieldCheck className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function MobileAgentWorkspace() {
           />
         }
       >
-        <div className="border-b border-slate-200 bg-white px-4 py-3">
+        <div className="border-b border-border bg-card px-4 py-3">
           <div className="grid grid-cols-3 gap-2">
             {tabItems.map((item) => (
               <button
@@ -228,8 +228,8 @@ export default function MobileAgentWorkspace() {
                 onClick={() => setAssistantTab(item.id)}
                 className={`rounded-full px-3 py-2 text-sm font-semibold transition ${
                   assistantTab === item.id
-                    ? 'bg-indigo-600 text-white'
-                    : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-white'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border bg-muted/50 text-foreground hover:bg-card'
                 }`}
               >
                 {item.label}

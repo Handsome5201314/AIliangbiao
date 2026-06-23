@@ -609,11 +609,7 @@ export default function Questionnaire({ scale, language = 'zh' }: QuestionnaireP
       )}
 
       <div className="mb-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:hidden">
-        <Avatar
-          state={profile.avatarState}
-          gender={profile.gender}
-          className="w-14 h-14"
-        />
+        <Avatar nickname={profile.nickname} className="w-14 h-14" />
         <div>
           <div className="text-sm font-semibold text-slate-900">{profile.nickname}</div>
           <div className="text-xs text-slate-500">
@@ -623,11 +619,7 @@ export default function Questionnaire({ scale, language = 'zh' }: QuestionnaireP
       </div>
 
       <div className="fixed top-4 left-4 z-10 hidden rounded-2xl bg-white/90 p-3 shadow-lg backdrop-blur md:block">
-        <Avatar
-          state={profile.avatarState}
-          gender={profile.gender}
-          className="w-16 h-16"
-        />
+        <Avatar nickname={profile.nickname} className="w-16 h-16" />
         <div className="text-center mt-1 text-xs font-medium text-slate-600">
           {profile.nickname}
         </div>
