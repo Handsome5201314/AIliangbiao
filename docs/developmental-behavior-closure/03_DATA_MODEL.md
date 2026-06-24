@@ -25,18 +25,19 @@
 | `McpLog` | MCP 调用基础日志。 |
 | `KnowledgeDoc` / `QuestionExplanation` | 人工审核知识和题目解释素材。 |
 
-## 建议扩展的已有模型
+## Phase 1 对已有模型的处理
 
-| 模型 | 建议扩展 |
+Phase 1 不把医生复核、正式报告、健康教育、随访任务和 AI/MCP 审计继续塞进旧表字段里；旧模型只增加必要的 Prisma 反向关系，真实业务 source of truth 落到独立模型。
+
+| 既有模型 | Phase 1 关系 |
 |---|---|
-| `AssessmentSession` | 增加 assessment purpose、baseline/followup 类型、doctor review 状态投影、低置信度答案标记。 |
-| `AssessmentHistory` | 增加 review status 投影、report id、source channel、duration seconds、locked scoring snapshot。 |
-| `ScaleScore` | 明确 `questionId` 类型、raw answer、mapped answer confidence、needsReview、AI evidence。 |
-| `FollowUp` | 增加 taskType、dueDate、windowStartAt、windowEndAt、completedAssessmentId、lostToFollowupReason。 |
-| `AiInteraction` | 增加 modelName、inputSummary、outputSummary、confidence、reviewRequired、toolCalls、errorCode。 |
-| `McpLog` | 增加 toolName、requestId、argumentsSummary、resultSummary、success、errorCode、latencyMs。 |
+| `AssessmentSession` / `AssessmentHistory` | 关联 `DoctorReview`、`AssessmentReport`、`EducationDelivery`、`FollowUpTask`、`AiDecisionLog`、`McpToolLog`。 |
+| `MemberProfile` | 关联复核、报告、健康教育触达、复测任务、提醒日志和 AI 决策日志。 |
+| `DoctorProfile` | 关联复核、审批报告、报告模板、健康教育内容、复测任务、提醒日志、研究导入批次和 AI 决策日志。 |
+| `KnowledgeDoc` | 作为健康教育内容的人工审核来源。 |
+| `ApiKey` | 关联 MCP 工具调用日志。 |
 
-## 建议新增模型
+## Phase 1 已新增模型
 
 | 模型 | 目的 |
 |---|---|
@@ -46,13 +47,13 @@
 | `AssessmentReport` | 正式报告 source of truth，保存编号、模板、快照、状态、PDF URL 和审批时间。 |
 | `EducationContent` | 人工审核健康教育内容库。 |
 | `EducationDelivery` | 健康教育触达、查看、确认和随访关联日志。 |
-| `FollowUpTask` | 1 个月/3 个月复测任务，若不复用 `FollowUp` 则独立建表。 |
+| `FollowUpTask` | 1 个月/3 个月复测任务 source of truth。 |
 | `ReminderLog` | 手工提醒记录，不接真实短信也要记录提醒行为。 |
 | `ResearchImportBatch` | 历史 CSV 导入批次、字段映射、质量标记和导入人。 |
-| `ResearchDerivedDataset` | 研究衍生表版本、字段快照和导出参数。 |
-| `AiDecisionLog` | 若 `AiInteraction` 不扩展，单独记录 AI 答案映射、追问、摘要和安全审查。 |
+| `AiDecisionLog` | 记录 AI 答案映射、追问、摘要、健康教育匹配和安全审查等可审计决策。 |
+| `McpToolLog` | 记录 canonical MCP 工具调用名称、参数摘要、结果摘要、状态、耗时和入口。 |
 
-## 核心字段建议
+## Phase 1 核心字段与边界
 
 ### `DoctorReview`
 
@@ -68,6 +69,8 @@
 - `completedAt`
 - `durationSeconds`
 
+正式报告不能绕过该实体；医生复核是否允许家长可见由 `allowParentVisible` 控制，默认 `false`。
+
 ### `AssessmentReport`
 
 - `reportNo`
@@ -81,7 +84,10 @@
 - `reportSnapshot`
 - `parentVisible`
 - `pdfUrl`
+- `approvedByDoctorProfileId`
 - `approvedAt`
+
+报告状态只允许 `DRAFT | PENDING_DOCTOR_REVIEW | APPROVED | REJECTED | SUPERSEDED`，不存在 AI 或家长审批状态。报告必须引用 `doctorReviewId` 和 `templateId`。
 
 ### `ScaleLicenseMetadata`
 
@@ -95,6 +101,73 @@
 - `copyrightNotice`
 - `licenseNotes`
 
+`commercialEnabled` 默认 `false`，量表授权由 `scaleId + scaleVersion` 唯一确定。
+
+### `ReportTemplate`
+
+- `name`
+- `templateVersion`
+- `hospitalName`
+- `departmentName`
+- `logoUrl`
+- `doctorSignatureConfig`
+- `scaleIds`
+- `status`
+- `isDefault`
+- `createdByDoctorProfileId`
+
+### `EducationContent` / `EducationDelivery`
+
+- `EducationContent.sourceDocId` 指向人工审核知识来源。
+- `EducationContent.status` 复用 `KnowledgeReviewStatus`，默认 `DRAFT`。
+- Phase 6 起，`EducationContent.reviewedByAdminId`、`reviewedAt`、`reviewComment` 和 `metadata` 记录健康教育内容自身的人工审核证据；仅 `APPROVED` 内容可进入匹配和触达。
+- `EducationDelivery.deliveryStatus` 记录 `PENDING | DELIVERED | READ | CONFIRMED | CANCELLED`。
+- `EducationDelivery` 只记录站内触达、阅读和确认状态，不接外部消息通道，也不替代医生复核结论。
+
+### `FollowUpTask` / `ReminderLog`
+
+- `FollowUpTask.taskType`: `ONE_MONTH | THREE_MONTH | CUSTOM`
+- `dueDate`
+- `windowStartAt`
+- `windowEndAt`
+- `completedAssessmentHistoryId`
+- `completedAssessmentSessionId`
+- `lostToFollowupReason`
+- `ReminderLog.reminderChannel`: `MANUAL_PHONE | MANUAL_WECHAT | IN_PERSON | OTHER`
+
+提醒日志只记录人工提醒，不接真实短信通道；`FAILED` 必须作为失败审计保存，不得把任务推进为 `REMINDED`。
+
+### `ResearchImportBatch`
+
+- `uploadedByDoctorProfileId`
+- `requestedByUserId`
+- `sourceName`
+- `status`
+- `fieldMapping`
+- `qualitySummary`
+- `importedRowCount`
+- `errorSummary`
+
+历史数据导入批次只保存字段映射和质量摘要，不在 schema 或迁移里写入真实儿童隐私样例。
+
+### `AiDecisionLog` / `McpToolLog`
+
+- `AiDecisionLog.decisionType`
+- `modelName`
+- `promptHash`
+- `inputSummary`
+- `outputSummary`
+- `confidence`
+- `reviewRequired`
+- `McpToolLog.toolName`
+- `requestId`
+- `argumentsSummary`
+- `resultSummary`
+- `status`
+- `latencyMs`
+
+AI 决策日志只做审计，不产生诊断结论或评分 source of truth；`reviewRequired` 默认 `true`。MCP 日志记录工具调用事实，不把失败当成成功。
+
 ## 3 个月窗口规则
 
 基线后第 75-105 天内完成至少一种约定量表复测，记为：
@@ -105,7 +178,12 @@ three_month_window_75_105_completed = true
 
 该字段属于研究衍生字段，不应由 AI 自由生成，应由确定性查询或导出服务计算。
 
+## 落库与验证
+
+- Prisma schema: `prisma/schema.prisma`
+- Migration: `prisma/migrations/20260623_developmental_closure_phase1/migration.sql`
+- Contract test: `tests/developmental-closure-phase1-schema.test.ts`
+
 ## 本阶段边界
 
-Phase 0 不修改 `prisma/schema.prisma`。所有真实 schema 变更必须留到 Phase 1，并附 Prisma migration、测试和回滚说明。
-
+Phase 1 只做数据模型和迁移，不做 UI、不接真实短信、不做 AI 评分、不绕过医生复核、不写入真实儿童隐私样例。

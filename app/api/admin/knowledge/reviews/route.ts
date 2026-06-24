@@ -11,7 +11,7 @@ import {
 } from "@/lib/services/admin-knowledge-reviews";
 
 const reviewActionSchema = z.object({
-  itemType: z.enum(["KNOWLEDGE_DOC", "QUESTION_EXPLANATION"]),
+  itemType: z.enum(["KNOWLEDGE_DOC", "QUESTION_EXPLANATION", "EDUCATION_CONTENT"]),
   itemId: z.string().trim().min(1, "缺少审核对象 ID"),
   action: z.enum(["approve", "reject"]),
   reviewNotes: z.string().trim().max(500, "审核备注不能超过 500 个字符").optional(),

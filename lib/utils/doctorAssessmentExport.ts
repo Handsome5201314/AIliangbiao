@@ -1,6 +1,12 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+import {
+  type AssessmentReportSnapshot,
+  createAssessmentReportSnapshotFromExportData,
+  renderAssessmentReportHtml,
+} from '@/lib/utils/assessmentReportTemplate';
+
 export interface DoctorAssessmentAnswerDetail {
   questionId: number;
   questionText: string;
@@ -10,11 +16,16 @@ export interface DoctorAssessmentAnswerDetail {
 
 export interface DoctorAssessmentExportData {
   assessmentId: string;
+  reportNo?: string | null;
+  report?: AssessmentReportSnapshot;
+  reportSnapshot?: AssessmentReportSnapshot;
   member: {
     nickname: string;
+    realName?: string | null;
     relation: string;
     gender: string;
     ageMonths?: number | null;
+    contactPhone?: string | null;
   };
   scale: {
     id: string;
@@ -87,84 +98,7 @@ function createFilename(data: DoctorAssessmentExportData, extension: string) {
 }
 
 function createReportMarkup(data: DoctorAssessmentExportData) {
-  const scoreLabel =
-    typeof data.result.details?.scoreLabel === 'string' ? data.result.details.scoreLabel : '总分';
-  const scoreDisplay =
-    typeof data.result.details?.scoreDisplay === 'string'
-      ? data.result.details.scoreDisplay
-      : String(data.result.totalScore);
-  const totalScoreLabel =
-    typeof data.result.details?.totalScoreLabel === 'string' ? data.result.details.totalScoreLabel : '总分';
-  const totalScoreHint =
-    typeof data.result.details?.totalScoreHint === 'string' ? data.result.details.totalScoreHint : '';
-  const dimensionRows = extractDimensionRows(data.result.details);
-
-  const answerRows = data.answerDetails
-    .map((item) => {
-      const score = item.answerScore === null ? '-' : String(item.answerScore);
-      return `
-        <tr>
-          <td>${item.questionId}</td>
-          <td>${item.questionText}</td>
-          <td>${item.answerLabel}</td>
-          <td>${score}</td>
-        </tr>
-      `;
-    })
-    .join('');
-
-  return `
-    <div style="font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; color: #0f172a; background: white; width: 820px; padding: 28px;">
-      <h1 style="margin: 0 0 8px; font-size: 28px;">单次评估结果报告</h1>
-      <p style="margin: 0 0 20px; color: #64748b; font-size: 14px;">医生端导出 · 仅用于临床沟通与留档参考</p>
-
-      <section style="border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin-bottom: 18px;">
-        <h2 style="margin: 0 0 12px; font-size: 18px;">成员信息</h2>
-        <p style="margin: 4px 0;"><strong>昵称：</strong>${data.member.nickname}</p>
-        <p style="margin: 4px 0;"><strong>关系：</strong>${data.member.relation}</p>
-        <p style="margin: 4px 0;"><strong>性别：</strong>${data.member.gender}</p>
-        <p style="margin: 4px 0;"><strong>月龄：</strong>${data.member.ageMonths ?? '未知'}</p>
-      </section>
-
-      <section style="border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin-bottom: 18px;">
-        <h2 style="margin: 0 0 12px; font-size: 18px;">评估信息</h2>
-        <p style="margin: 4px 0;"><strong>量表：</strong>${data.scale.name}（${data.scale.id}）</p>
-        <p style="margin: 4px 0;"><strong>版本：</strong>${data.scale.version}</p>
-        <p style="margin: 4px 0;"><strong>评估时间：</strong>${data.assessedAt}</p>
-        <p style="margin: 4px 0;"><strong>导出时间：</strong>${data.exportedAt}</p>
-      </section>
-
-      <section style="border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; margin-bottom: 18px;">
-        <h2 style="margin: 0 0 12px; font-size: 18px;">评估结果</h2>
-        <p style="margin: 4px 0;"><strong>${scoreLabel}：</strong>${scoreDisplay}</p>
-        ${scoreLabel !== totalScoreLabel ? `<p style="margin: 4px 0;"><strong>${totalScoreLabel}：</strong>${data.result.totalScore}</p>` : ''}
-        <p style="margin: 4px 0;"><strong>结论：</strong>${data.result.conclusion}</p>
-        ${dimensionRows.length ? `
-          <div style="margin-top: 12px;">
-            <p style="margin: 0 0 8px; font-weight: 600;">子领域得分</p>
-            ${dimensionRows.map((item) => `<p style="margin: 4px 0;"><strong>${item.label}：</strong>${item.display}</p>`).join('')}
-          </div>
-        ` : ''}
-        ${data.result.details?.description ? `<p style="margin: 12px 0 0; line-height: 1.8; white-space: pre-wrap;">${data.result.details.description}</p>` : ''}
-        ${totalScoreHint ? `<p style="margin: 12px 0 0; color: #64748b; line-height: 1.8;">${totalScoreHint}</p>` : ''}
-      </section>
-
-      <section style="border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px;">
-        <h2 style="margin: 0 0 12px; font-size: 18px;">答题明细</h2>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-          <thead>
-            <tr>
-              <th style="text-align: left; padding: 10px; border-bottom: 1px solid #cbd5e1;">题号</th>
-              <th style="text-align: left; padding: 10px; border-bottom: 1px solid #cbd5e1;">题目</th>
-              <th style="text-align: left; padding: 10px; border-bottom: 1px solid #cbd5e1;">作答</th>
-              <th style="text-align: left; padding: 10px; border-bottom: 1px solid #cbd5e1;">分值</th>
-            </tr>
-          </thead>
-          <tbody>${answerRows}</tbody>
-        </table>
-      </section>
-    </div>
-  `;
+  return renderAssessmentReportHtml(createAssessmentReportSnapshotFromExportData(data));
 }
 
 async function exportMarkupToPdf(markup: string, filename: string) {
@@ -286,15 +220,7 @@ export function downloadDoctorAssessmentCsv(data: DoctorAssessmentExportData) {
 }
 
 export function downloadDoctorAssessmentWord(data: DoctorAssessmentExportData) {
-  const markup = `
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>单次评估结果报告</title>
-      </head>
-      <body>${createReportMarkup(data)}</body>
-    </html>
-  `;
+  const markup = createReportMarkup(data);
 
   const blob = new Blob([markup], {
     type: 'application/msword',
@@ -304,4 +230,17 @@ export function downloadDoctorAssessmentWord(data: DoctorAssessmentExportData) {
 
 export async function downloadDoctorAssessmentPdf(data: DoctorAssessmentExportData) {
   await exportMarkupToPdf(createReportMarkup(data), createFilename(data, 'pdf'));
+}
+
+export function printDoctorAssessmentReport(data: DoctorAssessmentExportData) {
+  const popup = window.open('', '_blank', 'noopener,noreferrer,width=960,height=720');
+  if (!popup) {
+    throw new Error('无法打开打印窗口，请检查浏览器弹窗设置');
+  }
+
+  popup.document.open();
+  popup.document.write(createReportMarkup(data));
+  popup.document.close();
+  popup.focus();
+  popup.print();
 }

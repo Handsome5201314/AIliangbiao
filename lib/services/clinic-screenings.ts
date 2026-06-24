@@ -10,6 +10,7 @@ import {
   getDoctorVisibleScaleById,
   getSerializableScaleById,
 } from '@/lib/scales/catalog';
+import { ensurePendingDoctorReviewForAssessment } from '@/lib/services/doctor-care';
 import { resolveLocalizedText, resolveQuestionText } from '@/lib/schemas/core/i18n';
 
 function memberProfileModel() {
@@ -453,6 +454,12 @@ export async function submitClinicQrAssessment(input: {
     });
 
     return [history, createdSubmission];
+  });
+
+  await ensurePendingDoctorReviewForAssessment({
+    assessmentHistoryId: assessmentHistory.id,
+    memberProfileId: member.id,
+    doctorProfileId: qr.point.ownerDoctorProfileId,
   });
 
   return {

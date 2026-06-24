@@ -3,27 +3,32 @@ import { z } from 'zod';
 
 import { submitPublicAssessmentSessionByToken } from '@/lib/assessment-skill/scale-service';
 import { dispatchAssessmentCompletionCallback, getAssessmentCompletionCallbackStatus } from '@/lib/services/assessment-callbacks';
-import { isRespondentResultVisible } from '@/lib/scales/catalog';
 
 function toRespondentPayload(payload: Awaited<ReturnType<typeof submitPublicAssessmentSessionByToken>>) {
-  const visible = isRespondentResultVisible(payload.scale);
   return {
     ...payload,
     session: {
       ...payload.session,
-      resultVisibleToRespondent: visible,
-      result: visible ? payload.session.result : null,
+      resultVisibleToRespondent: false,
+      result: null,
+      assessmentHistoryId: null,
     },
   };
 }
 
+const answerDetailSchema = z.object({
+  estimated: z.boolean().optional(),
+  selectedSymptomIds: z.array(z.string()).optional(),
+  primarySymptomId: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  evidence: z.string().optional(),
+  source: z.enum(['manual', 'ai_mapped', 'user_confirmed_mapping']).optional(),
+  confirmedLowConfidence: z.boolean().optional(),
+});
+
 const requestSchema = z.object({
   answers: z.array(z.number()),
-  answerDetails: z.record(z.string(), z.object({
-    estimated: z.boolean().optional(),
-    selectedSymptomIds: z.array(z.string()).optional(),
-    primarySymptomId: z.string().optional(),
-  })).optional(),
+  answerDetails: z.record(z.string(), answerDetailSchema).optional(),
 });
 
 export async function POST(

@@ -38,6 +38,11 @@ type SuggestedAnswer = {
   method: "heuristic" | "llm" | "unanswered";
 };
 
+type SerializedSuggestedAnswer = SuggestedAnswer & {
+  needsConfirmation: boolean;
+  requiresExplicitSelection: boolean;
+};
+
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, "").toLowerCase();
 }
@@ -159,6 +164,14 @@ function sanitizeLlmSuggestions(
   });
 }
 
+function serializeSuggestion(suggestion: SuggestedAnswer): SerializedSuggestedAnswer {
+  return {
+    ...suggestion,
+    needsConfirmation: suggestion.score !== null && suggestion.confidence < 0.8,
+    requiresExplicitSelection: suggestion.score !== null && suggestion.confidence < 0.6,
+  };
+}
+
 async function requestLlmSuggestions(
   scaleId: string,
   questions: ScaleQuestion[],
@@ -257,9 +270,10 @@ export async function POST(request: NextRequest) {
       console.warn("[Scale Conversation Analysis] Falling back to heuristics:", error);
     }
 
+    const serializedSuggestions = finalSuggestions.map(serializeSuggestion);
     const answers = scale.questions.map((question) => {
-      const suggestion = finalSuggestions.find((item) => item.questionId === question.id);
-      return suggestion?.score ?? null;
+      const suggestion = serializedSuggestions.find((item) => item.questionId === question.id);
+      return suggestion && !suggestion.needsConfirmation ? suggestion.score : null;
     });
 
     const answeredCount = answers.filter((answer) => answer !== null).length;
@@ -273,7 +287,7 @@ export async function POST(request: NextRequest) {
       },
       llmUsed,
       answers,
-      suggestions: finalSuggestions,
+      suggestions: serializedSuggestions,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -20,6 +20,8 @@ export const skillHttpRoutes: SkillRouteDescriptor[] = [
   { method: 'POST', path: '/v1/scales/:scaleId/sessions/:sessionId/answer', summary: 'Submit answer for current assessment question', auth: 'agent', scope: 'skill:scales:evaluate' },
   { method: 'GET', path: '/v1/scales/:scaleId/sessions/:sessionId/result', summary: 'Get assessment session result', auth: 'agent', scope: 'skill:scales:read' },
   { method: 'POST', path: '/v1/scales/:scaleId/analyze-conversation', summary: 'Extract draft answers from chat history', auth: 'agent', scope: 'skill:scales:read' },
+  { method: 'POST', path: '/v1/scales/:scaleId/map-answer', summary: 'Map natural language to a draft answer that may require confirmation', auth: 'agent', scope: 'skill:scales:read' },
+  { method: 'POST', path: '/v1/scales/:scaleId/mapped-answers/confirm', summary: 'Confirm a mapped answer before it can be submitted', auth: 'agent', scope: 'skill:scales:evaluate' },
   { method: 'POST', path: '/v1/voice-intent', summary: 'Resolve questionnaire or triage intent', auth: 'agent', scope: 'skill:voice-intent' },
   { method: 'POST', path: '/v1/speech/transcribe', summary: 'Speech-to-text proxy', auth: 'agent', scope: 'skill:voice-intent' },
   { method: 'GET', path: '/v1/me/quota', summary: 'Get current user quota', auth: 'agent', scope: 'skill:member:read' },

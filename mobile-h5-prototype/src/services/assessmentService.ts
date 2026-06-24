@@ -35,6 +35,8 @@ type ServerScale = {
   category?: string;
   tags?: string[];
   estimatedMinutes?: number;
+  interactionMode?: string;
+  resultDeliveryMode?: string;
   questions: ServerScaleQuestion[];
   voiceFriendly?: boolean;
 };
@@ -145,6 +147,8 @@ const SCALE_META: Record<string, Pick<Scale, 'category' | 'ageRange' | 'recommen
   'CBCL_113': { category: 'development', ageRange: '1.5-18岁', recommended: false },
   'TAS_37': { category: 'development', ageRange: '儿童青少年', recommended: false },
 };
+
+export const PARENT_SELF_BLOCKED_SCALE_IDS = new Set(['CARS', 'VINELAND_3']);
 
 function resolveText(value: LocalizedText | undefined, fallback = '') {
   if (!value) return fallback;
@@ -328,9 +332,21 @@ export async function getChildren(headers?: HeadersInit): Promise<Child[]> {
 
 export async function getScales(options?: {
   group?: ScaleCategory;
+  audience?: 'parent_self' | 'doctor';
 }): Promise<Scale[]> {
   const data = await apiRequest<{ scales: ServerScale[] }>('/api/scales');
-  const allScales = data.scales.map(mapScale);
+  const audience = options?.audience || 'parent_self';
+  const availableScales = audience === 'doctor'
+    ? data.scales
+    : data.scales.filter((scale) => {
+        const scaleId = scale.id.toUpperCase();
+        return (
+          !PARENT_SELF_BLOCKED_SCALE_IDS.has(scaleId) &&
+          scale.interactionMode !== 'web_handoff' &&
+          scale.resultDeliveryMode !== 'physician_review'
+        );
+      });
+  const allScales = availableScales.map(mapScale);
 
   if (!options?.group || options.group === 'all') {
     return allScales;
@@ -349,18 +365,48 @@ export async function autoSaveLocal(
   answers: Record<string, Answer>,
 ): Promise<{ success: true; savedLocally: true }> {
   window.localStorage.setItem(`h5_assessment_draft:${sessionId}`, JSON.stringify(answers));
+  const [, scaleId] = sessionId.match(/^session_([^:]+):/) || [];
+  if (scaleId) {
+    window.localStorage.setItem(`h5_assessment_draft:last:${scaleId}`, sessionId);
+  }
   return { success: true, savedLocally: true };
 }
 
 export async function autoSaveServer(
-  _sessionId: string,
-  _answers: Record<string, Answer>,
+  sessionId: string,
+  answers: Record<string, Answer>,
 ): Promise<{ success: boolean; savedLocally: boolean }> {
-  throw new Error('答题自动保存接口尚未接入真实后端契约');
+  await autoSaveLocal(sessionId, answers);
+  return { success: true, savedLocally: true };
 }
 
 export async function forceSync(): Promise<{ success: true }> {
   throw new Error('答题同步接口尚未接入真实后端契约');
+}
+
+export async function loadLocalDraft(sessionId: string): Promise<Record<string, Answer> | null> {
+  const raw = window.localStorage.getItem(`h5_assessment_draft:${sessionId}`);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as Record<string, Answer>;
+  } catch {
+    window.localStorage.removeItem(`h5_assessment_draft:${sessionId}`);
+    return null;
+  }
+}
+
+export async function loadLatestLocalDraftForScale(scaleId: string): Promise<Record<string, Answer> | null> {
+  const sessionId = window.localStorage.getItem(`h5_assessment_draft:last:${scaleId}`);
+  return sessionId ? loadLocalDraft(sessionId) : null;
+}
+
+export async function clearLocalDraft(sessionId: string, scaleId?: string): Promise<{ success: true }> {
+  window.localStorage.removeItem(`h5_assessment_draft:${sessionId}`);
+  if (scaleId) {
+    window.localStorage.removeItem(`h5_assessment_draft:last:${scaleId}`);
+  }
+  return { success: true };
 }
 
 export async function submitAnswers(
@@ -403,15 +449,6 @@ export async function submitAnswers(
   });
 
   const reportId = saved.assessment?.id || sessionId;
-  window.sessionStorage.setItem(
-    `h5_report:${reportId}`,
-    JSON.stringify(buildReport({
-      sessionId: reportId,
-      scale,
-      result: evaluation.result,
-      childName: context.childName,
-    })),
-  );
 
   if (context.childId || context.serverSessionId) {
     await recordFollowUpCompletion({
@@ -426,17 +463,20 @@ export async function submitAnswers(
 }
 
 export async function getReport(sessionId: string, headers?: HeadersInit): Promise<Report> {
-  const cached = window.sessionStorage.getItem(`h5_report:${sessionId}`);
-  if (cached) {
+  try {
+    const report = await apiRequest<Report>(`/api/assessment/history/${encodeURIComponent(sessionId)}/report`, {
+      headers: requireAuthHeaders(headers),
+    });
     await recordReportViewAccess(sessionId, headers);
-    return JSON.parse(cached) as Report;
+    return report;
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    const message = error instanceof Error ? error.message : '';
+    if (status === 403 || /PENDING_DOCTOR_REVIEW|等待医生复核/.test(message)) {
+      throw new Error('PENDING_DOCTOR_REVIEW：等待医生复核后可查看正式报告');
+    }
+    throw error;
   }
-
-  const report = await apiRequest<Report>(`/api/assessment/history/${encodeURIComponent(sessionId)}/report`, {
-    headers: requireAuthHeaders(headers),
-  });
-  await recordReportViewAccess(sessionId, headers);
-  return report;
 }
 
 export async function getHistory(memberId?: string, headers?: HeadersInit): Promise<HistoryRecord[]> {

@@ -6,6 +6,63 @@ import { apiRequest, getAuthHeaders } from '@/services/authService';
 export const DISCLAIMER =
   'AI 只能帮助解释题意，不能替你选择答案，也不能作为诊断结论。';
 
+const STORAGE_KEY_H5_DEVICE_ID = 'h5_device_id';
+
+type BackendQuestionExplanationResponse = {
+  explanation?: {
+    exact?: {
+      platform?: {
+        content?: string;
+      };
+      organization?: Array<{
+        title?: string;
+        content?: string;
+      }>;
+      doctor?: Array<{
+        title?: string;
+        content?: string;
+      }>;
+    };
+    retrieval?: Array<{
+      content?: string;
+      contentText?: string;
+      docTitle?: string;
+    }>;
+  };
+};
+
+export function getOrCreateH5DeviceId() {
+  let deviceId = localStorage.getItem(STORAGE_KEY_H5_DEVICE_ID);
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem(STORAGE_KEY_H5_DEVICE_ID, deviceId);
+  }
+  return deviceId;
+}
+
+function renderBackendExplanation(data: BackendQuestionExplanationResponse) {
+  const explanation = data.explanation;
+  const platform = explanation?.exact?.platform?.content?.trim();
+  const organization = explanation?.exact?.organization || [];
+  const doctor = explanation?.exact?.doctor || [];
+  const retrieval = explanation?.retrieval || [];
+
+  const sections = [
+    platform,
+    ...organization.map((item) => `${item.title || '机构补充'}：${item.content || ''}`.trim()),
+    ...doctor.map((item) => `${item.title || '医生补充'}：${item.content || ''}`.trim()),
+    ...retrieval.map((item) =>
+      `${item.docTitle || '已审核知识'}：${item.content || item.contentText || ''}`.trim()
+    ),
+  ].filter((item): item is string => Boolean(item));
+
+  if (!sections.length) {
+    throw new Error('题目解释库未返回可展示内容');
+  }
+
+  return sections.join('\n\n');
+}
+
 // ─── Question Explanation ──────────────────────────────────────────────────────
 
 export async function getQuestionExplanation(params: {
@@ -23,15 +80,26 @@ export async function getQuestionExplanation(params: {
   disclaimer: string;
   timestamp: number;
 }> {
-  const optionText = params.options.length
-    ? `\n\n本题选项包括：${params.options.map((option) => option.label).join('、')}。`
-    : '';
-  const modeHint =
-    params.mode === 'doctor_assisted'
-      ? '可用更口语化的方式向家长确认近一段时间的真实观察，不要诱导家长选择特定答案。'
-      : '请结合孩子近一段时间的日常表现作答，不需要追求某一次事件的绝对准确。';
+  const numericQuestionId = Number(params.questionId);
+  if (!Number.isInteger(numericQuestionId) || numericQuestionId <= 0) {
+    throw new Error('题目 ID 不合法，无法获取题目解释');
+  }
 
-  const explanation = `这道题关注的是：${params.questionText}\n\n${modeHint}${optionText}`;
+  const backend = await apiRequest<BackendQuestionExplanationResponse>(
+    '/api/platform/v1/ai/explanations/question',
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        deviceId: getOrCreateH5DeviceId(),
+        memberId: params.memberId,
+        scaleId: params.scaleId,
+        questionId: numericQuestionId,
+        language: 'zh',
+      }),
+    },
+  );
+  const explanation = renderBackendExplanation(backend);
 
   await apiRequest('/api/research/ai-interactions', {
     method: 'POST',

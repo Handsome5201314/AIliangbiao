@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { ADMIN_ROLE } from '@/lib/auth/admin-role';
 import { requireAdminRequest } from '@/lib/auth/require-admin';
-import { requireApprovedDoctorUser } from '@/lib/auth/require-app-session';
 import {
   exportResearchDataset,
   type ResearchExportFormat,
@@ -13,33 +12,29 @@ function parseExportFormat(value: string | null): ResearchExportFormat {
 }
 
 async function requireResearchExportAccess(request: NextRequest) {
-  try {
-    const { admin } = await requireAdminRequest(request, {
-      roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.AUDITOR],
-    });
+  const { admin } = await requireAdminRequest(request, {
+    roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.AUDITOR],
+  });
 
-    return {
-      actorType: 'ADMIN' as const,
-      actorId: admin.id,
-      actorRole: admin.role,
-    };
-  } catch {
-    const { user, doctorProfile } = await requireApprovedDoctorUser(request);
-
-    return {
-      actorType: 'DOCTOR' as const,
-      actorId: user.id,
-      doctorProfileId: doctorProfile.id,
-      actorRole: 'APPROVED_DOCTOR',
-    };
-  }
+  return {
+    actorType: 'ADMIN' as const,
+    actorId: admin.id,
+    adminId: admin.id,
+    actorRole: admin.role,
+  };
 }
 
 export async function GET(request: NextRequest) {
   try {
-    await requireResearchExportAccess(request);
+    const actor = await requireResearchExportAccess(request);
     const format = parseExportFormat(request.nextUrl.searchParams.get('format'));
-    const dataset = await exportResearchDataset({ format });
+    const purpose = request.nextUrl.searchParams.get('purpose') || 'research-derived-dataset-export';
+    const dataset = await exportResearchDataset({
+      format,
+      actor,
+      purpose,
+      persistBatch: true,
+    });
 
     return new NextResponse(dataset.content, {
       status: 200,

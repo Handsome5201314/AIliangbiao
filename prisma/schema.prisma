@@ -103,6 +103,10 @@ enum AuditTargetType {
   MEMBER_PROFILE
   KNOWLEDGE_DOC
   QUESTION_EXPLANATION
+  EDUCATION_CONTENT
+  EDUCATION_DELIVERY
+  FOLLOWUP_TASK
+  REMINDER_LOG
   AGENT_SESSION
   ORGANIZATION
   HERMES_PROFILE
@@ -152,6 +156,96 @@ enum DoctorNeonateBilirubinContext {
   PHOTOTHERAPY
 }
 
+enum ScaleLicenseStatus {
+  UNKNOWN
+  INTERNAL_REVIEW
+  AUTHORIZED_INTERNAL
+  AUTHORIZED_COMMERCIAL
+  RESTRICTED
+  EXPIRED
+}
+
+enum DoctorReviewStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  NEEDS_MORE_INFO
+  SUPERSEDED
+}
+
+enum AssessmentReportStatus {
+  DRAFT
+  PENDING_DOCTOR_REVIEW
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum ReportTemplateStatus {
+  ACTIVE
+  DISABLED
+  ARCHIVED
+}
+
+enum EducationDeliveryStatus {
+  PENDING
+  DELIVERED
+  READ
+  CONFIRMED
+  CANCELLED
+}
+
+enum FollowUpTaskType {
+  ONE_MONTH
+  THREE_MONTH
+  CUSTOM
+}
+
+enum FollowUpTaskStatus {
+  PENDING
+  REMINDED
+  COMPLETED
+  CANCELLED
+  LOST_TO_FOLLOWUP
+}
+
+enum ReminderChannel {
+  MANUAL_PHONE
+  MANUAL_WECHAT
+  IN_PERSON
+  OTHER
+}
+
+enum ReminderStatus {
+  RECORDED
+  ACKNOWLEDGED
+  FAILED
+}
+
+enum ResearchImportBatchStatus {
+  DRAFT
+  VALIDATED
+  IMPORTED
+  FAILED
+  CANCELLED
+}
+
+enum AiDecisionType {
+  QUESTION_EXPLANATION
+  ANSWER_MAPPING
+  LOW_CONFIDENCE_CONFIRMATION
+  PARENT_EXPLANATION
+  DOCTOR_SUMMARY
+  EDUCATION_MATCH
+  SAFETY_REVIEW
+}
+
+enum McpToolCallStatus {
+  SUCCESS
+  ERROR
+}
+
 model User {
   id                      String               @id @default(cuid())
   role                    UserRole             @default(GUEST)
@@ -186,6 +280,9 @@ model User {
   assignedCareAssignments CareAssignment[]     @relation("CareAssignmentAssignedByPatient")
   researchConsentsGranted ResearchConsent[]    @relation("ResearchConsentGrantedByPatient")
   researchExportsRequested ResearchExportLog[] @relation("ResearchExportRequestedByUser")
+  researchImportBatchesRequested ResearchImportBatch[] @relation("ResearchImportBatchRequestedByUser")
+  aiDecisionLogs         AiDecisionLog[]
+  mcpToolLogs            McpToolLog[]
   @@index([role])
   @@index([accountType])
 }
@@ -243,6 +340,12 @@ model MemberProfile {
   reportViews        ReportView[]
   outcome3mRecords   Outcome3m[]
   inpatientRecords   InpatientRecord[]
+  doctorReviews      DoctorReview[]
+  assessmentReports  AssessmentReport[]
+  educationDeliveries EducationDelivery[]
+  followUpTasks      FollowUpTask[]
+  reminderLogs       ReminderLog[]
+  aiDecisionLogs     AiDecisionLog[]
 
   @@index([userId, relation])
   @@index([contactPhone])
@@ -297,6 +400,13 @@ model AssessmentHistory {
   followUps           FollowUp[]
   aiInteractions      AiInteraction[]
   reportViews         ReportView[]
+  doctorReviews       DoctorReview[]
+  assessmentReports   AssessmentReport[]
+  educationDeliveries EducationDelivery[]
+  baselineFollowUpTasks FollowUpTask[] @relation("FollowUpTaskBaselineHistory")
+  completedFollowUpTasks FollowUpTask[] @relation("FollowUpTaskCompletedHistory")
+  aiDecisionLogs      AiDecisionLog[]
+  mcpToolLogs         McpToolLog[]
 
   @@index([userId, createdAt])
   @@index([profileId, createdAt])
@@ -331,6 +441,13 @@ model AssessmentSession {
   aiInteractions      AiInteraction[]
   reportViews         ReportView[]
   outcome3mRecords    Outcome3m[]
+  doctorReviews       DoctorReview[]
+  assessmentReports   AssessmentReport[]
+  educationDeliveries EducationDelivery[]
+  baselineFollowUpTasks FollowUpTask[] @relation("FollowUpTaskBaselineSession")
+  completedFollowUpTasks FollowUpTask[] @relation("FollowUpTaskCompletedSession")
+  aiDecisionLogs      AiDecisionLog[]
+  mcpToolLogs         McpToolLog[]
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   completedAt         DateTime?
@@ -409,6 +526,15 @@ model DoctorProfile {
   aiInteractions     AiInteraction[]
   reportViews        ReportView[]
   inpatientRecords   InpatientRecord[]
+  doctorReviews      DoctorReview[]
+  approvedReports    AssessmentReport[] @relation("AssessmentReportApprovedByDoctor")
+  reportTemplates    ReportTemplate[] @relation("ReportTemplateCreatedByDoctor")
+  educationContents  EducationContent[] @relation("EducationContentCreatedByDoctor")
+  educationDeliveries EducationDelivery[]
+  followUpTasks      FollowUpTask[] @relation("FollowUpTaskCreatedByDoctor")
+  reminderLogs       ReminderLog[]
+  researchImportBatches ResearchImportBatch[] @relation("ResearchImportBatchUploadedByDoctor")
+  aiDecisionLogs     AiDecisionLog[]
   neonateArchives    DoctorNeonateArchive[]
   careTeamMemberships CareTeamMembership[]
   grantedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessGrantedByDoctor")
@@ -473,6 +599,7 @@ model KnowledgeDoc {
 
   chunks               KnowledgeChunk[]
   questionExplanations QuestionExplanation[]
+  educationContents    EducationContent[]
 
   @@index([scopeType, status, language, createdAt])
   @@index([organizationId, doctorProfileId, status])
@@ -779,19 +906,32 @@ model ResearchConsent {
 
 model ResearchExportLog {
   id                String               @id @default(cuid())
-  memberProfileId   String
-  memberProfile     MemberProfile        @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
-  doctorProfileId   String
-  doctorProfile     DoctorProfile        @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  requestedByUserId String
-  requestedByUser   User                 @relation("ResearchExportRequestedByUser", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  memberProfileId   String?
+  memberProfile     MemberProfile?       @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  doctorProfileId   String?
+  doctorProfile     DoctorProfile?       @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  requestedByUserId String?
+  requestedByUser   User?                @relation("ResearchExportRequestedByUser", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  requestedByAdminId String?
+  requestedByAdmin   Admin?              @relation("ResearchExportRequestedByAdmin", fields: [requestedByAdminId], references: [id], onDelete: SetNull)
+  actorType         String               @default("DOCTOR")
   format            ResearchExportFormat @default(CSV)
   purpose           String
+  exportBatchKey    String?              @unique
+  datasetVersion    String               @default("research-derived-v1")
+  fieldSetVersion   String               @default("2026.06.phase7")
+  recordCount       Int                  @default(0)
   exportedFields    Json
+  tables            Json?
+  qualitySummary    Json?
   createdAt         DateTime             @default(now())
+
+  derivedDataset    ResearchDerivedDataset?
 
   @@index([memberProfileId, createdAt])
   @@index([doctorProfileId, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([requestedByAdminId, createdAt])
 }
 
 model ChildBaseline {
@@ -953,6 +1093,362 @@ model InpatientRecord {
   @@map("inpatient_record")
 }
 
+model ScaleLicenseMetadata {
+  id                String             @id @default(cuid())
+  scaleId           String
+  scaleVersion      String             @default("1.0")
+  licenseStatus     ScaleLicenseStatus @default(UNKNOWN)
+  usageScope        String             @default("internal_research_trial")
+  commercialEnabled Boolean            @default(false)
+  sourceName        String?
+  sourceUrl         String?
+  copyrightNotice   String?
+  licenseNotes      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([scaleId, scaleVersion])
+  @@index([licenseStatus])
+  @@index([commercialEnabled])
+  @@map("scale_license_metadata")
+}
+
+model DoctorReview {
+  id                  String             @id @default(cuid())
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  memberProfileId     String?
+  memberProfile       MemberProfile?     @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  doctorProfileId     String
+  doctorProfile       DoctorProfile      @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  status              DoctorReviewStatus @default(PENDING)
+  reviewConclusion    String?
+  reviewNotes         String?
+  allowParentVisible  Boolean            @default(false)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  durationSeconds     Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  reports             AssessmentReport[]
+
+  @@index([status, createdAt])
+  @@index([doctorProfileId, status, createdAt])
+  @@index([memberProfileId, createdAt])
+  @@index([assessmentHistoryId])
+  @@index([assessmentSessionId])
+  @@map("doctor_review")
+}
+
+model ReportTemplate {
+  id                       String               @id @default(cuid())
+  name                     String
+  templateVersion          String               @default("1.0")
+  hospitalName             String               @default("解放军总医院第一医学中心")
+  departmentName           String?
+  logoUrl                  String?
+  doctorSignatureConfig    Json?
+  scaleIds                 Json
+  status                   ReportTemplateStatus @default(ACTIVE)
+  isDefault                Boolean              @default(false)
+  createdByDoctorProfileId String?
+  createdByDoctorProfile   DoctorProfile?       @relation("ReportTemplateCreatedByDoctor", fields: [createdByDoctorProfileId], references: [id], onDelete: SetNull)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  reports                  AssessmentReport[]
+
+  @@index([status, isDefault])
+  @@index([createdByDoctorProfileId])
+  @@map("report_template")
+}
+
+model AssessmentReport {
+  id                        String                 @id @default(cuid())
+  reportNo                  String                 @unique
+  assessmentSessionId       String?
+  assessmentSession         AssessmentSession?     @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  assessmentHistoryId       String?
+  assessmentHistory         AssessmentHistory?     @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  memberProfileId           String?
+  memberProfile             MemberProfile?         @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  doctorReviewId            String
+  doctorReview              DoctorReview           @relation(fields: [doctorReviewId], references: [id], onDelete: Restrict)
+  templateId                String
+  template                  ReportTemplate         @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  scaleId                   String
+  reportStatus              AssessmentReportStatus @default(DRAFT)
+  reportSnapshot            Json
+  parentVisible             Boolean                @default(false)
+  pdfUrl                    String?
+  approvedByDoctorProfileId String?
+  approvedByDoctorProfile   DoctorProfile?         @relation("AssessmentReportApprovedByDoctor", fields: [approvedByDoctorProfileId], references: [id], onDelete: SetNull)
+  approvedAt                DateTime?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+
+  educationDeliveries       EducationDelivery[]
+
+  @@index([memberProfileId, createdAt])
+  @@index([doctorReviewId])
+  @@index([templateId])
+  @@index([reportStatus, createdAt])
+  @@index([approvedByDoctorProfileId, approvedAt])
+  @@map("assessment_report")
+}
+
+model EducationContent {
+  id                       String                @id @default(cuid())
+  title                    String
+  contentMd                String
+  summary                  String?
+  status                   KnowledgeReviewStatus @default(DRAFT)
+  scaleId                  String?
+  dimensionKey             String?
+  riskLevel                String?
+  audience                 String                @default("caregiver")
+  sourceDocId              String?
+  sourceDoc                KnowledgeDoc?         @relation(fields: [sourceDocId], references: [id], onDelete: SetNull)
+  createdByDoctorProfileId String?
+  createdByDoctorProfile   DoctorProfile?        @relation("EducationContentCreatedByDoctor", fields: [createdByDoctorProfileId], references: [id], onDelete: SetNull)
+  reviewedByAdminId        String?
+  reviewedAt               DateTime?
+  reviewComment            String?
+  metadata                 Json?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  deliveries               EducationDelivery[]
+
+  @@index([status, scaleId])
+  @@index([sourceDocId])
+  @@index([createdByDoctorProfileId])
+  @@index([reviewedByAdminId, reviewedAt])
+  @@map("education_content")
+}
+
+model EducationDelivery {
+  id                  String                  @id @default(cuid())
+  educationContentId  String
+  educationContent    EducationContent        @relation(fields: [educationContentId], references: [id], onDelete: Cascade)
+  memberProfileId     String?
+  memberProfile       MemberProfile?          @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentReportId  String?
+  assessmentReport    AssessmentReport?       @relation(fields: [assessmentReportId], references: [id], onDelete: SetNull)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory?      @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession?      @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  doctorProfileId     String?
+  doctorProfile       DoctorProfile?          @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  deliveryStatus      EducationDeliveryStatus @default(PENDING)
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  confirmedAt         DateTime?
+  metadata            Json?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([memberProfileId, deliveryStatus, createdAt])
+  @@index([educationContentId, createdAt])
+  @@index([assessmentReportId])
+  @@index([doctorProfileId, createdAt])
+  @@map("education_delivery")
+}
+
+model FollowUpTask {
+  id                           String             @id @default(cuid())
+  memberProfileId              String
+  memberProfile                MemberProfile      @relation(fields: [memberProfileId], references: [id], onDelete: Cascade)
+  baselineAssessmentHistoryId  String?
+  baselineAssessmentHistory    AssessmentHistory? @relation("FollowUpTaskBaselineHistory", fields: [baselineAssessmentHistoryId], references: [id], onDelete: SetNull)
+  baselineAssessmentSessionId  String?
+  baselineAssessmentSession    AssessmentSession? @relation("FollowUpTaskBaselineSession", fields: [baselineAssessmentSessionId], references: [id], onDelete: SetNull)
+  scaleId                      String
+  taskType                     FollowUpTaskType
+  dueDate                      DateTime
+  windowStartAt                DateTime
+  windowEndAt                  DateTime
+  status                       FollowUpTaskStatus @default(PENDING)
+  completedAssessmentHistoryId String?
+  completedAssessmentHistory   AssessmentHistory? @relation("FollowUpTaskCompletedHistory", fields: [completedAssessmentHistoryId], references: [id], onDelete: SetNull)
+  completedAssessmentSessionId String?
+  completedAssessmentSession   AssessmentSession? @relation("FollowUpTaskCompletedSession", fields: [completedAssessmentSessionId], references: [id], onDelete: SetNull)
+  lostToFollowupReason         String?
+  createdByDoctorProfileId     String?
+  createdByDoctorProfile       DoctorProfile?     @relation("FollowUpTaskCreatedByDoctor", fields: [createdByDoctorProfileId], references: [id], onDelete: SetNull)
+  createdAt                    DateTime           @default(now())
+  updatedAt                    DateTime           @updatedAt
+
+  reminderLogs                 ReminderLog[]
+
+  @@index([memberProfileId, status, dueDate])
+  @@index([taskType, dueDate])
+  @@index([baselineAssessmentHistoryId])
+  @@index([completedAssessmentHistoryId])
+  @@index([createdByDoctorProfileId])
+  @@map("followup_task")
+}
+
+model ReminderLog {
+  id              String          @id @default(cuid())
+  followUpTaskId  String
+  followUpTask    FollowUpTask    @relation(fields: [followUpTaskId], references: [id], onDelete: Cascade)
+  memberProfileId String?
+  memberProfile   MemberProfile?  @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  doctorProfileId String?
+  doctorProfile   DoctorProfile?  @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  reminderChannel ReminderChannel @default(MANUAL_PHONE)
+  status          ReminderStatus  @default(RECORDED)
+  messageSummary  String?
+  recordedAt      DateTime        @default(now())
+  metadata        Json?
+
+  @@index([followUpTaskId, recordedAt])
+  @@index([memberProfileId, recordedAt])
+  @@index([doctorProfileId, recordedAt])
+  @@map("reminder_log")
+}
+
+model ResearchImportBatch {
+  id                        String                    @id @default(cuid())
+  uploadedByDoctorProfileId String?
+  uploadedByDoctorProfile   DoctorProfile?           @relation("ResearchImportBatchUploadedByDoctor", fields: [uploadedByDoctorProfileId], references: [id], onDelete: SetNull)
+  requestedByUserId         String?
+  requestedByUser           User?                    @relation("ResearchImportBatchRequestedByUser", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  sourceName                String
+  status                    ResearchImportBatchStatus @default(DRAFT)
+  fieldMapping              Json
+  qualitySummary            Json?
+  importedRowCount          Int                       @default(0)
+  errorSummary              Json?
+  completedAt               DateTime?
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+
+  rows                      ResearchImportRow[]
+  fieldMappings             ResearchFieldMapping[]
+
+  @@index([status, createdAt])
+  @@index([uploadedByDoctorProfileId, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@map("research_import_batch")
+}
+
+model ResearchImportRow {
+  id                String              @id @default(cuid())
+  batchId           String
+  batch             ResearchImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber         Int
+  sourceRowHash     String
+  researchSubjectId String?
+  rawData           Json
+  normalizedData    Json
+  qualityFlags      Json
+  importStatus      String              @default("VALIDATED")
+  createdAt         DateTime            @default(now())
+
+  @@unique([batchId, rowNumber])
+  @@index([researchSubjectId])
+  @@index([sourceRowHash])
+  @@map("research_import_row")
+}
+
+model ResearchFieldMapping {
+  id             String              @id @default(cuid())
+  batchId        String
+  batch          ResearchImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sourceField    String
+  canonicalField String
+  required       Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+
+  @@unique([batchId, sourceField])
+  @@index([canonicalField])
+  @@map("research_field_mapping")
+}
+
+model ResearchDerivedDataset {
+  id                String             @id @default(cuid())
+  exportLogId       String?            @unique
+  exportLog         ResearchExportLog? @relation(fields: [exportLogId], references: [id], onDelete: SetNull)
+  datasetVersion    String             @default("research-derived-v1")
+  fieldSetVersion   String             @default("2026.06.phase7")
+  rowCount          Int                @default(0)
+  primaryOutcome    Json
+  secondaryOutcomes Json
+  qualitySummary    Json?
+  rowsSnapshot      Json
+  contentHash       String
+  createdAt         DateTime           @default(now())
+
+  @@index([datasetVersion, createdAt])
+  @@index([contentHash])
+  @@map("research_derived_dataset")
+}
+
+model AiDecisionLog {
+  id                  String             @id @default(cuid())
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberProfileId     String?
+  memberProfile       MemberProfile?     @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  doctorProfileId     String?
+  doctorProfile       DoctorProfile?     @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  decisionType        AiDecisionType
+  modelName           String?
+  promptHash          String?
+  inputSummary        String?
+  outputSummary       String?
+  confidence          Float?
+  fallbackReason      String?
+  reviewRequired      Boolean            @default(true)
+  toolCalls           Json?
+  metadata            Json?
+  createdAt           DateTime           @default(now())
+
+  @@index([decisionType, createdAt])
+  @@index([memberProfileId, createdAt])
+  @@index([assessmentSessionId, createdAt])
+  @@index([doctorProfileId, createdAt])
+  @@map("ai_decision_log")
+}
+
+model McpToolLog {
+  id                  String             @id @default(cuid())
+  apiKeyId            String?
+  apiKey              ApiKey?            @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  toolName            String
+  requestId           String?
+  argumentsSummary    Json?
+  resultSummary       Json?
+  status              McpToolCallStatus  @default(SUCCESS)
+  success             Boolean            @default(false)
+  errorCode           String?
+  latencyMs           Int?
+  entrypoint          String             @default("canonical")
+  createdAt           DateTime           @default(now())
+
+  @@index([toolName, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([assessmentSessionId, createdAt])
+  @@index([status, createdAt])
+  @@map("mcp_tool_log")
+}
+
 model McpLog {
   id            String    @id @default(cuid())
   userId        String?
@@ -1015,6 +1511,7 @@ model Admin {
   updatedAt       DateTime        @updatedAt
   reviewedDoctors DoctorProfile[] @relation("DoctorApprovedByAdmin")
   createdCareTeams CareTeam[]     @relation("CareTeamCreatedByAdmin")
+  researchExportsRequested ResearchExportLog[] @relation("ResearchExportRequestedByAdmin")
 }
 
 model ApiKey {
@@ -1036,6 +1533,8 @@ model ApiKey {
   usageCount       Int       @default(0)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  mcpToolLogs      McpToolLog[]
 
   @@index([purpose, isActive])
   @@index([provider, isActive])

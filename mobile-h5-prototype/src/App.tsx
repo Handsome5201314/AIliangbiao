@@ -154,9 +154,13 @@ function AppInner() {
       try {
         const promises: Promise<any>[] = []
         if (auth.isPatient) {
-          promises.push(getChildren(auth.authHeaders), getScales(), getHistory(undefined, auth.authHeaders))
+          promises.push(
+            getChildren(auth.authHeaders),
+            getScales({ audience: auth.isDoctor && !auth.isPatient ? 'doctor' : 'parent_self' }),
+            getHistory(undefined, auth.authHeaders),
+          )
         } else {
-          promises.push(Promise.resolve([]), getScales(), Promise.resolve([]))
+          promises.push(Promise.resolve([]), getScales({ audience: 'doctor' }), Promise.resolve([]))
         }
         if (auth.isDoctor) {
           promises.push(
@@ -340,6 +344,9 @@ function AppInner() {
 
   const handleSwitchMode = useCallback((mode: 'patient' | 'doctor') => {
     setAppMode(mode)
+    getScales({ audience: mode === 'doctor' ? 'doctor' : 'parent_self' })
+      .then(setScales)
+      .catch((error) => console.error('Load scales failed:', error))
     if (mode === 'patient') {
       navigate('home')
     } else {
@@ -733,6 +740,7 @@ function AppInner() {
         questionNumber={aiQuestionNumber}
         questionText={aiQuestionText}
         questionId={aiQuestionId}
+        scaleId={selectedScale?.id || ''}
         mode={currentScreen === 'doctor-assisted-runner' ? 'doctor_assisted' : 'parent_self'}
       />
     </div>

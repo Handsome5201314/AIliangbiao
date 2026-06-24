@@ -17,6 +17,10 @@ type AnswerDetailValue = {
   estimated?: boolean;
   selectedSymptomIds?: string[];
   primarySymptomId?: string;
+  confidence?: number;
+  evidence?: string;
+  source?: 'manual' | 'ai_mapped' | 'user_confirmed_mapping';
+  confirmedLowConfidence?: boolean;
 };
 
 type AnswerDetailMap = Record<number, AnswerDetailValue>;
@@ -291,23 +295,62 @@ export default function AssessmentHandoffPage() {
     })
     .map((question) => question.id);
 
+  const persistDraft = useCallback(async (
+    nextAnswers: AnswerValue[],
+    nextAnswerDetails: AnswerDetailMap = answerDetails
+  ) => {
+    if (!payload || !token || payload.session.status === 'COMPLETED') {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/assessment/handoff/${token}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          answers: nextAnswers,
+          answerDetails: nextAnswerDetails,
+        }),
+      });
+      const nextPayload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(nextPayload.error || copy.unavailableTitle);
+      }
+    } catch (draftError) {
+      setValidationError(
+        draftError instanceof Error ? draftError.message : copy.unavailableTitle
+      );
+    }
+  }, [answerDetails, copy.unavailableTitle, payload, token]);
+
   const handleAnswer = useCallback((questionIndex: number, score: number) => {
     const question = questionList[questionIndex];
     const requiresSymptoms =
       Boolean(question.symptomOptions?.length) &&
       score > getMinimumOptionScore(question);
 
-    setAnswers((previous) =>
-      previous.map((answer, index) => (index === questionIndex ? score : answer))
-    );
+    setAnswers((previous) => {
+      const nextAnswers = previous.map((answer, index) =>
+        index === questionIndex ? score : answer
+      );
+      void persistDraft(nextAnswers);
+      return nextAnswers;
+    });
     setValidationError('');
 
     setAnswerDetails((previous) => {
       if (requiresSymptoms) {
-        return {
+        const nextAnswerDetails = {
           ...previous,
           [question.id]: previous[question.id] || createEmptyAnswerDetail(),
         };
+        void persistDraft(answers.map((answer, index) =>
+          index === questionIndex ? score : answer
+        ), nextAnswerDetails);
+        return nextAnswerDetails;
       }
 
       if (!(question.id in previous)) {
@@ -316,7 +359,7 @@ export default function AssessmentHandoffPage() {
 
       const existing = previous[question.id];
       if (existing?.estimated) {
-        return {
+        const nextAnswerDetails = {
           ...previous,
           [question.id]: {
             estimated: true,
@@ -324,17 +367,24 @@ export default function AssessmentHandoffPage() {
             primarySymptomId: undefined,
           },
         };
+        void persistDraft(answers.map((answer, index) =>
+          index === questionIndex ? score : answer
+        ), nextAnswerDetails);
+        return nextAnswerDetails;
       }
 
       const { [question.id]: _removed, ...rest } = previous;
+      void persistDraft(answers.map((answer, index) =>
+        index === questionIndex ? score : answer
+      ), rest);
       return rest;
     });
-  }, [questionList]);
+  }, [answers, persistDraft, questionList]);
 
   const toggleEstimated = useCallback((questionId: number) => {
     setAnswerDetails((previous) => {
       const current = previous[questionId] || createEmptyAnswerDetail();
-      return {
+      const nextAnswerDetails = {
         ...previous,
         [questionId]: {
           ...current,
@@ -342,8 +392,10 @@ export default function AssessmentHandoffPage() {
           selectedSymptomIds: current.selectedSymptomIds || [],
         },
       };
+      void persistDraft(answers, nextAnswerDetails);
+      return nextAnswerDetails;
     });
-  }, []);
+  }, [answers, persistDraft]);
 
   const toggleSymptomSelection = useCallback((questionId: number, symptomId: string) => {
     setValidationError('');
@@ -354,7 +406,7 @@ export default function AssessmentHandoffPage() {
 
       if (exists) {
         const nextSelected = selectedSymptomIds.filter((item) => item !== symptomId);
-        return {
+        const nextAnswerDetails = {
           ...previous,
           [questionId]: {
             ...current,
@@ -363,10 +415,12 @@ export default function AssessmentHandoffPage() {
               current.primarySymptomId === symptomId ? nextSelected[0] : current.primarySymptomId,
           },
         };
+        void persistDraft(answers, nextAnswerDetails);
+        return nextAnswerDetails;
       }
 
       const nextSelected = [...selectedSymptomIds, symptomId];
-      return {
+      const nextAnswerDetails = {
         ...previous,
         [questionId]: {
           ...current,
@@ -374,8 +428,10 @@ export default function AssessmentHandoffPage() {
           primarySymptomId: current.primarySymptomId || symptomId,
         },
       };
+      void persistDraft(answers, nextAnswerDetails);
+      return nextAnswerDetails;
     });
-  }, []);
+  }, [answers, persistDraft]);
 
   const setPrimarySymptom = useCallback((questionId: number, symptomId: string) => {
     setAnswerDetails((previous) => {
@@ -385,15 +441,17 @@ export default function AssessmentHandoffPage() {
         return previous;
       }
 
-      return {
+      const nextAnswerDetails = {
         ...previous,
         [questionId]: {
           ...current,
           primarySymptomId: symptomId,
         },
       };
+      void persistDraft(answers, nextAnswerDetails);
+      return nextAnswerDetails;
     });
-  }, []);
+  }, [answers, persistDraft]);
 
   const toggleGroup = useCallback((groupKey: string) => {
     setCollapsedGroups((previous) => ({

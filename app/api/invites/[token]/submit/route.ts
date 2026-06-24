@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { submitDoctorScaleInvite } from '@/lib/services/doctor-invites';
-import { getSerializableScaleById, isRespondentResultVisible, resolveScaleResultDeliveryMode } from '@/lib/scales/catalog';
+import { getSerializableScaleById, resolveScaleResultDeliveryMode } from '@/lib/scales/catalog';
 
 const requestSchema = z.object({
   deviceId: z.string().min(1),
@@ -34,15 +34,14 @@ export async function POST(
       answers: body.answers,
     });
     const scale = getSerializableScaleById(result.invite.scaleId);
-    const resultVisibleToRespondent = scale ? isRespondentResultVisible(scale) : true;
     const resultDeliveryMode = scale ? resolveScaleResultDeliveryMode(scale) : 'immediate';
 
     return NextResponse.json({
       success: true,
       ...result,
       resultDeliveryMode,
-      resultVisibleToRespondent,
-      result: resultVisibleToRespondent ? result.result : null,
+      resultVisibleToRespondent: false,
+      result: null,
     });
   } catch (error) {
     const status = error instanceof z.ZodError ? 400 : 500;

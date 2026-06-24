@@ -57,6 +57,13 @@
 - 高风险/敏感项：即使置信度足够，也应保留医生复核标记。
 - AI 映射只能给出建议，最终保存的是用户确认后的结构化答案。
 
+Phase 2 落地约束：
+
+- `/api/scales/analyze-conversation` 返回 `needsConfirmation` 和 `requiresExplicitSelection`，低置信度候选不会进入自动 `answers` 数组。
+- MCP `map_natural_language_answer` 只做选项/别名/映射提示内的候选匹配，不能生成最终分数或风险等级。
+- MCP `confirm_mapped_answer` 和 Skill `POST /v1/scales/:scaleId/mapped-answers/confirm` 只返回用户确认后的结构化题级答案，最终总分仍必须由 `evaluateScaleAnswers` 计算。
+- 旧 `/api/assessment/save` 即使收到客户端 `totalScore` 或 `conclusion`，也必须忽略并用确定性计分结果入库。
+
 ## 黑盒规避
 
 AI 输出必须可追溯到以下来源之一：
@@ -68,4 +75,3 @@ AI 输出必须可追溯到以下来源之一：
 - 确定性计分结果。
 
 不能出现“AI 根据综合判断得出风险等级”这类不可审计结论。
-

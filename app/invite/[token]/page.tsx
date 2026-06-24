@@ -38,11 +38,6 @@ type InvitePayload = {
 };
 
 type SubmitResult = {
-  result: {
-    totalScore: number;
-    conclusion: string;
-    details?: Record<string, unknown>;
-  } | null;
   resultDeliveryMode?: string;
   resultVisibleToRespondent?: boolean;
   nextAction: 'login' | 'register' | 'none';
@@ -199,7 +194,6 @@ export default function PublicInvitePage() {
       }
 
       setSubmitResult({
-        result: data.result,
         resultDeliveryMode: data.resultDeliveryMode,
         resultVisibleToRespondent: data.resultVisibleToRespondent,
         nextAction: data.nextAction,
@@ -453,15 +447,11 @@ export default function PublicInvitePage() {
               <div className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
                 量表已提交，等待医师审核评估结果。
               </div>
-            ) : null}
-
-            {!physicianReviewMode && submitResult.result ? (
-            <div className="mt-6 rounded-3xl bg-slate-50 p-5">
-              <div className="text-sm text-slate-500">结论</div>
-              <div className="mt-2 text-xl font-semibold text-slate-900">{submitResult.result?.conclusion}</div>
-              <div className="mt-2 text-sm text-slate-600">总分：{submitResult.result.totalScore}</div>
-            </div>
-            ) : null}
+            ) : (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                公开邀请链接只用于提交复测。正式报告需要登录并通过复核/二次校验后查看。
+              </div>
+            )}
 
             <div className="mt-6 flex flex-wrap gap-3">
               {submitResult.nextAction === 'login' && (

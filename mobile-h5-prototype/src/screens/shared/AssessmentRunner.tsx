@@ -12,7 +12,13 @@ import ProgressBar from './ProgressBar';
 import QuestionCard from './QuestionCard';
 import OptionButton from './OptionButton';
 import AutoSaveIndicator from './AutoSaveIndicator';
-import { autoSaveLocal, autoSaveServer } from '@/services/assessmentService';
+import {
+  autoSaveLocal,
+  autoSaveServer,
+  clearLocalDraft,
+  loadLatestLocalDraftForScale,
+  loadLocalDraft,
+} from '@/services/assessmentService';
 import type {
   AssessmentMode,
   Question,
@@ -31,7 +37,7 @@ export interface AssessmentRunnerProps {
   questions: Question[];
   scale: Scale;
   patientInfo: { name: string; ageLabel: string };
-  onComplete: (answers: Record<string, Answer>) => void;
+  onComplete: (answers: Record<string, Answer>) => void | Promise<void>;
   onBack: () => void;
   showAi?: boolean;
   onOpenAi?: () => void;
@@ -73,8 +79,29 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
 
   // Generate a stable session id for auto-save
   const [sessionId] = useState(
-    () => `${SESSION_ID_PREFIX}${scale.id}_${Date.now()}`,
+    () => `${SESSION_ID_PREFIX}${scale.id}:${mode}:${patientInfo.name || 'unknown'}`,
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreDraft() {
+      const draft =
+        (await loadLocalDraft(sessionId)) ||
+        (await loadLatestLocalDraftForScale(scale.id));
+
+      if (!cancelled && draft && Object.keys(draft).length > 0) {
+        setAnswers(draft);
+        setSaveStatus('saved-locally');
+      }
+    }
+
+    void restoreDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scale.id, sessionId]);
 
   /* ---------- toast helper ---------- */
   const flashToast = useCallback((msg: string) => {
@@ -142,7 +169,7 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
   }, [answers, currentQuestion, flashToast, persistAnswers]);
 
   /* ---------- navigation ---------- */
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (!currentQuestion) return;
     if (!answers[currentQuestion.id]) {
       flashToast('请先选择一个选项');
@@ -150,11 +177,12 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
     }
     if (isLastQuestion) {
       // submit
-      onComplete(answers);
+      await Promise.resolve(onComplete(answers));
+      await clearLocalDraft(sessionId, scale.id);
     } else {
       setCurrentIndex((i) => i + 1);
     }
-  }, [answers, currentQuestion, flashToast, isLastQuestion, onComplete]);
+  }, [answers, currentQuestion, flashToast, isLastQuestion, onComplete, scale.id, sessionId]);
 
   const handlePrev = useCallback(() => {
     if (currentIndex === 0) {

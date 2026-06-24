@@ -1,12 +1,14 @@
 import { prisma } from '@/lib/db/prisma';
 import {
   createAssessmentSessionForDevice,
+  confirmMappedScaleAnswer,
   evaluateSkillScale,
   generateAssessmentLinkForDevice,
   getAssessmentSessionForDevice,
   getAssessmentSessionResultForDevice,
   getSkillScale,
   listSkillScales,
+  mapNaturalLanguageScaleAnswer,
   pauseAssessmentSessionForDevice,
   resumeAssessmentSessionForDevice,
   submitAssessmentAnswerForDevice,
@@ -58,6 +60,109 @@ const symptomKeywords: Record<string, string[]> = {
   SRS: ['社交困难', '同伴关系', '眼神接触', '不合群'],
   'SNAP-IV': ['注意力', '多动', '坐不住', '冲动'],
 };
+
+const listSupportedScalesTool = {
+  name: 'list_supported_scales',
+  description: '列出可用儿童临床量表，包含授权与结果交付状态投影',
+  inputSchema: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+} as const;
+
+const getScaleSchemaTool = {
+  name: 'get_scale_schema',
+  description: '获取指定量表 schema、题目版本、语言和授权状态',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      scaleId: {
+        type: 'string',
+        description: '量表 ID',
+      },
+    },
+    required: ['scaleId'],
+  },
+} as const;
+
+const mapNaturalLanguageAnswerTool = {
+  name: 'map_natural_language_answer',
+  description: '将自然语言答案映射为候选分值；低置信度必须确认后才能提交',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      scaleId: {
+        type: 'string',
+        description: '量表 ID',
+      },
+      questionId: {
+        type: 'number',
+        description: '题目 ID',
+      },
+      text: {
+        type: 'string',
+        description: '用户自然语言回答',
+      },
+      language: {
+        type: 'string',
+        description: '语言，可选 zh/en',
+      },
+    },
+    required: ['scaleId', 'questionId', 'text'],
+  },
+} as const;
+
+const confirmMappedAnswerTool = {
+  name: 'confirm_mapped_answer',
+  description: '确认自然语言映射候选，返回可提交的结构化答案',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      scaleId: {
+        type: 'string',
+        description: '量表 ID',
+      },
+      questionId: {
+        type: 'number',
+        description: '题目 ID',
+      },
+      score: {
+        type: 'number',
+        description: '用户确认的分值',
+      },
+      confidence: {
+        type: 'number',
+        description: '原映射置信度，可选',
+      },
+      evidence: {
+        type: 'string',
+        description: '原映射证据，可选',
+      },
+    },
+    required: ['scaleId', 'questionId', 'score'],
+  },
+} as const;
+
+const scoreAssessmentTool = {
+  name: 'score_assessment',
+  description: '只使用本地确定性评分引擎计算量表结果，不持久化',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      scaleId: {
+        type: 'string',
+        description: '量表 ID',
+      },
+      answers: {
+        type: 'array',
+        items: { type: 'number' },
+        description: '按题目顺序排列的答案分值',
+      },
+    },
+    required: ['scaleId', 'answers'],
+  },
+} as const;
 
 const recommendScaleTool = {
   name: 'recommend_scale',
@@ -361,6 +466,11 @@ const submitAssessmentTool = {
 } as const;
 
 export const canonicalScaleTools = [
+  listSupportedScalesTool,
+  getScaleSchemaTool,
+  mapNaturalLanguageAnswerTool,
+  confirmMappedAnswerTool,
+  scoreAssessmentTool,
   recommendAssessmentTool,
   recommendScaleTool,
   getScaleQuestionsTool,
@@ -467,12 +577,118 @@ async function listScales() {
     category: scale.category,
     source: scale.source || 'builtin',
     tags: scale.tags || [],
+    status: scale.status || 'active',
+    licenseStatus: 'UNKNOWN',
+    commercialEnabled: false,
+    resultDeliveryMode: resolveScaleResultDeliveryMode(scale),
+    resultVisibleToRespondent: isRespondentResultVisible(scale),
   }));
 
   return {
     success: true,
     totalCount: scales.length,
     scales,
+  };
+}
+
+async function getScaleSchema(input: { scaleId: string }) {
+  const scale = getScaleDefinitionById(input.scaleId);
+
+  if (!scale) {
+    const availableScaleIds = listPublicClinicalChildScales().map((item) => item.id).join(', ');
+    return {
+      success: false,
+      error: `量表 ${input.scaleId} 不存在，可用量表：${availableScaleIds}`,
+      statusCode: 404,
+    };
+  }
+
+  return {
+    success: true,
+    scale: {
+      id: scale.id,
+      version: scale.version || '1.0',
+      title: resolveLocalizedText(scale.title, 'zh'),
+      description: resolveLocalizedText(scale.description, 'zh'),
+      questionCount: scale.questions.length,
+      supportedLanguages: scale.supportedLanguages || ['zh'],
+      status: scale.status || 'active',
+      licenseStatus: 'UNKNOWN',
+      commercialEnabled: false,
+      resultDeliveryMode: resolveScaleResultDeliveryMode(scale),
+      resultVisibleToRespondent: isRespondentResultVisible(scale),
+      doctorReviewRequired: resolveScaleResultDeliveryMode(scale) === 'physician_review',
+      questions: scale.questions.map((question) => ({
+        questionId: question.id,
+        question: resolveLocalizedText(question.text, 'zh'),
+        colloquial: resolveLocalizedText(question.colloquial, 'zh'),
+        confirmationPrompt: resolveLocalizedText(question.confirmationPrompt, 'zh'),
+        riskLevel: question.riskLevel || 'normal',
+        options: question.options.map((option) => ({
+          label: option.label,
+          score: option.score,
+          aliases: option.aliases ?? [],
+          description: resolveLocalizedText(option.description, 'zh'),
+        })),
+      })),
+    },
+  };
+}
+
+function validateScoreAnswers(scale: NonNullable<ReturnType<typeof getScaleDefinitionById>>, answers: unknown) {
+  if (!Array.isArray(answers) || answers.length !== scale.questions.length) {
+    return {
+      error: `Expected ${scale.questions.length} answers, received ${Array.isArray(answers) ? answers.length : 0}`,
+      answers: null,
+    };
+  }
+
+  const normalizedAnswers: number[] = [];
+  for (let index = 0; index < answers.length; index += 1) {
+    const score = Number(answers[index]);
+    const question = scale.questions[index];
+    if (!Number.isFinite(score) || !question.options.some((option) => option.score === score)) {
+      return {
+        error: `Score ${answers[index]} is not valid for question ${question.id}`,
+        answers: null,
+      };
+    }
+    normalizedAnswers.push(score);
+  }
+
+  return {
+    error: null,
+    answers: normalizedAnswers,
+  };
+}
+
+async function scoreAssessment(input: { scaleId: string; answers: unknown }) {
+  const scale = getScaleDefinitionById(input.scaleId);
+  if (!scale) {
+    return {
+      success: false,
+      error: `Scale "${input.scaleId}" not found`,
+      statusCode: 404,
+    };
+  }
+
+  const normalized = validateScoreAnswers(scale, input.answers);
+  if (!normalized.answers) {
+    return {
+      success: false,
+      error: normalized.error,
+      statusCode: 400,
+    };
+  }
+
+  const resultVisibleToRespondent = isRespondentResultVisible(scale);
+  const resultDeliveryMode = resolveScaleResultDeliveryMode(scale);
+
+  return {
+    success: true,
+    resultDeliveryMode,
+    resultVisibleToRespondent,
+    result: evaluateScaleAnswers(scale.id, normalized.answers),
   };
 }
 
@@ -609,7 +825,13 @@ export async function handleScaleToolCall(name: string, args: any) {
   try {
     switch (name) {
       case 'list_scales':
+      case 'list_supported_scales':
         return await listScales();
+
+      case 'get_scale_schema':
+        return await getScaleSchema({
+          scaleId: String(args?.scaleId || ''),
+        });
 
       case 'recommend_scale':
       case 'recommend_assessment':
@@ -624,6 +846,36 @@ export async function handleScaleToolCall(name: string, args: any) {
           offset: typeof args?.offset === 'number' ? args.offset : undefined,
           limit: typeof args?.limit === 'number' ? args.limit : undefined,
         });
+
+      case 'map_natural_language_answer': {
+        const mapping = mapNaturalLanguageScaleAnswer({
+          scaleId: String(args?.scaleId || ''),
+          questionId: Number(args?.questionId),
+          text: String(args?.text || ''),
+          language: args?.language === 'en' ? 'en' : 'zh',
+        }).mapping;
+
+        return {
+          success: true,
+          scaleId: String(args?.scaleId || ''),
+          questionId: Number(args?.questionId),
+          mapping,
+          needsConfirmation: mapping.score !== null && mapping.confidence < 0.8,
+          requiresExplicitSelection: mapping.score !== null && mapping.confidence < 0.6,
+        };
+      }
+
+      case 'confirm_mapped_answer':
+        return {
+          success: true,
+          ...confirmMappedScaleAnswer({
+            scaleId: String(args?.scaleId || ''),
+            questionId: Number(args?.questionId),
+            score: Number(args?.score),
+            confidence: typeof args?.confidence === 'number' ? args.confidence : undefined,
+            evidence: typeof args?.evidence === 'string' ? args.evidence : undefined,
+          }),
+        };
 
       case 'create_assessment_session': {
         const session = await createAssessmentSessionForDevice({
@@ -777,34 +1029,22 @@ export async function handleScaleToolCall(name: string, args: any) {
         };
 
       case 'submit_and_evaluate': {
-        const scale = getScaleDefinitionById(String(args?.scaleId || ''));
-        if (!scale) {
-          return {
-            success: false,
-            error: `Scale "${args?.scaleId}" not found`,
-            statusCode: 404,
-          };
-        }
-
-        if (!Array.isArray(args?.answers) || args.answers.length !== scale.questions.length) {
-          return {
-            success: false,
-            error: `Expected ${scale.questions.length} answers, received ${Array.isArray(args?.answers) ? args.answers.length : 0}`,
-            statusCode: 400,
-          };
-        }
-
-        const resultVisibleToRespondent = isRespondentResultVisible(scale);
-        const resultDeliveryMode = resolveScaleResultDeliveryMode(scale);
+        const scored = await scoreAssessment({
+          scaleId: String(args?.scaleId || ''),
+          answers: args?.answers,
+        });
 
         return {
-          success: true,
-          resultDeliveryMode,
-          resultVisibleToRespondent,
-          result: evaluateScaleAnswers(scale.id, args.answers),
+          ...scored,
           legacy: true,
         };
       }
+
+      case 'score_assessment':
+        return await scoreAssessment({
+          scaleId: String(args?.scaleId || ''),
+          answers: args?.answers,
+        });
 
       case 'submit_assessment':
         return await submitAssessmentLegacy({

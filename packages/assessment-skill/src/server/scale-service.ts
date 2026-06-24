@@ -23,6 +23,7 @@ import {
 } from '@/lib/scales/answer-details';
 import { assertAgentCanStartAssessment } from '@/lib/agent/quota';
 import { isAiToyVoiceScale } from '@/lib/services/ai-toy-device-binding';
+import { ensurePendingDoctorReviewForAssessment } from '@/lib/services/doctor-care';
 import {
   resolveFallbackExamples,
   resolveLocalizedText,
@@ -40,13 +41,22 @@ import type {
   ScaleResultDeliveryMode,
   ScaleQuestion,
   ScaleScoreResult,
-  ScaleSymptomOption,
 } from '@/lib/schemas/core/types';
 
 const ASSESSMENT_SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const PUBLIC_HANDOFF_TOKEN_TTL_MS = ASSESSMENT_SESSION_TIMEOUT_MS;
+const LOW_CONFIDENCE_CONFIRMATION_THRESHOLD = 0.8;
 
 type SessionAnswerValue = number | null;
+type PublicScaleAnswerDetailMap = Record<
+  string,
+  ScaleAnswerDetailMap[string] & {
+    confidence?: number;
+    evidence?: string;
+    source?: 'manual' | 'ai_mapped' | 'user_confirmed_mapping';
+    confirmedLowConfidence?: boolean;
+  }
+>;
 
 type SerializedScaleQuestion = {
   id: number;
@@ -119,6 +129,14 @@ type SerializedScaleDefinition = {
 
 type AssessmentSessionRecord = Awaited<ReturnType<typeof getAssessmentSessionRecord>>;
 
+type NaturalLanguageAnswerMapping = {
+  questionId: number;
+  score: number | null;
+  confidence: number;
+  evidence: string;
+  method: 'option_alias' | 'mapping_hint' | 'unmatched';
+};
+
 export class AssessmentSessionServiceError extends Error {
   constructor(
     message: string,
@@ -141,6 +159,17 @@ function resolveScaleInteractionMode(scale: Pick<ScaleDefinition, 'interactionMo
 
 function isWebHandoffScale(scale: Pick<ScaleDefinition, 'interactionMode'>) {
   return resolveScaleInteractionMode(scale) === 'web_handoff';
+}
+
+function isDoctorCreatedPublicHandoff(record: { channel?: string | null }) {
+  return ['doctor_patient_handoff', 'mobile_h5_caregiver_handoff'].includes(record.channel || '');
+}
+
+function canUsePublicHandoffSession(
+  record: { channel?: string | null },
+  scale: Pick<ScaleDefinition, 'interactionMode'>
+) {
+  return isWebHandoffScale(scale) || isDoctorCreatedPublicHandoff(record);
 }
 
 function shouldExposeResultToRespondent(scale: Pick<ScaleDefinition, 'resultDeliveryMode'>) {
@@ -507,13 +536,192 @@ function assertAllAnswersAllowed(scale: ExecutableScaleDefinition, answers: numb
   });
 }
 
+function normalizePartialAnswers(
+  scale: ExecutableScaleDefinition,
+  answers: SessionAnswerValue[]
+): SessionAnswerValue[] {
+  if (answers.length !== scale.questions.length) {
+    throw new AssessmentSessionServiceError(
+      `Expected ${scale.questions.length} answers, received ${answers.length}`,
+      400,
+      'INVALID_ANSWER_COUNT'
+    );
+  }
+
+  return answers.map((score, index) => {
+    if (score === null) {
+      return null;
+    }
+
+    if (typeof score !== 'number' || !Number.isFinite(score)) {
+      throw new AssessmentSessionServiceError(
+        `Score ${score} is not valid for question ${scale.questions[index].id}`,
+        400,
+        'INVALID_SCORE'
+      );
+    }
+
+    const question = scale.questions[index];
+    if (!question.options.some((option) => option.score === score)) {
+      throw new AssessmentSessionServiceError(
+        `Score ${score} is not valid for question ${question.id}`,
+        400,
+        'INVALID_SCORE'
+      );
+    }
+
+    return score;
+  });
+}
+
+function assertConfirmedLowConfidenceAnswers(answerDetails?: PublicScaleAnswerDetailMap) {
+  const unconfirmedQuestionIds = Object.entries(answerDetails || {})
+    .filter(([, detail]) => {
+      const confidence = detail.confidence;
+      return (
+        typeof confidence === 'number' &&
+        Number.isFinite(confidence) &&
+        confidence < LOW_CONFIDENCE_CONFIRMATION_THRESHOLD &&
+        detail.confirmedLowConfidence !== true
+      );
+    })
+    .map(([questionId]) => questionId);
+
+  if (unconfirmedQuestionIds.length > 0) {
+    throw new AssessmentSessionServiceError(
+      '低置信度答案需要家长确认后才能保存',
+      400,
+      'LOW_CONFIDENCE_CONFIRMATION_REQUIRED',
+      { questionIds: unconfirmedQuestionIds }
+    );
+  }
+}
+
+function normalizeMappingText(text: string): string {
+  return text.replace(/\s+/g, '').toLowerCase();
+}
+
+function resolveMappedQuestion(scale: ExecutableScaleDefinition, questionId: number): ScaleQuestion {
+  const question = scale.questions.find((item) => item.id === questionId);
+  if (!question) {
+    throw new AssessmentSessionServiceError('Question not found', 404, 'QUESTION_NOT_FOUND');
+  }
+
+  return question;
+}
+
+function resolveNaturalLanguageAnswerMapping(
+  question: ScaleQuestion,
+  text: string,
+  language: LanguageCode
+): NaturalLanguageAnswerMapping {
+  const normalizedText = normalizeMappingText(text);
+
+  for (const option of question.options) {
+    const optionTexts = [
+      option.label,
+      ...(option.aliases ?? []),
+      resolveLocalizedText(option.description, language),
+    ].filter(Boolean);
+    const matched = optionTexts.find((candidate) => {
+      const normalizedCandidate = normalizeMappingText(String(candidate));
+      return normalizedCandidate.length > 0 && normalizedText.includes(normalizedCandidate);
+    });
+
+    if (matched) {
+      return {
+        questionId: question.id,
+        score: option.score,
+        confidence: 0.92,
+        evidence: String(matched),
+        method: 'option_alias',
+      };
+    }
+  }
+
+  for (const phrase of question.answerMappingHints?.phrases ?? []) {
+    const matchedKeywords = phrase.keywords.filter((keyword) =>
+      normalizedText.includes(normalizeMappingText(keyword))
+    );
+
+    if (matchedKeywords.length > 0) {
+      return {
+        questionId: question.id,
+        score: phrase.score,
+        confidence: Math.min(0.55 + matchedKeywords.length * 0.1, 0.79),
+        evidence: matchedKeywords.join('、'),
+        method: 'mapping_hint',
+      };
+    }
+  }
+
+  return {
+    questionId: question.id,
+    score: null,
+    confidence: 0,
+    evidence: '',
+    method: 'unmatched',
+  };
+}
+
+export function mapNaturalLanguageScaleAnswer(input: {
+  scaleId: string;
+  questionId: number;
+  text: string;
+  language?: LanguageCode;
+}) {
+  const scale = getExecutableScaleOrThrow(input.scaleId);
+  const question = resolveMappedQuestion(scale, input.questionId);
+  const mapping = resolveNaturalLanguageAnswerMapping(question, input.text, input.language ?? 'zh');
+
+  return {
+    scaleId: scale.id,
+    scaleVersion: scale.version || '1.0',
+    questionId: question.id,
+    mapping,
+    needsConfirmation: mapping.score !== null && mapping.confidence < 0.8,
+    requiresExplicitSelection: mapping.score !== null && mapping.confidence < 0.6,
+  };
+}
+
+export function confirmMappedScaleAnswer(input: {
+  scaleId: string;
+  questionId: number;
+  score: number;
+  confidence?: number;
+  evidence?: string;
+}) {
+  const scale = getExecutableScaleOrThrow(input.scaleId);
+  const question = resolveMappedQuestion(scale, input.questionId);
+  if (!question.options.some((option) => option.score === input.score)) {
+    throw new AssessmentSessionServiceError(
+      `Score ${input.score} is not valid for question ${question.id}`,
+      400,
+      'INVALID_SCORE'
+    );
+  }
+
+  return {
+    scaleId: scale.id,
+    scaleVersion: scale.version || '1.0',
+    confirmedAnswer: {
+      questionId: question.id,
+      score: input.score,
+      confidence: input.confidence ?? 1,
+      evidence: input.evidence ?? '',
+      source: 'user_confirmed_mapping',
+      reviewRequired: question.riskLevel === 'sensitive' || question.riskLevel === 'high',
+    },
+  };
+}
+
 async function completeAssessmentSession(input: {
   record: NonNullable<AssessmentSessionRecord>;
   scale: ExecutableScaleDefinition;
   answers: number[];
   answerDetails?: ScaleAnswerDetailMap;
 }) {
-  const result = input.scale.calculateScore(input.answers);
+  const result = evaluateScaleAnswers(input.scale.id, input.answers);
   const normalizedAnswerDetails = normalizeScaleAnswerDetails(input.scale, input.answerDetails);
   const estimateSummary = summarizeEstimatedAnswerDetails(normalizedAnswerDetails);
   const resultDetails = {
@@ -522,7 +730,7 @@ async function completeAssessmentSession(input: {
     ...(estimateSummary ? { estimateSummary } : {}),
   };
 
-  return prisma.$transaction(async (tx) => {
+  const completedSession = await prisma.$transaction(async (tx) => {
     const assessmentSessionTx = tx as any;
 
     const existingSession = await assessmentSessionTx.assessmentSession.findUnique({
@@ -570,6 +778,16 @@ async function completeAssessmentSession(input: {
       where: { id: input.record.id },
     });
   });
+
+  if (completedSession.assessmentHistoryId) {
+    await ensurePendingDoctorReviewForAssessment({
+      assessmentHistoryId: completedSession.assessmentHistoryId,
+      assessmentSessionId: completedSession.id,
+      memberProfileId: completedSession.profileId || null,
+    });
+  }
+
+  return completedSession;
 }
 
 async function resolveLatestReusableSession(input: {
@@ -691,6 +909,11 @@ export async function evaluateSkillScale(input: {
       answers: JSON.parse(JSON.stringify(input.answers)),
       resultDetails: Object.keys(resultDetails).length ? JSON.parse(JSON.stringify(resultDetails)) : undefined,
     },
+  });
+
+  await ensurePendingDoctorReviewForAssessment({
+    assessmentHistoryId: assessment.id,
+    memberProfileId: input.profileId || null,
   });
 
   return {
@@ -910,7 +1133,7 @@ async function resolvePublicAssessmentSessionRecord(publicToken: string) {
   }
 
   const scale = getExecutableScaleOrThrow(record.scaleId);
-  if (!isWebHandoffScale(scale)) {
+  if (!canUsePublicHandoffSession(record, scale)) {
     throw new AssessmentSessionServiceError(
       'Assessment handoff is not enabled for this scale',
       404,
@@ -934,14 +1157,42 @@ export async function getPublicAssessmentSessionByToken(publicToken: string) {
   };
 }
 
+export async function savePublicAssessmentSessionDraftByToken(input: {
+  publicToken: string;
+  answers: SessionAnswerValue[];
+  answerDetails?: PublicScaleAnswerDetailMap;
+}) {
+  const { record, scale } = await resolvePublicAssessmentSessionRecord(input.publicToken);
+  assertSessionIsMutable(record);
+  const answers = normalizePartialAnswers(scale, input.answers);
+  assertConfirmedLowConfidenceAnswers(input.answerDetails);
+
+  const updatedRecord = await getAssessmentSessionModel().update({
+    where: { id: record.id },
+    data: {
+      answers: JSON.parse(JSON.stringify(answers)),
+      currentQuestionIndex: getNextQuestionIndex(answers) ?? scale.questions.length,
+      status: record.status === 'HANDOFF_READY' || record.status === 'PAUSED'
+        ? 'ONGOING'
+        : record.status,
+    },
+  });
+
+  return {
+    session: buildAssessmentSessionState(updatedRecord, scale),
+    scale: serializeScaleDefinition(scale, resolveSessionLanguage(updatedRecord.language)),
+  };
+}
+
 export async function submitPublicAssessmentSessionByToken(input: {
   publicToken: string;
   answers: number[];
-  answerDetails?: ScaleAnswerDetailMap;
+  answerDetails?: PublicScaleAnswerDetailMap;
 }) {
   const { record, scale } = await resolvePublicAssessmentSessionRecord(input.publicToken);
   assertSessionIsMutable(record);
   assertAllAnswersAllowed(scale, input.answers);
+  assertConfirmedLowConfidenceAnswers(input.answerDetails);
 
   const updatedRecord = await completeAssessmentSession({
     record,

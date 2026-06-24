@@ -11,6 +11,7 @@ interface AiAssistantFullProps {
   onClose: () => void;
   questionText: string;
   questionId: string;
+  scaleId: string;
 }
 
 interface Message {
@@ -24,6 +25,7 @@ const AiAssistantFull: React.FC<AiAssistantFullProps> = ({
   onClose,
   questionText,
   questionId,
+  scaleId,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,7 @@ const AiAssistantFull: React.FC<AiAssistantFullProps> = ({
     setMessages([]);
 
     getQuestionExplanation({
-      scaleId: 'snap-iv',
+      scaleId,
       questionId,
       questionText,
       options: [],
@@ -58,7 +60,7 @@ const AiAssistantFull: React.FC<AiAssistantFullProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [questionId, open]);
+  }, [questionId, open, scaleId]);
 
   const handleSend = () => {
     if (!inputValue.trim()) return;

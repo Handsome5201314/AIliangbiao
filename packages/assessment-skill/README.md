@@ -243,6 +243,45 @@ Web Handoff 的核心约束：
 
 ---
 
+## Phase 8 Skill + MCP 比赛演示包
+
+本仓库提供一个本地 replay 型比赛演示包，用于展示 Skill + MCP 的调用链，而不是开启生产 demo 权限。
+
+运行命令：
+
+```bash
+rtk node --import tsx scripts/skill-mcp-phase8-demo.mjs
+```
+
+演示数据：
+
+- `packages/assessment-skill/demo/phase8-demo-cases.json`
+- 顶层和每个案例都必须带 `demo_mode: true`
+- 顶层必须带 `synthetic_data_only: true`
+- 水印固定为 `DEMO_ONLY`
+- 只允许合成 persona、合成作答和比赛说明，不允许真实儿童隐私字段
+
+演示链路：
+
+1. `list_supported_scales` 展示量表目录。
+2. `get_scale_schema` 展示题目、选项、结果交付模式和医生复核需求。
+3. `create_assessment_session` 展示生产会话创建 payload；本地 replay 不伪造数据库会话。
+4. `generate_assessment_link` 展示 Web Handoff payload；长表单结果仍回到同一个 `AssessmentSession`。
+5. `map_natural_language_answer` / `confirm_mapped_answer` 展示 AI 只能给候选映射，低置信度必须确认。
+6. `submit_answer` 展示答案提交 payload。
+7. `score_assessment` 调用本地确定性计分引擎，输出可复现 preview；demo 只展示总分，未复核结论与报告详情会被隐藏。
+8. `get_assessment_result` 展示结果查询 payload，并明确 `physician_review` 量表等待医生复核。
+
+安全边界：
+
+- `demo_mode` 只存在于 demo 数据、replay 输出和文档中，不改变 `/api/mcp`、`/api/skill/v1/*` 或医生端生产权限。
+- MCP 生产入口仍必须使用 `MCP API Key`。
+- Skill facade 生产入口仍必须使用 `agent session token` 和对应 scope。
+- replay 输出只用于比赛演示和医生复核预览，不构成诊断、处方或未复核正式报告。
+- `physician_review` 量表的正式报告与家长可见性必须等待医生复核。
+
+---
+
 ## 当前限制
 
 - 包内 runtime 仍依赖宿主应用的 Prisma、量表目录与业务服务

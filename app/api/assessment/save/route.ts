@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { QuotaManager } from '@/lib/auth/quotaManager';
 import { extractAppBearerToken, verifyAppSessionToken } from '@/lib/auth/app-session';
-import { getScaleDefinitionById } from '@/lib/scales/catalog';
+import { evaluateScaleAnswers, getScaleDefinitionById } from '@/lib/scales/catalog';
 import { assertDoctorCanWriteMember, logPatientWriteAction } from '@/lib/services/care-teams';
+import { ensurePendingDoctorReviewForAssessment } from '@/lib/services/doctor-care';
+import type { ExecutableScaleDefinition } from '@/lib/schemas/core/types';
 
 type AssessmentOwner = {
   userId: string;
@@ -83,18 +85,65 @@ async function resolveAssessmentOwner(
   };
 }
 
+function normalizeDeterministicAnswers(scale: ExecutableScaleDefinition, rawAnswers: unknown) {
+  if (!Array.isArray(rawAnswers)) {
+    return {
+      error: 'answers 必须是按题目顺序排列的分值数组',
+      answers: null,
+    };
+  }
+
+  if (rawAnswers.length !== scale.questions.length) {
+    return {
+      error: `答案数量不匹配，需要 ${scale.questions.length} 个答案，实际 ${rawAnswers.length} 个`,
+      answers: null,
+    };
+  }
+
+  const answers: number[] = [];
+  for (let index = 0; index < rawAnswers.length; index += 1) {
+    const score = Number(rawAnswers[index]);
+    const question = scale.questions[index];
+
+    if (!Number.isFinite(score) || !question.options.some((option) => option.score === score)) {
+      return {
+        error: `第 ${index + 1} 题答案分值无效`,
+        answers: null,
+      };
+    }
+
+    answers.push(score);
+  }
+
+  return {
+    error: null,
+    answers,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { deviceId, profileId, scaleId, totalScore, conclusion, answers, sessionId } = body;
+    const { deviceId, profileId, scaleId, answers, sessionId } = body;
 
-    if (!scaleId || totalScore === undefined || !conclusion || !answers) {
+    if (!scaleId || !answers) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
     }
 
     const owner = await resolveAssessmentOwner(request, { deviceId, profileId });
     const scale = getScaleDefinitionById(scaleId);
-    const scaleVersion = scale?.version || '1.0';
+    if (!scale) {
+      return NextResponse.json({ error: '量表不存在' }, { status: 404 });
+    }
+
+    const normalized = normalizeDeterministicAnswers(scale, answers);
+    if (!normalized.answers) {
+      return NextResponse.json({ error: normalized.error }, { status: 400 });
+    }
+
+    const deterministicAnswers = normalized.answers;
+    const result = evaluateScaleAnswers(scale.id, deterministicAnswers);
+    const scaleVersion = scale.version || '1.0';
     const assessmentSession = sessionId
       ? await prisma.assessmentSession.findFirst({
           where: {
@@ -109,18 +158,18 @@ export async function POST(request: NextRequest) {
       throw new Error('Assessment session not found for this submission');
     }
 
-    const normalizedScore = parseFloat(Number(totalScore).toFixed(2));
-    const serializedAnswers = JSON.parse(JSON.stringify(answers));
+    const serializedAnswers = JSON.parse(JSON.stringify(deterministicAnswers));
     const assessment = await prisma.$transaction(async (tx) => {
       const created = await tx.assessmentHistory.create({
         data: {
           userId: owner.userId,
           profileId: owner.profileId,
-          scaleId,
+          scaleId: scale.id,
           scaleVersion,
-          totalScore: normalizedScore,
-          conclusion,
+          totalScore: result.totalScore,
+          conclusion: result.conclusion,
           answers: serializedAnswers,
+          resultDetails: result.details ? JSON.parse(JSON.stringify(result.details)) : undefined,
         },
       });
 
@@ -130,8 +179,10 @@ export async function POST(request: NextRequest) {
           data: {
             status: 'COMPLETED',
             answers: serializedAnswers,
-            totalScore: normalizedScore,
-            conclusion,
+            currentQuestionIndex: scale.questions.length,
+            totalScore: result.totalScore,
+            conclusion: result.conclusion,
+            resultDetails: result.details ? JSON.parse(JSON.stringify(result.details)) : undefined,
             assessmentHistoryId: created.id,
             completedAt: new Date(),
           },
@@ -149,10 +200,17 @@ export async function POST(request: NextRequest) {
         metadata: {
           assessmentId: assessment.id,
           sessionId: assessmentSession?.id,
-          scaleId,
+          scaleId: scale.id,
         },
       });
     }
+
+    await ensurePendingDoctorReviewForAssessment({
+      assessmentHistoryId: assessment.id,
+      assessmentSessionId: assessmentSession?.id || null,
+      memberProfileId: owner.profileId,
+      doctorProfileId: owner.actorDoctorProfileId,
+    });
 
     return NextResponse.json({
       success: true,

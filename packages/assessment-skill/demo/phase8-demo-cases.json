@@ -1,0 +1,112 @@
+{
+  "demo_mode": true,
+  "synthetic_data_only": true,
+  "watermark": "DEMO_ONLY",
+  "description": "Phase 8 Skill + MCP competition demo cases. All profiles are synthetic personas and must not be used as clinical records.",
+  "cases": [
+    {
+      "caseId": "demo-mchat-parent-chat",
+      "demo_mode": true,
+      "scaleId": "M_CHAT_R",
+      "language": "zh",
+      "syntheticProfile": {
+        "personaLabel": "DEMO_ONLY toddler caregiver conversation",
+        "ageBandMonths": "18-30",
+        "relation": "caregiver",
+        "channel": "skill_mcp_competition"
+      },
+      "answers": [0, 1, 0, 1],
+      "answerExpansion": "repeat_to_scale_length",
+      "mappingExample": {
+        "questionId": 1,
+        "text": "有时能跟着大人指的方向看，但不是每次都稳定。",
+        "expectedScore": 0
+      },
+      "safetyFocus": "AI 只做候选答案映射，最终答案由用户确认，结果等待医生复核。"
+    },
+    {
+      "caseId": "demo-cars-structured-interview",
+      "demo_mode": true,
+      "scaleId": "CARS",
+      "language": "zh",
+      "syntheticProfile": {
+        "personaLabel": "DEMO_ONLY structured autism rating interview",
+        "ageBandMonths": "36-72",
+        "relation": "clinician_observer",
+        "channel": "skill_mcp_competition"
+      },
+      "answers": [1, 2, 2, 3, 1],
+      "answerExpansion": "repeat_to_scale_length",
+      "mappingExample": {
+        "questionId": 2,
+        "text": "模仿有一点困难，需要成人提示后才能跟上。",
+        "expectedScore": 2
+      },
+      "safetyFocus": "CARS 演示只能生成医生复核预览，不输出诊断结论。"
+    },
+    {
+      "caseId": "demo-snap-iv-attention",
+      "demo_mode": true,
+      "scaleId": "SNAP-IV",
+      "language": "zh",
+      "syntheticProfile": {
+        "personaLabel": "DEMO_ONLY school-age attention behavior",
+        "ageBandMonths": "72-144",
+        "relation": "caregiver",
+        "channel": "skill_mcp_competition"
+      },
+      "answers": [0, 1, 2, 3],
+      "answerExpansion": "repeat_to_scale_length",
+      "mappingExample": {
+        "questionId": 1,
+        "text": "做作业时经常粗心，但不是每天都发生。",
+        "expectedScore": 2
+      },
+      "safetyFocus": "SNAP-IV 只展示确定性计分和复核边界，不输出处方或治疗建议。"
+    },
+    {
+      "caseId": "demo-abc-behavior-summary",
+      "demo_mode": true,
+      "scaleId": "ABC",
+      "language": "zh",
+      "syntheticProfile": {
+        "personaLabel": "DEMO_ONLY caregiver behavior checklist",
+        "ageBandMonths": "48-96",
+        "relation": "caregiver",
+        "channel": "skill_mcp_competition"
+      },
+      "answers": [0, 1, 2, 3],
+      "answerExpansion": "repeat_to_scale_length",
+      "mappingExample": {
+        "questionId": 3,
+        "text": "有时候不太理人，需要重复叫才回应。",
+        "expectedScore": 2
+      },
+      "safetyFocus": "ABC 结果属于量表原始分解释，正式报告必须等待医生审核。"
+    },
+    {
+      "caseId": "demo-srs-handoff-boundary",
+      "demo_mode": true,
+      "scaleId": "SRS",
+      "language": "zh",
+      "syntheticProfile": {
+        "personaLabel": "DEMO_ONLY social responsiveness scenario",
+        "ageBandMonths": "60-132",
+        "relation": "caregiver",
+        "channel": "skill_mcp_competition"
+      },
+      "answers": [1, 2, 3, 4],
+      "answerExpansion": "repeat_to_scale_length",
+      "mappingExample": {
+        "questionId": 1,
+        "text": "和同龄人互动时偶尔显得笨拙，需要成人提醒。",
+        "expectedScore": 2
+      },
+      "handoffDemo": {
+        "scaleId": "VINELAND_3",
+        "reason": "VINELAND_3 是长表单 web_handoff 示例；replay 只生成调用参数，不伪造数据库会话。"
+      },
+      "safetyFocus": "同时展示长表单 Handoff 边界和医生复核边界。"
+    }
+  ]
+}

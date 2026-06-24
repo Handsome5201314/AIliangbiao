@@ -9,7 +9,11 @@ export type AdminKnowledgeReviewStatus =
   | "REJECTED"
   | "ARCHIVED";
 
-export type AdminKnowledgeReviewItemType = "ALL" | "KNOWLEDGE_DOC" | "QUESTION_EXPLANATION";
+export type AdminKnowledgeReviewItemType =
+  | "ALL"
+  | "KNOWLEDGE_DOC"
+  | "QUESTION_EXPLANATION"
+  | "EDUCATION_CONTENT";
 
 export type AdminKnowledgeReviewAction = "approve" | "reject";
 
@@ -46,6 +50,9 @@ type AdminKnowledgeReviewRecord = {
   scaleId: string | null;
   uploadedByUserId: string | null;
   sourceFileName: string | null;
+  dimensionKey: string | null;
+  riskLevel: string | null;
+  audience: string | null;
   chunkCount: number;
   reviewedByAdminId: string | null;
   reviewedAt: Date | null;
@@ -138,6 +145,9 @@ function mapKnowledgeDocRecord(
     scaleId: null,
     uploadedByUserId: record.uploadedByUserId || null,
     sourceFileName: record.sourceFileName || null,
+    dimensionKey: null,
+    riskLevel: null,
+    audience: null,
     chunkCount: typeof record.chunkCount === "number" ? record.chunkCount : 0,
     reviewedByAdminId: record.reviewedByAdminId || null,
     reviewedAt: record.reviewedAt || null,
@@ -171,9 +181,50 @@ function mapQuestionExplanationRecord(
     scaleId: record.scaleId || null,
     uploadedByUserId: null,
     sourceFileName: null,
+    dimensionKey: null,
+    riskLevel: null,
+    audience: null,
     chunkCount: 0,
     reviewedByAdminId: null,
     reviewedAt: null,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+function mapEducationContentRecord(
+  record: any,
+  maps: {
+    organizationMap: Map<string, string>;
+    doctorMap: Map<string, string>;
+  }
+): AdminKnowledgeReviewRecord {
+  return {
+    id: record.id,
+    itemType: "EDUCATION_CONTENT",
+    title: record.title,
+    summary: normalizeTextPreview(record.summary || record.contentMd, "暂无健康教育摘要"),
+    status: normalizeReviewItemStatus(record.status),
+    scopeType: record.createdByDoctorProfileId ? "DOCTOR" : "PLATFORM",
+    language: "zh",
+    organizationId: record.createdByDoctorProfile?.organizationId || null,
+    doctorProfileId: record.createdByDoctorProfileId || null,
+    organizationName: null,
+    doctorName: record.createdByDoctorProfileId
+      ? maps.doctorMap.get(record.createdByDoctorProfileId) || null
+      : null,
+    sourceDocId: record.sourceDoc?.id || record.sourceDocId || null,
+    sourceDocTitle: record.sourceDoc?.title || null,
+    questionId: null,
+    scaleId: record.scaleId || null,
+    uploadedByUserId: null,
+    sourceFileName: null,
+    dimensionKey: record.dimensionKey || null,
+    riskLevel: record.riskLevel || null,
+    audience: record.audience || "caregiver",
+    chunkCount: 0,
+    reviewedByAdminId: record.reviewedByAdminId || null,
+    reviewedAt: record.reviewedAt || null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -184,11 +235,14 @@ export async function listAdminKnowledgeReviewItems(
 ) {
   const knowledgeDocModel = (prisma as any).knowledgeDoc;
   const questionExplanationModel = (prisma as any).questionExplanation;
+  const educationContent = (prisma as any).educationContent;
   const query = input.query?.trim();
   const limit = input.limit || 100;
 
-  const [knowledgeDocs, questionExplanations] = await Promise.all([
-    input.itemType === "QUESTION_EXPLANATION" || !knowledgeDocModel?.findMany
+  const [knowledgeDocs, questionExplanations, educationContents] = await Promise.all([
+    input.itemType === "QUESTION_EXPLANATION" ||
+    input.itemType === "EDUCATION_CONTENT" ||
+    !knowledgeDocModel?.findMany
       ? []
       : knowledgeDocModel.findMany({
           where: {
@@ -224,7 +278,9 @@ export async function listAdminKnowledgeReviewItems(
             updatedAt: true,
           },
         }),
-    input.itemType === "KNOWLEDGE_DOC" || !questionExplanationModel?.findMany
+    input.itemType === "KNOWLEDGE_DOC" ||
+    input.itemType === "EDUCATION_CONTENT" ||
+    !questionExplanationModel?.findMany
       ? []
       : questionExplanationModel.findMany({
           where: {
@@ -267,6 +323,45 @@ export async function listAdminKnowledgeReviewItems(
             },
           },
         }),
+    input.itemType === "KNOWLEDGE_DOC" ||
+    input.itemType === "QUESTION_EXPLANATION" ||
+    !educationContent?.findMany
+      ? []
+      : educationContent.findMany({
+          where: {
+            ...buildReviewStatusFilter(input.status),
+            ...(query
+              ? {
+                  OR: [
+                    { title: { contains: query, mode: "insensitive" } },
+                    { summary: { contains: query, mode: "insensitive" } },
+                    { scaleId: { contains: query, mode: "insensitive" } },
+                    { dimensionKey: { contains: query, mode: "insensitive" } },
+                    {
+                      sourceDoc: {
+                        title: { contains: query, mode: "insensitive" },
+                      },
+                    },
+                  ],
+                }
+              : {}),
+          },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: input.itemType === "EDUCATION_CONTENT" ? limit : Math.max(20, Math.floor(limit / 3)),
+          include: {
+            sourceDoc: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+            createdByDoctorProfile: {
+              select: {
+                organizationId: true,
+              },
+            },
+          },
+        }),
   ]);
 
   const maps = await buildReferenceMaps([
@@ -278,11 +373,16 @@ export async function listAdminKnowledgeReviewItems(
       organizationId: item.organizationId,
       doctorProfileId: item.doctorProfileId,
     })),
+    ...(educationContents || []).map((item: any) => ({
+      organizationId: item.createdByDoctorProfile?.organizationId,
+      doctorProfileId: item.createdByDoctorProfileId,
+    })),
   ]);
 
   return [
     ...(knowledgeDocs || []).map((item: any) => mapKnowledgeDocRecord(item, maps)),
     ...(questionExplanations || []).map((item: any) => mapQuestionExplanationRecord(item, maps)),
+    ...(educationContents || []).map((item: any) => mapEducationContentRecord(item, maps)),
   ]
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
     .slice(0, limit);
@@ -291,15 +391,17 @@ export async function listAdminKnowledgeReviewItems(
 export async function countPendingKnowledgeReviewItems() {
   const knowledgeDocModel = (prisma as any).knowledgeDoc;
   const questionExplanationModel = (prisma as any).questionExplanation;
+  const educationContent = (prisma as any).educationContent;
 
-  const [knowledgeDocs, questionExplanations] = await Promise.all([
+  const [knowledgeDocs, questionExplanations, educationContents] = await Promise.all([
     knowledgeDocModel?.count ? knowledgeDocModel.count({ where: { status: "PENDING_REVIEW" } }) : 0,
     questionExplanationModel?.count
       ? questionExplanationModel.count({ where: { status: "PENDING_REVIEW" } })
       : 0,
+    educationContent?.count ? educationContent.count({ where: { status: "PENDING_REVIEW" } }) : 0,
   ]);
 
-  return knowledgeDocs + questionExplanations;
+  return knowledgeDocs + questionExplanations + educationContents;
 }
 
 export async function reviewKnowledgeItem(input: ReviewKnowledgeItemInput) {
@@ -370,6 +472,84 @@ export async function reviewKnowledgeItem(input: ReviewKnowledgeItemInput) {
 
     return {
       itemType: "KNOWLEDGE_DOC" as const,
+      itemId: updated.id,
+      title: updated.title,
+      status: updated.status,
+    };
+  }
+
+  if (input.itemType === "EDUCATION_CONTENT") {
+    const educationContent = (prisma as any).educationContent;
+    if (!educationContent?.findUnique || !educationContent?.update) {
+      throw new Error("EducationContent model is not available");
+    }
+
+    const record = await educationContent.findUnique({
+      where: { id: input.itemId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        scaleId: true,
+        dimensionKey: true,
+        riskLevel: true,
+        createdByDoctorProfile: {
+          select: {
+            organizationId: true,
+          },
+        },
+      },
+    });
+
+    if (!record) {
+      throw new Error("健康教育内容不存在");
+    }
+
+    if (record.status !== "PENDING_REVIEW") {
+      throw new Error("只有待审核健康教育内容才能执行审核操作");
+    }
+
+    const updated = await educationContent.update({
+      where: { id: input.itemId },
+      data: {
+        status: nextStatus,
+        reviewedByAdminId: input.adminId,
+        reviewedAt: now,
+        reviewComment: input.reviewNotes?.trim() || null,
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+      },
+    });
+
+    if (auditLogModel?.create) {
+      await auditLogModel.create({
+        data: {
+          organizationId: record.createdByDoctorProfile?.organizationId || null,
+          actorType: "ADMIN",
+          actorAdminId: input.adminId,
+          targetType: "EDUCATION_CONTENT",
+          targetId: record.id,
+          action:
+            input.action === "approve"
+              ? "EDUCATION_CONTENT_APPROVED"
+              : "EDUCATION_CONTENT_REJECTED",
+          details: {
+            title: record.title,
+            scaleId: record.scaleId,
+            dimensionKey: record.dimensionKey,
+            riskLevel: record.riskLevel,
+            nextStatus,
+            reviewNotes: input.reviewNotes?.trim() || null,
+          },
+        },
+      });
+    }
+
+    return {
+      itemType: "EDUCATION_CONTENT" as const,
       itemId: updated.id,
       title: updated.title,
       status: updated.status,

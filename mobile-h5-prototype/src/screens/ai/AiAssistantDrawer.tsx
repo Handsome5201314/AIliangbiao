@@ -15,6 +15,7 @@ interface AiAssistantDrawerProps {
   questionNumber: number;
   questionText: string;
   questionId: string;
+  scaleId: string;
   mode: AssessmentMode;
 }
 
@@ -29,6 +30,7 @@ const AiAssistantDrawer: React.FC<AiAssistantDrawerProps> = ({
   questionNumber,
   questionText,
   questionId,
+  scaleId,
   mode,
 }) => {
   const [expanded, setExpanded] = useState(false);
@@ -65,7 +67,7 @@ const AiAssistantDrawer: React.FC<AiAssistantDrawerProps> = ({
     setLoading(true);
 
     getQuestionExplanation({
-      scaleId: 'snap-iv',
+      scaleId,
       questionId,
       questionText,
       options: [],
@@ -80,7 +82,7 @@ const AiAssistantDrawer: React.FC<AiAssistantDrawerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [questionId, open]);
+  }, [questionId, open, scaleId]);
 
   const handleQuickQuestion = async (quickType: QuickQuestionType) => {
     setQuickLoading(true);

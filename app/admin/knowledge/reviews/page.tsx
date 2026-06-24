@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
-type ReviewItemType = 'ALL' | 'KNOWLEDGE_DOC' | 'QUESTION_EXPLANATION';
+type ReviewItemType = 'ALL' | 'KNOWLEDGE_DOC' | 'QUESTION_EXPLANATION' | 'EDUCATION_CONTENT';
 type ReviewStatus = 'ALL' | 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'ARCHIVED';
 
 type KnowledgeReviewItem = {
@@ -28,6 +28,9 @@ type KnowledgeReviewItem = {
   scaleId?: string | null;
   uploadedByUserId?: string | null;
   sourceFileName?: string | null;
+  dimensionKey?: string | null;
+  riskLevel?: string | null;
+  audience?: string | null;
   chunkCount: number;
   reviewedByAdminId?: string | null;
   reviewedAt?: string | null;
@@ -39,6 +42,7 @@ const TYPE_FILTERS: Array<{ value: ReviewItemType; label: string }> = [
   { value: 'ALL', label: '全部类型' },
   { value: 'KNOWLEDGE_DOC', label: '知识文档' },
   { value: 'QUESTION_EXPLANATION', label: '题目解释' },
+  { value: 'EDUCATION_CONTENT', label: '健康教育' },
 ];
 
 const STATUS_FILTERS: Array<{ value: ReviewStatus; label: string }> = [
@@ -61,6 +65,7 @@ const STATUS_META: Record<KnowledgeReviewItem['status'], { label: string; badge:
 const TYPE_LABEL: Record<KnowledgeReviewItem['itemType'], string> = {
   KNOWLEDGE_DOC: '知识文档',
   QUESTION_EXPLANATION: '题目解释',
+  EDUCATION_CONTENT: '健康教育',
 };
 
 function formatDateTime(value?: string | null) {
@@ -257,6 +262,11 @@ export default function AdminKnowledgeReviewsPage() {
                       <p>来源文件：{item.sourceFileName || item.sourceDocTitle || '无'}</p>
                       {item.itemType === 'QUESTION_EXPLANATION' ? (
                         <p>题目定位：{item.scaleId} · 第 {item.questionId} 题</p>
+                      ) : item.itemType === 'EDUCATION_CONTENT' ? (
+                        <p>
+                          健康教育匹配：{item.scaleId || '通用'} · {item.riskLevel || '全风险'} ·{' '}
+                          {item.dimensionKey || '全维度'}
+                        </p>
                       ) : (
                         <p>切块数量：{item.chunkCount}</p>
                       )}
