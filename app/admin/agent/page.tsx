@@ -26,7 +26,7 @@ type ApiKeyRecord = {
   id: string;
   provider: string;
   keyName: string;
-  keyValue: string;
+  secretPreview?: string | null;
   customEndpoint?: string | null;
   customModel?: string | null;
   serviceType?: string | null;
@@ -222,7 +222,7 @@ export default function AdminAgentPage() {
           body: JSON.stringify({
             provider,
             endpoint: matchingKey.customEndpoint || '',
-            apiKey: matchingKey.keyValue,
+            keyId: matchingKey.id,
             serviceType,
           }),
         });

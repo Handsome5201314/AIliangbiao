@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { getHermesHealthSnapshot } from '@/lib/realtime/hermes-health';
 
-import { PROVIDER_CONFIGS } from './apiKeyService';
+import { PROVIDER_CONFIGS } from './apiKeyProviderConfig';
 import { countPendingKnowledgeReviewItems } from './admin-knowledge-reviews';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;

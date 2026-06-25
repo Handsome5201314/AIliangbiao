@@ -34,7 +34,7 @@ async function fixApiKeys() {
     customKeys.forEach((key, index) => {
       console.log(`${index + 1}. ID: ${key.id}`);
       console.log(`   Key Name: ${key.keyName}`);
-      console.log(`   Key Value: ${key.keyValue.substring(0, 10)}...`);
+      console.log(`   Key: ${key.secretPreview || '需要重新录入'}`);
       console.log(`   Provider: ${key.provider}\n`);
     });
 

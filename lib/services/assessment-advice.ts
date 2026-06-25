@@ -1,7 +1,8 @@
 import { getAgentWorkspaceConfig } from '@/lib/agent/config';
 import { prisma } from '@/lib/db/prisma';
 import { getSerializableScaleById } from '@/lib/scales/catalog';
-import { getSystemApiKey, PROVIDER_CONFIGS } from '@/lib/services/apiKeyService';
+import { getSystemApiKey } from '@/lib/services/apiKeyService';
+import { PROVIDER_CONFIGS } from '@/lib/services/apiKeyProviderConfig';
 
 export interface AssessmentAnalysisInput {
   result: {

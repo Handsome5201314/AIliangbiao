@@ -39,7 +39,7 @@ async function autoFixApiKeys() {
         keyName: true,
         provider: true,
         isActive: true,
-        keyValue: true
+        secretPreview: true
       }
     });
 
@@ -47,7 +47,7 @@ async function autoFixApiKeys() {
     afterKeys.forEach((key, index) => {
       console.log(`  ${index + 1}. ${key.keyName}`);
       console.log(`     Provider: ${key.provider}`);
-      console.log(`     Key: ${key.keyValue.substring(0, 15)}...`);
+      console.log(`     Key: ${key.secretPreview || '需要重新录入'}`);
       console.log(`     Active: ${key.isActive ? '✅' : '❌'}`);
     });
     console.log('');

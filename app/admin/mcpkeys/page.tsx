@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 interface McpKey {
   id: string;
   keyName: string;
-  keyValue: string;
+  secretPreview: string | null;
+  secretConfigured?: boolean;
   isActive: boolean;
   usageCount: number;
   lastUsedAt: string | null;
@@ -155,7 +156,7 @@ export default function MCPKeysPage() {
 
                   <div className="mb-3 flex items-center gap-2">
                       <code className="flex-1 break-all rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-mono">
-                        {key.keyValue}
+                        {key.secretPreview || '需要重新创建'}
                       </code>
                     </div>
 

@@ -131,6 +131,7 @@ sudo chmod 600 /opt/ai-scale-system/shared/.env.production
 - `SESSION_SECRET`
 - `APP_SESSION_SECRET`
 - `ADMIN_SESSION_SECRET`
+- `BUSINESS_SECRET_ENCRYPTION_KEY`
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 - `ENABLE_VOICE_INTERACTION`
@@ -153,6 +154,8 @@ sudo chmod 600 /opt/ai-scale-system/shared/.env.production
 
 - `DATABASE_URL` / `DIRECT_URL` 在容器内必须指向 `db:5432`，不能写 `localhost`
 - `HERMES_API_SERVER_BASE_URL` 在默认 Compose 拓扑下应为 `http://hermes:8642/v1`
+- `BUSINESS_SECRET_ENCRYPTION_KEY` 是后台业务密钥的加密/HMAC 主密钥，生产环境必须设置并离线备份；丢失后已保存的业务密钥无法解密，需要重新录入
+- AI 服务商 API Key、MCP Key、医生 FastGPT Key 等业务调用密钥不写入 `.env.production`，应在后台重新录入
 - 生产环境 `LOG_LEVEL` 推荐 `info` 或 `warn`
 - 当前生产 `.env.production` 应保持离线保存，不进 git
 

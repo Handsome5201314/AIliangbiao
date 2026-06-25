@@ -16,7 +16,7 @@ async function checkSophonKey() {
         id: true,
         provider: true,
         keyName: true,
-        keyValue: true,
+        secretPreview: true,
         isActive: true,
         userId: true,
         usageCount: true
@@ -33,7 +33,7 @@ async function checkSophonKey() {
       console.log(`${index + 1}. ${key.keyName}`);
       console.log(`   ID: ${key.id}`);
       console.log(`   Provider: "${key.provider}"`);
-      console.log(`   Key: ${key.keyValue.substring(0, 15)}...`);
+      console.log(`   Key: ${key.secretPreview || '需要重新录入'}`);
       console.log(`   Active: ${key.isActive ? '✅' : '❌'}`);
       console.log(`   System Key: ${key.userId === null ? '✅' : '❌'}`);
       console.log(`   Usage Count: ${key.usageCount}`);

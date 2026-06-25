@@ -25,7 +25,7 @@ async function fixSophonKey() {
     // 显示找到的 Key
     customKeys.forEach((key, index) => {
       console.log(`${index + 1}. ${key.keyName}`);
-      console.log(`   Key: ${key.keyValue.substring(0, 15)}...`);
+      console.log(`   Key: ${key.secretPreview || '需要重新录入'}`);
       console.log(`   Current Provider: ${key.provider}\n`);
     });
 

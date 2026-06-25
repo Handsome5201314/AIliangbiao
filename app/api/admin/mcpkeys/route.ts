@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import crypto from 'crypto';
 
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { hashBusinessSecret, maskBusinessSecret } from '@/lib/utils/businessSecrets';
 
 /**
  * 生成API密钥
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
         purpose: true,
         provider: true,
         keyName: true,
-        keyValue: true,
+        secretPreview: true,
         isActive: true,
         usageCount: true,
         lastUsedAt: true,
@@ -37,10 +38,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // 脱敏显示
     const maskedKeys = keys.map(key => ({
       ...key,
-      keyValue: key.keyValue.substring(0, 10) + '...' + key.keyValue.substring(key.keyValue.length - 4)
+      secretConfigured: Boolean(key.secretPreview),
     }));
 
     return NextResponse.json({ keys: maskedKeys });
@@ -70,7 +70,9 @@ export async function POST(req: NextRequest) {
         purpose: 'MCP',
         provider: 'mcp',  // MCP服务专用
         keyName: keyName || 'MCP API Key',
-        keyValue,
+        secretHash: hashBusinessSecret(keyValue),
+        secretPreview: maskBusinessSecret(keyValue),
+        secretVersion: 'bs:hmac:v1',
         isActive: true,
         userId: null  // 系统级
       }
@@ -81,7 +83,7 @@ export async function POST(req: NextRequest) {
       key: {
         id: key.id,
         keyName: key.keyName,
-        keyValue: key.keyValue,  // 只在创建时返回完整密钥
+        keyValue,  // 只在创建时返回完整密钥
         createdAt: key.createdAt
       },
       message: 'API密钥创建成功，请妥善保管'

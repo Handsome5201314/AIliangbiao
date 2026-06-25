@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { hashBusinessSecret } from '@/lib/utils/businessSecrets';
 
 export type McpEntrypoint = 'canonical' | 'scale_compat' | 'growth_compat' | 'memory_compat';
 
@@ -26,7 +27,7 @@ export async function validateMcpApiKey(authHeader: string | null): Promise<McpA
 
   return prisma.apiKey.findFirst({
     where: {
-      keyValue: token,
+      secretHash: hashBusinessSecret(token),
       isActive: true,
       OR: [{ purpose: 'MCP' }, { provider: 'mcp' }],
     },

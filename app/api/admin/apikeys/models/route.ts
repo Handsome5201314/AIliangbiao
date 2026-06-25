@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { prisma } from '@/lib/db/prisma';
+import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 各服务商的 API 端点配置
 const PROVIDER_ENDPOINTS: Record<string, { base: string; models: string }> = {
@@ -96,9 +98,33 @@ export async function POST(request: NextRequest) {
     await requireAdminRequest(request);
 
     const body = await request.json();
-    const { provider, endpoint, apiKey, serviceType } = body;
+    const { provider, endpoint, apiKey, keyId, serviceType } = body;
+    let effectiveApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
 
-    if (!apiKey) {
+    if (!effectiveApiKey && keyId) {
+      const storedKey = await prisma.apiKey.findFirst({
+        where: {
+          id: keyId,
+          purpose: 'AI',
+          isActive: true,
+          NOT: { provider: 'mcp' },
+        },
+        select: {
+          secretCiphertext: true,
+        },
+      });
+
+      if (!storedKey?.secretCiphertext) {
+        return NextResponse.json({
+          success: false,
+          error: '该 API Key 需要重新录入',
+        }, { status: 400 });
+      }
+
+      effectiveApiKey = decryptBusinessSecret(storedKey.secretCiphertext);
+    }
+
+    if (!effectiveApiKey) {
       return NextResponse.json({
         success: false,
         error: '请先填写 API Key'
@@ -145,7 +171,7 @@ export async function POST(request: NextRequest) {
         const response = await fetch(modelsEndpoint, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${apiKey}`
+            'Authorization': `Bearer ${effectiveApiKey}`
           },
           signal: AbortSignal.timeout(10000) // 10秒超时
         });

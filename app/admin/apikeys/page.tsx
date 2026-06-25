@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Key, Plus, Trash2, Eye, EyeOff, Copy, CheckCircle,
-  Zap, RefreshCw, Wifi, WifiOff, Clock, AlertCircle,
+  Key, Plus, Trash2,
+  Zap, Wifi, WifiOff, Clock, AlertCircle,
   Loader2
 } from 'lucide-react';
 
@@ -39,7 +39,8 @@ interface ApiKeyItem {
   id: string;
   provider: string;
   keyName: string;
-  keyValue: string;
+  secretPreview: string | null;
+  secretConfigured?: boolean;
   serviceType?: string; // 添加服务类型
   customEndpoint?: string;
   customModel?: string;
@@ -75,8 +76,6 @@ export default function ApiKeysPage() {
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
     loadApiKeys();
@@ -204,7 +203,6 @@ export default function ApiKeysPage() {
         body: JSON.stringify({
           provider: key.provider,
           endpoint: key.customEndpoint || DEFAULT_ENDPOINTS[key.provider],
-          apiKey: key.keyValue,
           model: key.customModel,
           keyId: key.id,
           serviceType: key.serviceType || 'text' // 传递服务类型，默认为文本
@@ -225,27 +223,6 @@ export default function ApiKeysPage() {
     } finally {
       setTestingConnection(null);
     }
-  };
-
-  const toggleKeyVisibility = (id: string) => {
-    const newVisible = new Set(visibleKeys);
-    if (newVisible.has(id)) {
-      newVisible.delete(id);
-    } else {
-      newVisible.add(id);
-    }
-    setVisibleKeys(newVisible);
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(id);
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
-
-  const maskApiKey = (key: string) => {
-    if (key.length <= 8) return '••••••••';
-    return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
   };
 
   const getConnectionStatusIcon = (status?: string) => {
@@ -350,30 +327,8 @@ export default function ApiKeysPage() {
                     {/* API Key */}
                     <div className="flex items-center gap-2 mb-3">
                       <code className="flex-1 bg-slate-50 px-4 py-2 rounded-lg text-sm font-mono border border-slate-200">
-                        {visibleKeys.has(key.id) ? key.keyValue : maskApiKey(key.keyValue)}
+                        {key.secretPreview || '需要重新录入'}
                       </code>
-                      <button
-                        onClick={() => toggleKeyVisibility(key.id)}
-                        className="p-2 hover:bg-slate-100 rounded-2xl transition-colors"
-                        title={visibleKeys.has(key.id) ? '隐藏' : '显示'}
-                      >
-                        {visibleKeys.has(key.id) ? (
-                          <EyeOff className="w-5 h-5 text-slate-400" />
-                        ) : (
-                          <Eye className="w-5 h-5 text-slate-400" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => copyToClipboard(key.keyValue, key.id)}
-                        className="p-2 hover:bg-slate-100 rounded-2xl transition-colors"
-                        title="复制"
-                      >
-                        {copiedKey === key.id ? (
-                          <CheckCircle className="w-5 h-5 text-emerald-500" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-slate-400" />
-                        )}
-                      </button>
                     </div>
 
                     {/* 自定义配置 */}

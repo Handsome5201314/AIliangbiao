@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { getAgentWorkspaceConfig } from '@/lib/agent/config';
-import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyService';
+import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyProviderConfig';
+import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 export async function getAgentModelConfig(serviceType: ApiServiceType) {
   const config = await getAgentWorkspaceConfig();
@@ -44,6 +45,10 @@ export async function resolveAgentApiKeyByService(serviceType: ApiServiceType) {
   });
 
   if (preferredKey) {
+    if (!preferredKey.secretCiphertext) {
+      throw new Error(`Agent ${serviceType} API 密钥需要重新录入`);
+    }
+
     const endpoint =
       preferredKey.customEndpoint ||
       preferred.endpoint ||
@@ -59,7 +64,7 @@ export async function resolveAgentApiKeyByService(serviceType: ApiServiceType) {
     });
 
     return {
-      key: preferredKey.keyValue,
+      key: decryptBusinessSecret(preferredKey.secretCiphertext),
       provider: preferredKey.provider,
       endpoint,
       model,

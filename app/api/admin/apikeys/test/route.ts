@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 各服务商的默认配置
 const PROVIDER_CONFIGS: Record<string, { 
@@ -73,6 +74,30 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { provider, endpoint, apiKey, model, keyId, serviceType } = body;
+    let effectiveApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+
+    if (!effectiveApiKey && keyId) {
+      const storedKey = await prisma.apiKey.findFirst({
+        where: {
+          id: keyId,
+          purpose: 'AI',
+          isActive: true,
+          NOT: { provider: 'mcp' },
+        },
+        select: {
+          secretCiphertext: true,
+        },
+      });
+
+      if (!storedKey?.secretCiphertext) {
+        return NextResponse.json({
+          success: false,
+          error: '该 API Key 需要重新录入',
+        }, { status: 400 });
+      }
+
+      effectiveApiKey = decryptBusinessSecret(storedKey.secretCiphertext);
+    }
 
     // 确定服务类型（默认为文本）
     const isSpeech = serviceType === 'speech';
@@ -91,7 +116,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    if (!apiKey) {
+    if (!effectiveApiKey) {
       return NextResponse.json({
         success: false,
         error: '缺少 API Key'
@@ -115,7 +140,7 @@ export async function POST(request: NextRequest) {
         const responseTime = endTime - startTime;
 
         // 验证 API Key 格式（简单检查）
-        if (!apiKey.startsWith('sk-') && provider === 'siliconflow') {
+        if (!effectiveApiKey.startsWith('sk-') && provider === 'siliconflow') {
           if (keyId) {
             await prisma.apiKey.update({
               where: { id: keyId },
@@ -144,7 +169,7 @@ export async function POST(request: NextRequest) {
           response = await fetch(testEndpoint, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${apiKey}`
+              'Authorization': `Bearer ${effectiveApiKey}`
             },
             body: formData,
             signal: AbortSignal.timeout(10000)
@@ -246,7 +271,7 @@ export async function POST(request: NextRequest) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Authorization': `Bearer ${effectiveApiKey}`
           },
           body: JSON.stringify({
             model: testModel,

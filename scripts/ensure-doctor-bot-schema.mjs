@@ -11,7 +11,7 @@ async function main() {
       "welcomeMessage" text,
       "publicSlug" text not null unique,
       "fastgptBaseUrl" text not null,
-      "fastgptApiKeyEncrypted" text not null,
+      "fastgptApiKeyEncrypted" text,
       "enabledScaleIds" jsonb not null default '[]'::jsonb,
       "status" text not null default 'draft',
       "lastValidatedAt" timestamp(3),
@@ -53,6 +53,12 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     create index if not exists "DoctorBotChatSession_memberProfileId_lastActiveAt_idx"
     on "DoctorBotChatSession" ("memberProfileId", "lastActiveAt");
+  `);
+
+  console.log('[schema] aligning DoctorBotConfig secret column constraints');
+  await prisma.$executeRawUnsafe(`
+    alter table if exists "DoctorBotConfig"
+    alter column "fastgptApiKeyEncrypted" drop not null;
   `);
 }
 

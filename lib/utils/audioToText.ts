@@ -11,6 +11,7 @@
 import { resolveAgentApiKeyByService } from '@/lib/agent/model-resolver';
 import { prisma } from '@/lib/db/prisma';
 import { getSystemApiKeyByService } from '@/lib/services/apiKeyService';
+import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 支持的音频格式
 export type AudioFormat = 'webm' | 'wav' | 'mp3' | 'm4a' | 'ogg';
@@ -85,8 +86,11 @@ export async function getSpeechApiKey(preferredProvider?: string): Promise<{
       return null;
     }
 
-    // 解密 API Key（实际项目中应该使用加密存储）
-    const apiKey = apiKeyRecord.keyValue;
+    if (!apiKeyRecord.secretCiphertext) {
+      throw new Error('语音识别 API 密钥需要重新录入');
+    }
+
+    const apiKey = decryptBusinessSecret(apiKeyRecord.secretCiphertext);
 
     // 获取端点和模型
     let endpoint = apiKeyRecord.customEndpoint || getDefaultEndpoint(apiKeyRecord.provider);

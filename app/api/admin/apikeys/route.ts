@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { BUSINESS_SECRET_VERSION, encryptBusinessSecret, maskBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 获取所有API密钥
 export async function GET(request: NextRequest) {
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest) {
         purpose: true,
         provider: true,
         keyName: true,
-        keyValue: true,
+        secretPreview: true,
+        secretVersion: true,
         serviceType: true,
         customEndpoint: true,
         customModel: true,
@@ -34,7 +36,12 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({ keys });
+    return NextResponse.json({
+      keys: keys.map((key) => ({
+        ...key,
+        secretConfigured: Boolean(key.secretPreview),
+      })),
+    });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return createAdminUnauthorizedResponse();
@@ -52,12 +59,19 @@ export async function POST(req: NextRequest) {
 
     const { provider, keyName, keyValue, customEndpoint, customModel, serviceType } = await req.json();
 
+    const trimmedKey = typeof keyValue === 'string' ? keyValue.trim() : '';
+    if (!trimmedKey) {
+      return NextResponse.json({ error: 'API key is required' }, { status: 400 });
+    }
+
     const key = await prisma.apiKey.create({
       data: {
         purpose: 'AI',
         provider,
         keyName,
-        keyValue, // 生产环境应加密存储
+        secretCiphertext: encryptBusinessSecret(trimmedKey),
+        secretPreview: maskBusinessSecret(trimmedKey),
+        secretVersion: BUSINESS_SECRET_VERSION,
         serviceType: serviceType || 'text', // 默认为文本模型
         customEndpoint: customEndpoint || null,
         customModel: customModel || null,
@@ -67,7 +81,29 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    return NextResponse.json({ success: true, key });
+    return NextResponse.json({
+      success: true,
+      key: {
+        id: key.id,
+        purpose: key.purpose,
+        provider: key.provider,
+        keyName: key.keyName,
+        secretPreview: key.secretPreview,
+        secretVersion: key.secretVersion,
+        serviceType: key.serviceType,
+        customEndpoint: key.customEndpoint,
+        customModel: key.customModel,
+        isActive: key.isActive,
+        usageCount: key.usageCount,
+        connectionStatus: key.connectionStatus,
+        lastTestedAt: key.lastTestedAt,
+        responseTime: key.responseTime,
+        lastUsedAt: key.lastUsedAt,
+        createdAt: key.createdAt,
+        userId: key.userId,
+        secretConfigured: Boolean(key.secretPreview),
+      },
+    });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return createAdminUnauthorizedResponse();

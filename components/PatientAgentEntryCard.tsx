@@ -121,7 +121,7 @@ export default function PatientAgentEntryCard() {
           <span>正在同步当前成员的智能体状态...</span>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4">
           <a
             href={primary.href}
             className="group rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 transition-all hover:border-cyan-300 hover:bg-white hover:shadow-sm"
@@ -132,22 +132,6 @@ export default function PatientAgentEntryCard() {
               <ArrowRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-700" />
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-500">{primary.description}</p>
-          </a>
-
-          <a
-            href="/agent?mode=self_service"
-            className="group rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 transition-all hover:border-indigo-300 hover:bg-white hover:shadow-sm"
-          >
-            <div className="inline-flex rounded-2xl bg-indigo-50 p-3 text-indigo-700">
-              <Bot className="h-5 w-5" />
-            </div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-slate-900">进入自助智能体</h3>
-              <ArrowRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-700" />
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              保留原有 `/agent` 自助版功能，用于自助分诊、推荐量表和站内无感填表。
-            </p>
           </a>
         </div>
       )}

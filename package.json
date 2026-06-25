@@ -16,6 +16,7 @@
     "dev:services": "docker compose -f docker-compose.dev.yml --env-file .env.local up -d",
     "dev:services:down": "docker compose -f docker-compose.dev.yml --env-file .env.local down",
     "dev:full": "npm run dev:services && npm run dev",
+    "secrets:reset": "node scripts/reset-business-secrets.mjs",
     "prisma:generate": "prisma generate",
     "db:dev:up": "docker compose -f docker-compose.dev.yml --env-file .env.local up -d",
     "db:dev:down": "docker compose -f docker-compose.dev.yml --env-file .env.local down",

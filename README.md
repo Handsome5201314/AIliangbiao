@@ -290,10 +290,13 @@ Copy-Item .env.local.example .env.local
 - `SESSION_SECRET`
 - `APP_SESSION_SECRET`
 - `ADMIN_SESSION_SECRET`
+- `BUSINESS_SECRET_ENCRYPTION_KEY`
 - `HERMES_API_SERVER_BASE_URL`
 - `HERMES_API_SERVER_KEY`
 - `HERMES_API_SERVER_MODEL`
 - `PLATFORM_KNOWLEDGE_EMBEDDING_*`
+
+`.env` 只保存应用启动、内部服务和加密主密钥。AI 服务商 API Key、MCP Key、医生 FastGPT Key 等业务调用密钥在后台录入，并以加密或哈希形式保存到数据库。
 
 ### 3. 启动依赖服务
 

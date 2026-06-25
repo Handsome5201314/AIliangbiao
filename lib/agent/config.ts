@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
-import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyService';
+import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyProviderConfig';
 import { TRIAGE_SYSTEM_PROMPT } from '@/lib/services/triageFlow';
 
 export const AGENT_WORKSPACE_CONFIG_KEY = 'agentWorkspaceConfig';

@@ -1521,7 +1521,11 @@ model ApiKey {
   purpose          ApiKeyPurpose @default(AI)
   provider         String
   keyName          String
-  keyValue         String
+  keyValue         String?
+  secretCiphertext String?
+  secretHash      String?
+  secretPreview   String?
+  secretVersion   String?
   serviceType      String    @default("text")
   customEndpoint   String?
   customModel      String?
@@ -1539,6 +1543,7 @@ model ApiKey {
   @@index([purpose, isActive])
   @@index([provider, isActive])
   @@index([serviceType, isActive])
+  @@index([secretHash])
 }
 
 model SystemConfig {
@@ -1697,7 +1702,7 @@ model DoctorBotConfig {
   welcomeMessage         String?
   publicSlug             String                 @unique
   fastgptBaseUrl         String
-  fastgptApiKeyEncrypted String
+  fastgptApiKeyEncrypted String?
   enabledScaleIds        Json
   status                 String                 @default("draft")
   lastValidatedAt        DateTime?
