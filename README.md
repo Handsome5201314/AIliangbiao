@@ -163,6 +163,8 @@ npx prisma migrate deploy
 5. 本地演练 `prisma migrate resolve --applied 20260627_baseline` + `prisma migrate deploy`。
 6. 汇报迁移命令、备份路径和回滚方案，等待确认。
 
+确认后，先用 `--prepare-only` 准备新 release、备份、构建和 pgvector `db` 容器；该模式不会执行 Prisma、不会重建 app、不会切换 `current`。生产库 catch-up 和 baseline resolve 完成后，再执行常规 redeploy。
+
 生产写库前不得跳过人工确认。
 
 ## 日常更新

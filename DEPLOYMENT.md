@@ -265,6 +265,13 @@ npx prisma migrate deploy
 
 确认后，已有生产库的最小写操作通常是：
 
+先准备新 release、执行备份、构建镜像并用新 compose 启动 `db`。这一步不会执行 Prisma、不会重建 app、不会切换 `current`：
+
+```bash
+DEPLOY_PASSWORD='use-env-only' \
+python scripts/docker-redeploy.py --host tongyimohe.cloud --prepare-only
+```
+
 ```bash
 APP_ENV_FILE=/opt/ai-scale-system/shared/.env.production \
 docker compose -f docker-compose.prod.yml --env-file /opt/ai-scale-system/shared/.env.production run --rm --no-deps app \
@@ -389,3 +396,7 @@ curl https://tongyimohe.cloud/api/health
 ### 什么时候可以用 --skip-prisma-migrate？
 
 只有在确认本次 release 没有 schema/migration 变化，或迁移已在同一窗口单独完成并验证时才可以用。默认不要跳过迁移。
+
+### 什么时候可以用 --prepare-only？
+
+已有生产库需要切换到 pgvector 镜像并执行 catch-up SQL 时使用。它只准备 release、备份、构建和启动 db，明确不会执行 Prisma、不会重建 app、不会切换 `current`。

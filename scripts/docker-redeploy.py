@@ -82,6 +82,7 @@ class DeployConfig:
     domain: str
     skip_backup: bool
     skip_prisma_migrate: bool
+    prepare_only: bool
     keep_releases: int
     diff_only: bool
     diff_limit: int
@@ -410,6 +411,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--domain", default=os.environ.get("DEPLOY_DOMAIN", DEFAULT_DOMAIN))
     parser.add_argument("--skip-backup", action="store_true")
     parser.add_argument("--skip-prisma-migrate", action="store_true")
+    parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Upload, backup, build, and ensure db, then stop before Prisma/app/current changes.",
+    )
     parser.add_argument("--keep-releases", type=int, default=3)
     parser.add_argument("--diff-only", action="store_true")
     parser.add_argument("--diff-limit", type=int, default=40)
@@ -441,6 +447,7 @@ def parse_args() -> DeployConfig:
         domain=args.domain,
         skip_backup=args.skip_backup,
         skip_prisma_migrate=args.skip_prisma_migrate,
+        prepare_only=args.prepare_only,
         keep_releases=args.keep_releases,
         diff_only=args.diff_only,
         diff_limit=args.diff_limit,
@@ -526,6 +533,12 @@ def main() -> int:
 
         print("Ensuring database container is running ...")
         run_remote(client, f"{compose_prefix} up -d db", timeout=600)
+
+        if config.prepare_only:
+            print("\nPrepare-only mode complete.")
+            print(f"Prepared release: {release_dir}")
+            print("No Prisma migration, app recreation, health switch, or current symlink change was performed.")
+            return 0
 
         if not config.skip_prisma_migrate:
             print("Running prisma migrate deploy ...")

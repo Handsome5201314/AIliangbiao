@@ -118,12 +118,28 @@ class DockerRedeployTests(unittest.TestCase):
     def test_parser_defaults_to_root_and_exposes_diff_only(self) -> None:
         parser = self.module.build_arg_parser()
         option_names = {option for action in parser._actions for option in action.option_strings}
-        args = parser.parse_args(["--diff-only"])
+        args = parser.parse_args(["--diff-only", "--prepare-only"])
 
         self.assertEqual(args.user, "root")
         self.assertTrue(args.diff_only)
+        self.assertTrue(args.prepare_only)
         self.assertIn("--key-path", option_names)
+        self.assertIn("--prepare-only", option_names)
         self.assertNotIn("--password", option_names)
+
+    def test_prepare_only_stops_before_prisma_app_and_current_switch(self) -> None:
+        source = read_project_file("scripts", "docker-redeploy.py")
+
+        db_ready = source.index('f"{compose_prefix} up -d db"')
+        prepare_guard = source.index("if config.prepare_only:")
+        prisma_migrate = source.index("Running prisma migrate deploy")
+        app_recreate = source.index("Recreating app container")
+        current_switch = source.index("sudo ln -sfn {shell_quote(release_dir)}")
+
+        self.assertLess(db_ready, prepare_guard)
+        self.assertLess(prepare_guard, prisma_migrate)
+        self.assertLess(prepare_guard, app_recreate)
+        self.assertLess(prepare_guard, current_switch)
 
     def test_run_remote_drains_stdout_and_stderr_before_exit_status(self) -> None:
         class FakeChannel:
