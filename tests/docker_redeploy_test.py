@@ -13,7 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "docker-redeploy.py"
-PGVECTOR_IMAGE = "pgvector/pgvector:0.8.3-pg16-bookworm"
+PGVECTOR_IMAGE = "pgvector/pgvector:0.8.3-pg16"
 
 
 def load_deploy_module():

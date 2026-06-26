@@ -24,7 +24,7 @@ const DUMP_CONTENTS_FILENAME = 'production.dump.contents.txt';
 const VERIFICATION_SQL_FILENAME = 'restore-verification.sql';
 const ENV_SNAPSHOT_FILENAME = 'env-snapshot-instructions.md';
 const MANIFEST_FILENAME = 'manifest.json';
-const PGVECTOR_IMAGE = 'pgvector/pgvector:0.8.3-pg16-bookworm';
+const PGVECTOR_IMAGE = 'pgvector/pgvector:0.8.3-pg16';
 
 function usage() {
   console.error('Usage: SOURCE_DATABASE_URL=postgresql://... node scripts/export-production-db.mjs');

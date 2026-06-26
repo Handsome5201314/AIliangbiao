@@ -53,7 +53,7 @@ AI量表系统是面向儿童评估、医生协作、平台知识治理和外部
 
 本地开发：
 
-- `db`: `pgvector/pgvector:0.8.3-pg16-bookworm`，暴露到 `127.0.0.1:5432`
+- `db`: `pgvector/pgvector:0.8.3-pg16`，暴露到 `127.0.0.1:5432`
 - `hermes`: `nousresearch/hermes-agent:latest`，暴露到 `127.0.0.1:8642`
 - `app`: 本机 `npm run dev`
 

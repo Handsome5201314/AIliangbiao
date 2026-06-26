@@ -6,7 +6,7 @@
 
 - 发布源：云端只部署 Git 仓库中已确认的版本，不从本地临时文件、构建产物或手工补丁发布。
 - 运行拓扑：生产保持 `app + db + hermes` 三容器拓扑。
-- 数据库镜像：PostgreSQL 使用 `pgvector/pgvector:0.8.3-pg16-bookworm`，确保 `vector` 扩展可用。
+- 数据库镜像：PostgreSQL 使用 `pgvector/pgvector:0.8.3-pg16`，确保 `vector` 扩展可用。
 - 生产 env：`/opt/ai-scale-system/shared/.env.production` 留在服务器，不进入 Git，不打包进 release。
 - 生产迁移：禁止 `prisma db push`；只允许备份、审查、`prisma migrate deploy` 和经确认的 `prisma migrate resolve`。
 - 生产写库：任何写生产数据库的操作前，必须先完成备份和本地恢复演练，并把 SQL/迁移、备份路径、回滚方案提交人工确认。
@@ -68,7 +68,7 @@ docker compose -f docker-compose.dev.yml --env-file .env.local up -d
 
 本地 Compose 会启动：
 
-- `db`: `pgvector/pgvector:0.8.3-pg16-bookworm`
+- `db`: `pgvector/pgvector:0.8.3-pg16`
 - `hermes`: `nousresearch/hermes-agent:latest`
 
 ### 4. 初始化空库 schema
@@ -339,7 +339,7 @@ bash scripts/docker-db-backup.sh
 ### 备份结构检查
 
 ```bash
-docker run --rm -i pgvector/pgvector:0.8.3-pg16-bookworm pg_restore --list < /path/to/backup.dump
+docker run --rm -i pgvector/pgvector:0.8.3-pg16 pg_restore --list < /path/to/backup.dump
 ```
 
 ### 恢复
@@ -383,7 +383,7 @@ curl https://tongyimohe.cloud/api/health
 
 ### 为什么使用 pgvector 镜像？
 
-平台知识检索使用 `Unsupported("vector")` 字段，普通 PostgreSQL 镜像没有内置 pgvector 扩展。固定 `pgvector/pgvector:0.8.3-pg16-bookworm` 可以保持 Postgres 16 兼容，同时让 `CREATE EXTENSION vector` 可用。
+平台知识检索使用 `Unsupported("vector")` 字段，普通 PostgreSQL 镜像没有内置 pgvector 扩展。固定 `pgvector/pgvector:0.8.3-pg16` 可以保持 Postgres 16 兼容，同时让 `CREATE EXTENSION vector` 可用。
 
 ### 为什么旧 migration 被归档？
 
