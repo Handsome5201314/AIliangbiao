@@ -2,7 +2,7 @@ name: ai-scale-system-dev
 
 services:
   db:
-    image: postgres:16-bookworm
+    image: pgvector/pgvector:0.8.3-pg16-bookworm
     container_name: ai-scale-db-dev
     restart: unless-stopped
     environment:

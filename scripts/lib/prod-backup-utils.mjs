@@ -34,6 +34,11 @@ export function buildVerificationSql() {
 -- Note: Prisma model MemberProfile is mapped to ChildProfile in the physical PostgreSQL schema.
 SELECT
 ${countClauses};
+
+-- Verify pgvector is available in the restored database.
+SELECT extname, extversion
+FROM pg_extension
+WHERE extname = 'vector';
 `;
 }
 

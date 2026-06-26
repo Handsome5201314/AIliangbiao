@@ -23,7 +23,7 @@ mkdir -p "$BACKUP_DIR"
 
 DUMP_PATH="$BACKUP_DIR/${POSTGRES_DB}_migration_${TIMESTAMP}.dump"
 
-docker run --rm postgres:16-bookworm \
+docker run --rm pgvector/pgvector:0.8.3-pg16-bookworm \
   pg_dump --format=custom --no-owner --no-privileges --dbname="$SOURCE_DATABASE_URL" > "$DUMP_PATH"
 
 cat "$DUMP_PATH" | docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T db \

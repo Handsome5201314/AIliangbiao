@@ -35,6 +35,8 @@ test('buildVerificationSql uses physical table names required by the current sch
   assert.match(sql, /"Admin"/);
   assert.match(sql, /"ApiKey"/);
   assert.match(sql, /"SystemConfig"/);
+  assert.match(sql, /pg_extension/);
+  assert.match(sql, /vector/);
   assert.match(sql, /MemberProfile is mapped to ChildProfile/);
   assert.doesNotMatch(sql, /FROM "MemberProfile"/);
 });

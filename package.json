@@ -20,7 +20,7 @@
     "prisma:generate": "prisma generate",
     "db:dev:up": "docker compose -f docker-compose.dev.yml --env-file .env.local up -d",
     "db:dev:down": "docker compose -f docker-compose.dev.yml --env-file .env.local down",
-    "db:dev:push": "prisma db push",
+    "db:dev:migrate": "prisma migrate deploy",
     "db:dev:seed": "node scripts/seed-local-dev.mjs",
     "skill:build": "tsc -p packages/assessment-skill/tsconfig.build.json",
     "skill:start": "node packages/assessment-skill/dist/standalone.js"

@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const PHASE1_MIGRATION = "prisma/migrations/20260623_developmental_closure_phase1/migration.sql";
+const CURRENT_BASELINE_MIGRATION = "prisma/migrations/20260627_baseline/migration.sql";
 
 async function readSchema() {
   return readFile("prisma/schema.prisma", "utf8");
 }
 
-async function readPhase1Migration() {
+async function readCurrentBaselineMigration() {
   try {
-    return await readFile(PHASE1_MIGRATION, "utf8");
+    return await readFile(CURRENT_BASELINE_MIGRATION, "utf8");
   } catch (error) {
     assert.fail(
-      `Phase 1 migration is missing at ${PHASE1_MIGRATION}: ${
+      `Current baseline migration is missing at ${CURRENT_BASELINE_MIGRATION}: ${
         error instanceof Error ? error.message : String(error)
       }`
     );
@@ -105,7 +105,7 @@ test("Phase 1 closure schema preserves doctor-review and deterministic-report bo
 });
 
 test("Phase 1 migration creates audit-backed tables with indexes and foreign keys", async () => {
-  const migration = await readPhase1Migration();
+  const migration = await readCurrentBaselineMigration();
 
   for (const tableName of [
     "scale_license_metadata",
@@ -134,7 +134,7 @@ test("Phase 1 migration creates audit-backed tables with indexes and foreign key
 
 test("Phase 1 schema artifacts do not include real child privacy examples", async () => {
   const schema = await readSchema();
-  const migration = await readPhase1Migration();
+  const migration = await readCurrentBaselineMigration();
   const combined = `${schema}\n${migration}`;
 
   assert.doesNotMatch(combined, /张三|李四|真实儿童|身份证|手机号/);

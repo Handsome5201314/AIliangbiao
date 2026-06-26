@@ -10,4 +10,4 @@ source "$ROOT_DIR/scripts/docker-env.sh"
 require_env_file "$ENV_FILE"
 
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T app \
-  npx prisma db push
+  npx prisma migrate deploy

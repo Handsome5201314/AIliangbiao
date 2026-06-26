@@ -5,7 +5,7 @@ test("prisma schema should preserve the deep-research Hermes lifecycle and knowl
   const file = await import("node:fs/promises");
   const schema = await file.readFile("prisma/schema.prisma", "utf8");
   const migration = await file.readFile(
-    "prisma/migrations/20260616_platform_knowledge_pgvector/migration.sql",
+    "prisma/migrations/20260627_baseline/migration.sql",
     "utf8"
   );
 
@@ -21,7 +21,7 @@ test("prisma schema should preserve the deep-research Hermes lifecycle and knowl
   assert.match(schema, /tokenCount\s+Int\?/);
   assert.match(schema, /embedding\s+Unsupported\("vector"\)\?/);
   assert.match(migration, /CREATE EXTENSION IF NOT EXISTS vector/i);
-  assert.match(migration, /ALTER TABLE "KnowledgeChunk" ADD COLUMN IF NOT EXISTS "embedding" vector/i);
+  assert.match(migration, /CREATE TABLE "KnowledgeChunk"[\s\S]*"embedding" vector/i);
 });
 
 test("platform explanation service should separate organization and doctor exact supplements", async () => {

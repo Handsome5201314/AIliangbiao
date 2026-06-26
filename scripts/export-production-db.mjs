@@ -24,6 +24,7 @@ const DUMP_CONTENTS_FILENAME = 'production.dump.contents.txt';
 const VERIFICATION_SQL_FILENAME = 'restore-verification.sql';
 const ENV_SNAPSHOT_FILENAME = 'env-snapshot-instructions.md';
 const MANIFEST_FILENAME = 'manifest.json';
+const PGVECTOR_IMAGE = 'pgvector/pgvector:0.8.3-pg16-bookworm';
 
 function usage() {
   console.error('Usage: SOURCE_DATABASE_URL=postgresql://... node scripts/export-production-db.mjs');
@@ -46,7 +47,7 @@ function dockerPgDumpArgs(sourceDatabaseUrl) {
   return [
     'run',
     '--rm',
-    'postgres:16-bookworm',
+    PGVECTOR_IMAGE,
     'pg_dump',
     '--format=custom',
     '--no-owner',
@@ -56,7 +57,7 @@ function dockerPgDumpArgs(sourceDatabaseUrl) {
 }
 
 function dockerPgRestoreListArgs() {
-  return ['run', '--rm', '-i', 'postgres:16-bookworm', 'pg_restore', '--list'];
+  return ['run', '--rm', '-i', PGVECTOR_IMAGE, 'pg_restore', '--list'];
 }
 
 function waitForExit(child, label) {
