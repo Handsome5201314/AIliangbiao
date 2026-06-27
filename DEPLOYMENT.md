@@ -305,6 +305,8 @@ DEPLOY_PASSWORD='use-env-only' \
 python scripts/docker-redeploy.py --host tongyimohe.cloud
 ```
 
+如果本次发布需要强制保留所有旧 release，或不允许清理任何 Docker 镜像/构建缓存，可加 `--skip-cleanup`。已有生产库基线化窗口建议使用该参数，等新版本稳定后再单独评估清理。
+
 脚本行为：
 
 1. 读取本地 Git 跟踪文件并生成 release manifest。
@@ -400,3 +402,7 @@ curl https://tongyimohe.cloud/api/health
 ### 什么时候可以用 --prepare-only？
 
 已有生产库需要切换到 pgvector 镜像并执行 catch-up SQL 时使用。它只准备 release、备份、构建和启动 db，明确不会执行 Prisma、不会重建 app、不会切换 `current`。
+
+### 什么时候可以用 --skip-cleanup？
+
+需要保留旧 release、避免 Docker image/cache prune 影响无关服务时使用。生产基线化和高风险发布窗口默认建议加上它，清理动作留到单独维护窗口。

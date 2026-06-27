@@ -118,13 +118,15 @@ class DockerRedeployTests(unittest.TestCase):
     def test_parser_defaults_to_root_and_exposes_diff_only(self) -> None:
         parser = self.module.build_arg_parser()
         option_names = {option for action in parser._actions for option in action.option_strings}
-        args = parser.parse_args(["--diff-only", "--prepare-only"])
+        args = parser.parse_args(["--diff-only", "--prepare-only", "--skip-cleanup"])
 
         self.assertEqual(args.user, "root")
         self.assertTrue(args.diff_only)
         self.assertTrue(args.prepare_only)
+        self.assertTrue(args.skip_cleanup)
         self.assertIn("--key-path", option_names)
         self.assertIn("--prepare-only", option_names)
+        self.assertIn("--skip-cleanup", option_names)
         self.assertNotIn("--password", option_names)
 
     def test_prepare_only_stops_before_prisma_app_and_current_switch(self) -> None:
@@ -140,6 +142,16 @@ class DockerRedeployTests(unittest.TestCase):
         self.assertLess(prepare_guard, prisma_migrate)
         self.assertLess(prepare_guard, app_recreate)
         self.assertLess(prepare_guard, current_switch)
+
+    def test_cleanup_can_be_skipped_after_current_switch(self) -> None:
+        source = read_project_file("scripts", "docker-redeploy.py")
+
+        current_switch = source.index("sudo ln -sfn {shell_quote(release_dir)}")
+        cleanup_guard = source.index("if config.skip_cleanup:")
+        cleanup_script = source.index("bash scripts/docker-server-cleanup.sh")
+
+        self.assertLess(current_switch, cleanup_guard)
+        self.assertLess(cleanup_guard, cleanup_script)
 
     def test_run_remote_drains_stdout_and_stderr_before_exit_status(self) -> None:
         class FakeChannel:

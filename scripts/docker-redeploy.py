@@ -83,6 +83,7 @@ class DeployConfig:
     skip_backup: bool
     skip_prisma_migrate: bool
     prepare_only: bool
+    skip_cleanup: bool
     keep_releases: int
     diff_only: bool
     diff_limit: int
@@ -412,6 +413,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-backup", action="store_true")
     parser.add_argument("--skip-prisma-migrate", action="store_true")
     parser.add_argument(
+        "--skip-cleanup",
+        action="store_true",
+        help="Do not remove old releases or prune Docker images/cache after switching current.",
+    )
+    parser.add_argument(
         "--prepare-only",
         action="store_true",
         help="Upload, backup, build, and ensure db, then stop before Prisma/app/current changes.",
@@ -448,6 +454,7 @@ def parse_args() -> DeployConfig:
         skip_backup=args.skip_backup,
         skip_prisma_migrate=args.skip_prisma_migrate,
         prepare_only=args.prepare_only,
+        skip_cleanup=args.skip_cleanup,
         keep_releases=args.keep_releases,
         diff_only=args.diff_only,
         diff_limit=args.diff_limit,
@@ -587,21 +594,24 @@ def main() -> int:
             f"sudo ln -sfn {shell_quote(release_dir)} {shell_quote(config.current_link)}",
         )
 
-        print("Cleaning old releases and unused Docker cache ...")
-        run_remote(
-            client,
-            " ".join(
-                [
-                    f"cd {shell_quote(release_dir)}",
-                    "&&",
-                    "sudo env",
-                    f"APP_BASE={shell_quote(config.app_base)}",
-                    f"KEEP_RELEASES={config.keep_releases}",
-                    "bash scripts/docker-server-cleanup.sh",
-                ]
-            ),
-            timeout=3600,
-        )
+        if config.skip_cleanup:
+            print("Skipping release and Docker cleanup.")
+        else:
+            print("Cleaning old releases and unused Docker cache ...")
+            run_remote(
+                client,
+                " ".join(
+                    [
+                        f"cd {shell_quote(release_dir)}",
+                        "&&",
+                        "sudo env",
+                        f"APP_BASE={shell_quote(config.app_base)}",
+                        f"KEEP_RELEASES={config.keep_releases}",
+                        "bash scripts/docker-server-cleanup.sh",
+                    ]
+                ),
+                timeout=3600,
+            )
 
         current_target = run_remote(
             client,

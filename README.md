@@ -187,6 +187,8 @@ DEPLOY_KEY_PATH=/path/to/deploy_key python scripts/docker-redeploy.py --host ton
 DEPLOY_PASSWORD='use-env-only' python scripts/docker-redeploy.py --host tongyimohe.cloud
 ```
 
+基线化窗口或需要保留旧 release 时，加 `--skip-cleanup`，避免自动删除旧 release 或 prune Docker 镜像/构建缓存。
+
 脚本只打包 Git 跟踪文件，并排除 env、secret、`node_modules`、`.next`、日志和临时文件。脚本会先备份数据库，再构建应用、运行 `prisma migrate deploy`，并在本地和公网健康检查都通过后才切换 `/opt/ai-scale-system/current`。
 
 ## 备份、恢复与回滚
