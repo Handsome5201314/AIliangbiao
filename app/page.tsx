@@ -6,12 +6,19 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Brain,
+  ClipboardList,
+  FileText,
   Heart,
+  History,
   LayoutDashboard,
   LogOut,
   Mic,
+  Monitor,
   Sparkles,
+  Smartphone,
+  Stethoscope,
   UserPlus,
+  UserRound,
   Users,
   Eye,
 } from 'lucide-react';
@@ -32,6 +39,12 @@ const NewbornGrowthTracker = dynamic(
   { ssr: false }
 );
 import { useAssessment, useAuthSession, useProfile, useSkillSession } from '@/contexts';
+import {
+  ROOT_HOME_VIEW_STORAGE_KEY,
+  normalizeRootHomeViewMode,
+  resolveRootHomeView,
+  type ResolvedRootHomeView,
+} from '@/lib/root-home-view';
 
 type ChildScaleCategoryKey = 'all_child' | 'child_development' | 'child_clinical';
 
@@ -52,6 +65,45 @@ const CATEGORY_TABS: Array<{ key: ChildScaleCategoryKey; labels: Record<Language
   { key: 'child_development', labels: { zh: '儿童发育', en: 'Child Development' } },
   { key: 'child_clinical', labels: { zh: '儿童临床', en: 'Child Clinical' } },
 ];
+
+const ROOT_HOME_MOBILE_MEDIA_QUERY = '(max-width: 767px)';
+const PARENT_SELF_BLOCKED_SCALE_IDS = new Set(['CARS', 'VINELAND_3']);
+
+async function fetchChildScaleLibrary(skillToken?: string | null) {
+  const params = new URLSearchParams();
+  params.set('category', 'all_child');
+  const query = `?${params.toString()}`;
+
+  if (skillToken) {
+    try {
+      const response = await fetch(`/api/skill/v1/scales${query}`, {
+        headers: { Authorization: `Bearer ${skillToken}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && Array.isArray(payload.scales)) {
+        return payload.scales as ScaleDefinition[];
+      }
+    } catch {
+      // Keep the existing public catalog path available when the skill session is not reachable.
+    }
+  }
+
+  const response = await fetch(`/api/scales${query}`);
+  const payload = await response.json().catch(() => ({}));
+  return Array.isArray(payload.scales) ? (payload.scales as ScaleDefinition[]) : [];
+}
+
+function isParentSelfScale(scale: ScaleDefinition) {
+  if (PARENT_SELF_BLOCKED_SCALE_IDS.has(scale.id.toUpperCase())) {
+    return false;
+  }
+
+  if (scale.interactionMode === 'web_handoff') {
+    return false;
+  }
+
+  return scale.isPediatric || scale.productGroup === 'clinical_child' || scale.category === 'Child Development';
+}
 
 function getScaleCardConfig(scaleId: string) {
   return SCALE_CARDS.find((item) => item.id === scaleId);
@@ -110,7 +162,585 @@ function LanguageSwitcher({
   );
 }
 
-export default function Home() {
+export default function RootHomeRouter() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [resolvedView, setResolvedView] = useState<ResolvedRootHomeView | null>(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(ROOT_HOME_MOBILE_MEDIA_QUERY);
+
+    const updateResolvedView = () => {
+      const queryView = searchParams.get('view');
+      const queryMode = normalizeRootHomeViewMode(queryView);
+
+      try {
+        if (queryView !== null && queryMode !== 'auto') {
+          window.localStorage.setItem(ROOT_HOME_VIEW_STORAGE_KEY, queryMode);
+        } else if (queryView === 'auto') {
+          window.localStorage.setItem(ROOT_HOME_VIEW_STORAGE_KEY, 'auto');
+        }
+      } catch {
+        // localStorage can be blocked in private or embedded browser modes.
+      }
+
+      let storedView: string | null = null;
+      try {
+        storedView = window.localStorage.getItem(ROOT_HOME_VIEW_STORAGE_KEY);
+      } catch {
+        storedView = null;
+      }
+
+      setResolvedView(
+        resolveRootHomeView({
+          queryView,
+          storedView,
+          isMobileViewport: mediaQuery.matches,
+        })
+      );
+    };
+
+    updateResolvedView();
+    mediaQuery.addEventListener('change', updateResolvedView);
+    return () => mediaQuery.removeEventListener('change', updateResolvedView);
+  }, [searchParams]);
+
+  const setRootView = useCallback(
+    (view: ResolvedRootHomeView) => {
+      try {
+        window.localStorage.setItem(ROOT_HOME_VIEW_STORAGE_KEY, view);
+      } catch {
+        // localStorage can be blocked in private or embedded browser modes.
+      }
+
+      setResolvedView(view);
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set('view', view);
+      const query = nextParams.toString();
+      router.replace(query ? `/?${query}` : '/', { scroll: false });
+    },
+    [router, searchParams]
+  );
+
+  if (!resolvedView) {
+    return <div className="min-h-screen bg-background" aria-hidden="true" />;
+  }
+
+  return resolvedView === 'mobile' ? (
+    <MobileHome onSwitchToDesktop={() => setRootView('desktop')} />
+  ) : (
+    <DesktopHome onSwitchToMobile={() => setRootView('mobile')} />
+  );
+}
+
+type MobileHomeTab = 'home' | 'scales' | 'history';
+
+type MobileHistoryItem = {
+  id: string;
+  scaleId: string;
+  scaleName: string;
+  childName: string;
+  completedAt: string;
+  riskLabel?: string;
+};
+
+function MobileHome({ onSwitchToDesktop }: { onSwitchToDesktop: () => void }) {
+  const router = useRouter();
+  const { currentScale, setCurrentScale, resetAssessment } = useAssessment();
+  const { user, loading: authLoading, isAuthenticated, isDoctor, logout } = useAuthSession();
+  const { profile, profiles, selectProfile, isGuest } = useProfile();
+  const { token: skillToken, loading: skillSessionLoading, error: skillSessionError } = useSkillSession();
+
+  const [language, setLanguage] = useState<LanguageCode>('zh');
+  const [activeTab, setActiveTab] = useState<MobileHomeTab>('home');
+  const [selectedCategory, setSelectedCategory] = useState<ChildScaleCategoryKey>('all_child');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [scales, setScales] = useState<ScaleDefinition[]>([]);
+  const [scalesLoading, setScalesLoading] = useState(true);
+  const [historyItems, setHistoryItems] = useState<MobileHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  const loadScaleLibrary = useCallback(async () => {
+    return fetchChildScaleLibrary(skillToken);
+  }, [skillToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setScalesLoading(true);
+
+    loadScaleLibrary()
+      .then((clinicalScales) => {
+        if (!cancelled) {
+          setScales(clinicalScales);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setScalesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadScaleLibrary, skillSessionLoading]);
+
+  useEffect(() => {
+    if (activeTab !== 'history' || !isAuthenticated || isDoctor) {
+      return;
+    }
+
+    let cancelled = false;
+    setHistoryLoading(true);
+
+    fetch(`/api/assessment/history?profileId=${encodeURIComponent(profile.id)}`)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !Array.isArray(payload.history)) {
+          return [];
+        }
+        return payload.history as MobileHistoryItem[];
+      })
+      .then((items) => {
+        if (!cancelled) {
+          setHistoryItems(items.slice(0, 5));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, isAuthenticated, isDoctor, profile.id]);
+
+  const filteredMobileScales = useMemo(() => {
+    return scales.filter((scale) => {
+      if (!isParentSelfScale(scale)) {
+        return false;
+      }
+
+      if (selectedCategory === 'child_development' && scale.category !== 'Child Development') {
+        return false;
+      }
+
+      if (
+        selectedCategory === 'child_clinical' &&
+        (scale.category === 'Child Development' || scale.productGroup !== 'clinical_child')
+      ) {
+        return false;
+      }
+
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) {
+        return true;
+      }
+
+      const title = resolveLocalizedText(scale.title, language);
+      const description = resolveLocalizedText(scale.description, language);
+      return [scale.id, title, description, ...(scale.tags ?? [])].join(' ').toLowerCase().includes(q);
+    });
+  }, [language, scales, searchQuery, selectedCategory]);
+
+  const featuredScales = useMemo(() => filteredMobileScales.slice(0, 4), [filteredMobileScales]);
+  const activeScaleList = activeTab === 'home' ? featuredScales : filteredMobileScales;
+  const identityLabel = isDoctor
+    ? user?.doctorProfile?.realName || user?.email || '医生账号'
+    : profile.nickname;
+
+  const goToPatientLogin = useCallback(() => {
+    if (isAuthenticated && isDoctor) {
+      logout();
+    }
+    router.push('/auth/login');
+  }, [isAuthenticated, isDoctor, logout, router]);
+
+  const goToDoctorEntry = useCallback(() => {
+    router.push(isAuthenticated && isDoctor ? '/doctor' : '/doctor/login');
+  }, [isAuthenticated, isDoctor, router]);
+
+  const renderScaleCard = (scale: ScaleDefinition) => {
+    const cardConfig = getScaleCardConfig(scale.id);
+    const localizedTitle = resolveLocalizedText(scale.title, language);
+    const localizedDescription = resolveLocalizedText(scale.description, language);
+    const estimatedTime = getEstimatedTime(scale.questions.length, scale.estimatedMinutes);
+
+    return (
+      <button
+        key={scale.id}
+        type="button"
+        onClick={() => setCurrentScale(scale)}
+        className="w-full rounded-[22px] border border-slate-200 bg-white p-4 text-left shadow-sm transition active:scale-[0.99]"
+      >
+        <div className="flex items-start gap-3">
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${cardConfig?.bgColor || 'bg-slate-100'}`}>
+            {cardConfig?.icon || <ClipboardList className="h-6 w-6 text-slate-500" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-base font-black text-slate-950">{scale.id}</div>
+                <div className="mt-0.5 truncate text-sm font-semibold text-slate-700">{localizedTitle}</div>
+              </div>
+              <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                {estimatedTime}
+              </span>
+            </div>
+            <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{localizedDescription}</p>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1.5 text-xs font-bold text-white">
+              <span>开始自测</span>
+              <Mic className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
+      </button>
+    );
+  };
+
+  if (currentScale) {
+    return (
+      <div data-root-home-view="mobile" className="min-h-dvh bg-[#f6fbf9] text-slate-950">
+        <nav className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex max-w-[430px] items-center gap-3">
+            <button
+              type="button"
+              onClick={resetAssessment}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700"
+              aria-label="返回手机版首页"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-black text-slate-950">
+                {resolveLocalizedText(currentScale.title, language)}
+              </div>
+              <div className="text-xs font-semibold text-slate-500">手机版自测</div>
+            </div>
+            <button
+              type="button"
+              onClick={onSwitchToDesktop}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+            >
+              <Monitor className="h-4 w-4" />
+              电脑版
+            </button>
+          </div>
+        </nav>
+        <main className="mx-auto max-w-[430px] px-3 py-4">
+          {currentScale.interactionMode === 'web_handoff' ? (
+            <WebHandoffLauncher scaleId={currentScale.id} language={language} />
+          ) : (
+            <Questionnaire scale={currentScale} language={language} />
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div data-root-home-view="mobile" className="min-h-dvh bg-[#f6fbf9] pb-24 text-slate-950">
+      <div className="mx-auto min-h-dvh max-w-[430px] px-4 pt-5">
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-1.5 text-sm font-black text-indigo-600">
+              <Sparkles className="h-4 w-4" />
+              智伴童行 H5
+            </div>
+            <h1 className="mt-3 text-[34px] font-black leading-tight tracking-normal text-slate-950">
+              我的健康筛查空间
+            </h1>
+            <p className="mt-3 max-w-[320px] text-base leading-7 text-slate-500">
+              家长和患者优先进入自测；医生工作台保留为专业入口。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onSwitchToDesktop}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm"
+          >
+            <Monitor className="h-4 w-4" />
+            电脑版
+          </button>
+        </header>
+
+        <section className="mt-6 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          {isDoctor ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                  <Stethoscope className="h-7 w-7" />
+                </div>
+                <div>
+                  <div className="text-xl font-black">{identityLabel}</div>
+                  <div className="text-sm font-semibold text-slate-500">医生账号已登录</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={goToDoctorEntry}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-base font-black text-white"
+              >
+                <Stethoscope className="h-5 w-5" />
+                进入医生工作台
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-center gap-4">
+                <div className="relative shrink-0">
+                  <div className="rounded-2xl bg-indigo-50 p-1.5">
+                    <Avatar nickname={profile.nickname} className="h-16 w-16 rounded-xl" />
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-4 border-white bg-emerald-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="truncate text-2xl font-black">{profile.nickname}</h2>
+                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-600">
+                      {isGuest ? '游客' : '已登录'}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-500">
+                    默认从适合家长自评的量表开始，必要时再绑定医生。
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-bold text-slate-500">家庭成员</span>
+                  <select
+                    value={profile.id}
+                    onChange={(event) => selectProfile(event.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-black outline-none"
+                  >
+                    {profiles.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.nickname}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsOnboardingOpen(true)}
+                  className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-base font-black text-slate-950"
+                >
+                  <UserPlus className="h-5 w-5" />
+                  新增成员
+                </button>
+              </div>
+
+              {!authLoading && !isAuthenticated ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={goToPatientLogin}
+                    className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white"
+                  >
+                    患者登录
+                  </button>
+                  <Link
+                    href="/auth/register"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-black text-slate-950"
+                  >
+                    注册账号
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </section>
+
+        {!isDoctor ? (
+          <section className="mt-5 grid grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab('scales')}
+              className="rounded-[22px] border border-emerald-100 bg-emerald-50 p-4 text-left"
+            >
+              <ClipboardList className="mb-3 h-6 w-6 text-emerald-600" />
+              <div className="text-sm font-black text-slate-950">开始自测</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className="rounded-[22px] border border-indigo-100 bg-indigo-50 p-4 text-left"
+            >
+              <History className="mb-3 h-6 w-6 text-indigo-600" />
+              <div className="text-sm font-black text-slate-950">历史记录</div>
+            </button>
+            <button
+              type="button"
+              onClick={goToDoctorEntry}
+              className="rounded-[22px] border border-amber-100 bg-amber-50 p-4 text-left"
+            >
+              <Stethoscope className="mb-3 h-6 w-6 text-amber-600" />
+              <div className="text-sm font-black text-slate-950">医生入口</div>
+            </button>
+          </section>
+        ) : null}
+
+        {!isDoctor && activeTab !== 'history' ? (
+          <section className="mt-7">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  {activeTab === 'home' ? '推荐自测' : '全部自测量表'}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">仅展示适合家长/患者自评的量表。</p>
+              </div>
+              <LanguageSwitcher language={language} onChange={setLanguage} />
+            </div>
+
+            {activeTab === 'scales' ? (
+              <div className="mb-4 space-y-3">
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="搜索量表名称或标签"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none"
+                />
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {CATEGORY_TABS.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setSelectedCategory(tab.key)}
+                      className={`shrink-0 rounded-full px-4 py-2 text-sm font-black ${
+                        selectedCategory === tab.key ? 'bg-slate-950 text-white' : 'bg-white text-slate-600'
+                      }`}
+                    >
+                      {tab.labels[language]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {skillSessionError ? (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+                自测会话暂未就绪：{skillSessionError}
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              {scalesLoading || skillSessionLoading ? (
+                [0, 1, 2].map((item) => (
+                  <div key={item} className="h-32 animate-pulse rounded-[22px] border border-slate-200 bg-white" />
+                ))
+              ) : (
+                activeScaleList.map(renderScaleCard)
+              )}
+            </div>
+
+            {!scalesLoading && !skillSessionLoading && activeScaleList.length === 0 ? (
+              <div className="rounded-[22px] border border-dashed border-slate-300 bg-white p-5 text-center text-sm leading-6 text-slate-500">
+                暂时没有符合条件的自测量表，请调整筛选或稍后再试。
+              </div>
+            ) : null}
+
+            {activeTab === 'home' && filteredMobileScales.length > featuredScales.length ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('scales')}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950"
+              >
+                查看全部量表
+                <FileText className="h-4 w-4" />
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+
+        {!isDoctor && activeTab === 'history' ? (
+          <section className="mt-7">
+            <h2 className="text-xl font-black text-slate-950">历史记录</h2>
+            <p className="mt-1 text-sm text-slate-500">仅显示当前账号和当前成员的已保存记录。</p>
+
+            {!isAuthenticated ? (
+              <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-5 text-center">
+                <UserRound className="mx-auto mb-3 h-8 w-8 text-slate-400" />
+                <p className="text-sm leading-6 text-slate-500">登录后可以查看正式保存的历史记录。</p>
+                <button
+                  type="button"
+                  onClick={goToPatientLogin}
+                  className="mt-4 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white"
+                >
+                  患者登录
+                </button>
+              </div>
+            ) : historyLoading ? (
+              <div className="mt-4 h-32 animate-pulse rounded-[22px] border border-slate-200 bg-white" />
+            ) : historyItems.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {historyItems.map((item) => (
+                  <div key={item.id} className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-black text-slate-950">{item.scaleName}</div>
+                        <div className="mt-1 text-sm text-slate-500">{item.childName}</div>
+                      </div>
+                      {item.riskLabel ? (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                          {item.riskLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 text-xs font-semibold text-slate-400">
+                      {new Date(item.completedAt).toLocaleString('zh-CN')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-[22px] border border-dashed border-slate-300 bg-white p-5 text-center text-sm leading-6 text-slate-500">
+                当前成员还没有正式保存的评估记录。
+              </div>
+            )}
+          </section>
+        ) : null}
+      </div>
+
+      {!isDoctor ? (
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur">
+          <div className="mx-auto grid max-w-[430px] grid-cols-3 gap-2">
+            {[
+              { key: 'home' as const, label: '首页', Icon: UserRound },
+              { key: 'scales' as const, label: '自测', Icon: ClipboardList },
+              { key: 'history' as const, label: '记录', Icon: History },
+            ].map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`flex flex-col items-center gap-1 rounded-2xl px-3 py-2 text-xs font-black ${
+                  activeTab === key ? 'bg-slate-950 text-white' : 'text-slate-500'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
+      ) : null}
+
+      <AccountOnboardingModal
+        open={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        reason="manual"
+      />
+    </div>
+  );
+}
+
+function DesktopHome({ onSwitchToMobile }: { onSwitchToMobile?: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { currentScale, setCurrentScale, resetAssessment } = useAssessment();
@@ -127,27 +757,7 @@ export default function Home() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   const loadScaleLibrary = useCallback(async () => {
-    const params = new URLSearchParams();
-    params.set('category', 'all_child');
-    const query = `?${params.toString()}`;
-
-    if (skillToken) {
-      try {
-        const response = await fetch(`/api/skill/v1/scales${query}`, {
-          headers: { Authorization: `Bearer ${skillToken}` },
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (response.ok && Array.isArray(payload.scales)) {
-          return payload.scales as ScaleDefinition[];
-        }
-      } catch {
-        // fall through to public scales
-      }
-    }
-
-    const response = await fetch(`/api/scales${query}`);
-    const payload = await response.json().catch(() => ({}));
-    return Array.isArray(payload.scales) ? (payload.scales as ScaleDefinition[]) : [];
+    return fetchChildScaleLibrary(skillToken);
   }, [skillToken]);
 
   useEffect(() => {
@@ -224,7 +834,7 @@ export default function Home() {
   if (currentScale) {
     const cardConfig = getScaleCardConfig(currentScale.id);
     return (
-      <div className="min-h-screen bg-background">
+      <div data-root-home-view="desktop" className="min-h-screen bg-background">
         <nav className="sticky top-0 z-10 flex items-center border-b border-border bg-card px-6 py-4">
           <button onClick={resetAssessment} className="group flex items-center text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="mr-2 h-5 w-5 transition-transform group-hover:-translate-x-1" />
@@ -238,6 +848,16 @@ export default function Home() {
             <span className="font-semibold text-foreground">{resolveLocalizedText(currentScale.title, language)}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {onSwitchToMobile ? (
+              <button
+                type="button"
+                onClick={onSwitchToMobile}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted md:hidden"
+              >
+                <Smartphone className="h-4 w-4" />
+                <span>手机版</span>
+              </button>
+            ) : null}
             <LanguageSwitcher language={language} onChange={setLanguage} />
             <ThemeSwitcher />
             <SettingsButton />
@@ -256,7 +876,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
+    <div data-root-home-view="desktop" className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <header className="relative z-50 mx-auto flex w-full max-w-[1400px] flex-col justify-between gap-4 px-6 py-5 md:flex-row md:items-center md:py-6">
         <div>
           <div className="mb-1.5 inline-flex items-center text-xs font-bold tracking-wider text-primary">
@@ -277,6 +897,16 @@ export default function Home() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3 self-end md:self-auto">
+          {onSwitchToMobile ? (
+            <button
+              type="button"
+              onClick={onSwitchToMobile}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted md:hidden"
+            >
+              <Smartphone className="h-4 w-4" />
+              <span>手机版</span>
+            </button>
+          ) : null}
           {!authLoading && isAuthenticated && isDoctor ? (
             <Link
               href="/doctor"
