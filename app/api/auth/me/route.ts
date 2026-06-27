@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         phone: user.phone,
         role: user.role,
+        isGuest: user.isGuest,
         accountType: session.accountType,
         doctorProfile: user.doctorProfile
           ? {
