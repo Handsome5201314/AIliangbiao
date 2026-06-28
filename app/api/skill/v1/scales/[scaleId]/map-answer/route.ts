@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { authenticateSkillRequest } from '@/lib/assessment-skill/request-auth';
 import { mapNaturalLanguageScaleAnswer } from '@/lib/assessment-skill/scale-service';
+import { recordAnswerMappingDecision } from '@/lib/services/ai-decision-audit';
 
 const requestSchema = z.object({
   questionId: z.number(),
@@ -15,18 +16,28 @@ export async function POST(
   context: { params: Promise<{ scaleId: string }> }
 ) {
   try {
-    authenticateSkillRequest(request, 'skill:scales:read');
+    const session = authenticateSkillRequest(request, 'skill:scales:read');
     const body = requestSchema.parse(await request.json());
     const { scaleId } = await context.params;
+    const mappedAnswer = mapNaturalLanguageScaleAnswer({
+      scaleId,
+      questionId: body.questionId,
+      text: body.text,
+      language: body.language,
+    });
+
+    await recordAnswerMappingDecision({
+      session,
+      scaleId,
+      questionId: body.questionId,
+      text: body.text,
+      language: body.language,
+      result: mappedAnswer,
+    });
 
     return NextResponse.json({
       success: true,
-      ...mapNaturalLanguageScaleAnswer({
-        scaleId,
-        questionId: body.questionId,
-        text: body.text,
-        language: body.language,
-      }),
+      ...mappedAnswer,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

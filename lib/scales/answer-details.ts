@@ -1,15 +1,28 @@
 import { resolveLocalizedText } from "../schemas/core/i18n";
 import type {
   NormalizedScaleAnswerDetailMap,
+  ScaleAnswerDetailInput,
   ScaleAnswerDetailMap,
   ScaleDefinition,
   ScaleQuestion,
   ScaleSymptomOption,
 } from "../schemas/core/types";
 
+type NormalizedAiAnswerDetail = {
+  source?: ScaleAnswerDetailInput["source"];
+};
+
 function normalizeQuestionId(questionId: string) {
   const parsed = Number(questionId);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeConfidence(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.min(Math.max(value, 0), 1);
 }
 
 export function normalizeScaleAnswerDetails(
@@ -39,6 +52,24 @@ export function normalizeScaleAnswerDetails(
 
       if (detail.estimated) {
         nextEntry.estimated = true;
+      }
+
+      const confidence = normalizeConfidence(detail.confidence);
+      if (confidence !== null) {
+        nextEntry.confidence = confidence;
+      }
+
+      const evidence = detail.evidence?.trim();
+      if (evidence) {
+        nextEntry.evidence = evidence.slice(0, 500);
+      }
+
+      if (detail.source) {
+        nextEntry.source = detail.source as NormalizedAiAnswerDetail["source"];
+      }
+
+      if (detail.confirmedLowConfidence === true) {
+        nextEntry.confirmedLowConfidence = true;
       }
 
       if (question.symptomOptions?.length && detail.selectedSymptomIds?.length) {

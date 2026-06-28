@@ -2,13 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getInternalApiUrl } from '@/lib/assessment-skill/internal-api';
 import { authenticateSkillRequest } from '@/lib/assessment-skill/request-auth';
+import { recordConversationAnalysisDecision } from '@/lib/services/ai-decision-audit';
+
+function isAuthError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes('Bearer token') ||
+    error.message.includes('Agent session') ||
+    error.message.includes('required scope')
+  );
+}
 
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ scaleId: string }> }
 ) {
   try {
-    authenticateSkillRequest(request, 'skill:scales:read');
+    const session = authenticateSkillRequest(request, 'skill:scales:read');
     const body = await request.json();
     const { scaleId } = await context.params;
 
@@ -24,6 +37,15 @@ export async function POST(
     });
 
     const text = await proxied.text();
+    if (proxied.ok) {
+      await recordConversationAnalysisDecision({
+        session,
+        scaleId,
+        messages: Array.isArray(body.messages) ? body.messages : [],
+        result: JSON.parse(text),
+      });
+    }
+
     return new NextResponse(text, {
       status: proxied.status,
       headers: {
@@ -32,8 +54,8 @@ export async function POST(
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unauthorized' },
-      { status: 401 }
+      { error: error instanceof Error ? error.message : 'Conversation analysis failed' },
+      { status: isAuthError(error) ? 401 : 500 }
     );
   }
 }

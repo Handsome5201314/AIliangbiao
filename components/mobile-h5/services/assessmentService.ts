@@ -129,6 +129,36 @@ type MobileDoctorReauthResponse = {
   success: boolean;
 };
 
+type AnswerMappingResponse = {
+  success?: boolean;
+  scaleId: string;
+  scaleVersion?: string;
+  questionId: number;
+  mapping: {
+    questionId: number;
+    score: number | null;
+    confidence: number;
+    evidence: string;
+    method: 'option_alias' | 'mapping_hint' | 'unmatched';
+  };
+  needsConfirmation: boolean;
+  requiresExplicitSelection: boolean;
+};
+
+type ConfirmMappedAnswerResponse = {
+  success?: boolean;
+  scaleId: string;
+  scaleVersion?: string;
+  confirmedAnswer: {
+    questionId: number;
+    score: number;
+    confidence: number;
+    evidence: string;
+    source: 'user_confirmed_mapping';
+    reviewRequired: boolean;
+  };
+};
+
 type SubmitContext = {
   scaleId: string;
   childId?: string | null;
@@ -360,6 +390,47 @@ export async function getQuestions(scaleId: string): Promise<Question[]> {
   return scale.questions.map(mapQuestion);
 }
 
+export async function mapNaturalLanguageAnswer(params: {
+  scaleId: string;
+  questionId: string;
+  text: string;
+}): Promise<AnswerMappingResponse> {
+  return apiRequest<AnswerMappingResponse>(
+    `/api/skill/v1/scales/${encodeURIComponent(params.scaleId)}/map-answer`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        questionId: Number(params.questionId),
+        text: params.text,
+        language: 'zh',
+      }),
+    },
+  );
+}
+
+export async function confirmMappedAnswer(params: {
+  scaleId: string;
+  questionId: string;
+  score: number;
+  confidence?: number;
+  evidence?: string;
+}): Promise<ConfirmMappedAnswerResponse> {
+  return apiRequest<ConfirmMappedAnswerResponse>(
+    `/api/skill/v1/scales/${encodeURIComponent(params.scaleId)}/mapped-answers/confirm`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        questionId: Number(params.questionId),
+        score: params.score,
+        confidence: params.confidence,
+        evidence: params.evidence,
+      }),
+    },
+  );
+}
+
 export async function autoSaveLocal(
   sessionId: string,
   answers: Record<string, Answer>,
@@ -409,6 +480,29 @@ export async function clearLocalDraft(sessionId: string, scaleId?: string): Prom
   return { success: true };
 }
 
+function buildAnswerDetails(answers: Record<string, Answer>) {
+  const entries = Object.values(answers)
+    .filter((answer) => (
+      answer.unsure ||
+      answer.source ||
+      typeof answer.confidence === 'number' ||
+      answer.evidence ||
+      answer.confirmedLowConfidence
+    ))
+    .map((answer) => [
+      answer.questionId,
+      {
+        ...(answer.unsure ? { estimated: true } : {}),
+        ...(typeof answer.confidence === 'number' ? { confidence: answer.confidence } : {}),
+        ...(answer.evidence ? { evidence: answer.evidence } : {}),
+        ...(answer.source ? { source: answer.source } : {}),
+        ...(answer.confirmedLowConfidence ? { confirmedLowConfidence: answer.confirmedLowConfidence } : {}),
+      },
+    ]);
+
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
 export async function submitAnswers(
   sessionId: string,
   answers: Record<string, Answer>,
@@ -432,6 +526,7 @@ export async function submitAnswers(
     body: JSON.stringify({
       scaleId: context.scaleId,
       answers: orderedScores,
+      answerDetails: buildAnswerDetails(answers),
     }),
   });
 
@@ -444,6 +539,7 @@ export async function submitAnswers(
       totalScore: evaluation.result.totalScore,
       conclusion: evaluation.result.conclusion,
       answers: orderedScores,
+      answerDetails: buildAnswerDetails(answers),
       ...(context.serverSessionId ? { sessionId: context.serverSessionId } : {}),
     }),
   });

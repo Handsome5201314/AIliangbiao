@@ -290,12 +290,14 @@ function AppInner({ onSwitchToDesktop }: MobileH5AppProps) {
   }
 
   // AI handler
-  const handleOpenAi = () => {
-    if (questions.length > 0) {
-      const q = questions[0]
-      setAiQuestionId(q.id)
-      setAiQuestionNumber(1)
-      setAiQuestionText(q.text)
+  function handleOpenAi(question?: Question, questionNumber?: number) {
+    const activeQuestion = question || questions[0]
+    if (activeQuestion) {
+      const resolvedQuestionNumber =
+        questionNumber || questions.findIndex((item) => item.id === activeQuestion.id) + 1 || 1
+      setAiQuestionId(activeQuestion.id)
+      setAiQuestionNumber(resolvedQuestionNumber)
+      setAiQuestionText(activeQuestion.text)
     }
     setAiDrawerOpen(true)
   }

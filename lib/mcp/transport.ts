@@ -123,13 +123,16 @@ export async function handleSsePost(request: Request): Promise<Response> {
         await touchMcpApiKey(apiKey.id, successfulToolCall);
       }
 
-      if (successfulToolCall) {
+      if (message.method === 'tools/call') {
         const params = message.params as { name?: string; arguments?: unknown };
         await logMcpToolCall({
           apiKeyId: apiKey.id,
           userId: apiKey.userId,
-          action: params.name || 'unknown_tool',
-          scaleId: getScaleId(params.arguments),
+          toolName: params.name || 'unknown_tool',
+          arguments: params.arguments,
+          result: response,
+          status: successfulToolCall ? 'SUCCESS' : 'ERROR',
+          success: successfulToolCall,
           entrypoint: 'canonical',
         });
       }
@@ -188,13 +191,16 @@ export async function handleSsePost(request: Request): Promise<Response> {
         await touchMcpApiKey(session.apiKeyId, successfulToolCall);
       }
 
-      if (successfulToolCall) {
+      if (message.method === 'tools/call') {
         const params = message.params as { name?: string; arguments?: unknown };
         await logMcpToolCall({
           apiKeyId: session.apiKeyId,
           userId: session.userId,
-          action: params.name || 'unknown_tool',
-          scaleId: getScaleId(params.arguments),
+          toolName: params.name || 'unknown_tool',
+          arguments: params.arguments,
+          result: response,
+          status: successfulToolCall ? 'SUCCESS' : 'ERROR',
+          success: successfulToolCall,
           entrypoint: 'canonical',
         });
       }
@@ -267,16 +273,6 @@ async function handleJsonRpcMessage(message: {
     const message = error instanceof Error ? error.message : "Unknown error";
     return createErrorResponse(id, -32603, message);
   }
-}
-
-function getScaleId(args: unknown) {
-  if (!args || typeof args !== 'object' || !('scaleId' in args)) {
-    return null;
-  }
-
-  return typeof (args as { scaleId?: unknown }).scaleId === 'string'
-    ? ((args as { scaleId: string }).scaleId)
-    : null;
 }
 
 function isSuccessfulToolCall(

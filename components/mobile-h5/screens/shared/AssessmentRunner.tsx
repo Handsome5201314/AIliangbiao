@@ -16,8 +16,10 @@ import {
   autoSaveLocal,
   autoSaveServer,
   clearLocalDraft,
+  confirmMappedAnswer,
   loadLatestLocalDraftForScale,
   loadLocalDraft,
+  mapNaturalLanguageAnswer,
 } from '@/components/mobile-h5/services/assessmentService';
 import type {
   AssessmentMode,
@@ -40,8 +42,10 @@ export interface AssessmentRunnerProps {
   onComplete: (answers: Record<string, Answer>) => void | Promise<void>;
   onBack: () => void;
   showAi?: boolean;
-  onOpenAi?: () => void;
+  onOpenAi?: (question?: Question, questionNumber?: number) => void;
 }
+
+type MappingSuggestion = Awaited<ReturnType<typeof mapNaturalLanguageAnswer>>;
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -70,6 +74,9 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [mappingText, setMappingText] = useState('');
+  const [mappingSuggestion, setMappingSuggestion] = useState<MappingSuggestion | null>(null);
+  const [mappingStatus, setMappingStatus] = useState<'idle' | 'mapping' | 'confirming'>('idle');
 
   const isLocked = mode === 'caregiver_handoff_locked';
   const isDoctor = mode === 'doctor_assisted';
@@ -115,6 +122,12 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
     return () => clearTimeout(timer);
   }, [showToast]);
 
+  useEffect(() => {
+    setMappingText('');
+    setMappingSuggestion(null);
+    setMappingStatus('idle');
+  }, [currentQuestion?.id]);
+
   /* ---------- auto-save ---------- */
   const persistAnswers = useCallback(
     (updated: Record<string, Answer>) => {
@@ -143,6 +156,7 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
           optionId: option.id,
           value: option.value,
           unsure: false,
+          source: 'manual',
         },
       };
       setAnswers(updated);
@@ -167,6 +181,107 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
     persistAnswers(updated);
     flashToast('已标记"家长不确定"');
   }, [answers, currentQuestion, flashToast, persistAnswers]);
+
+  const saveMappedAnswer = useCallback(
+    (option: Option, detail: {
+      confidence: number;
+      evidence: string;
+      source: 'ai_mapped' | 'user_confirmed_mapping';
+      confirmedLowConfidence?: boolean;
+    }) => {
+      if (!currentQuestion) return;
+
+      const updated: Record<string, Answer> = {
+        ...answers,
+        [currentQuestion.id]: {
+          questionId: currentQuestion.id,
+          optionId: option.id,
+          value: option.value,
+          unsure: false,
+          confidence: detail.confidence,
+          evidence: detail.evidence,
+          source: detail.source,
+          confirmedLowConfidence: detail.confirmedLowConfidence,
+        },
+      };
+      setAnswers(updated);
+      persistAnswers(updated);
+    },
+    [answers, currentQuestion, persistAnswers],
+  );
+
+  const handleMapCurrentQuestion = useCallback(async () => {
+    if (!currentQuestion) return;
+    const text = mappingText.trim();
+    if (!text) {
+      flashToast('请先写一句孩子的实际表现');
+      return;
+    }
+
+    setMappingStatus('mapping');
+    setMappingSuggestion(null);
+
+    try {
+      const suggestion = await mapNaturalLanguageAnswer({
+        scaleId: scale.id,
+        questionId: currentQuestion.id,
+        text,
+      });
+      setMappingSuggestion(suggestion);
+      if (suggestion.mapping.score === null) {
+        flashToast('AI 暂时无法匹配，请手动选择');
+      }
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : 'AI 匹配失败，请手动选择');
+    } finally {
+      setMappingStatus('idle');
+    }
+  }, [currentQuestion, flashToast, mappingText, scale.id]);
+
+  const handleApplyMappedSuggestion = useCallback(async () => {
+    if (!currentQuestion || !mappingSuggestion || mappingSuggestion.mapping.score === null) {
+      return;
+    }
+
+    const option = currentQuestion.options.find((item) => item.value === mappingSuggestion.mapping.score);
+    if (!option) {
+      flashToast('AI 建议的分值不在当前题选项中');
+      return;
+    }
+
+    if (mappingSuggestion.needsConfirmation) {
+      setMappingStatus('confirming');
+      try {
+        const confirmed = await confirmMappedAnswer({
+          scaleId: scale.id,
+          questionId: currentQuestion.id,
+          score: option.value,
+          confidence: mappingSuggestion.mapping.confidence,
+          evidence: mappingSuggestion.mapping.evidence,
+        });
+
+        saveMappedAnswer(option, {
+          confidence: confirmed.confirmedAnswer.confidence,
+          evidence: confirmed.confirmedAnswer.evidence,
+          source: 'user_confirmed_mapping',
+          confirmedLowConfidence: true,
+        });
+        flashToast('已确认并选择该答案');
+      } catch (error) {
+        flashToast(error instanceof Error ? error.message : '确认失败，请手动选择');
+      } finally {
+        setMappingStatus('idle');
+      }
+      return;
+    }
+
+    saveMappedAnswer(option, {
+      confidence: mappingSuggestion.mapping.confidence,
+      evidence: mappingSuggestion.mapping.evidence,
+      source: 'ai_mapped',
+    });
+    flashToast('已应用 AI 建议，请确认后继续');
+  }, [currentQuestion, flashToast, mappingSuggestion, saveMappedAnswer, scale.id]);
 
   /* ---------- navigation ---------- */
   const handleNext = useCallback(async () => {
@@ -269,11 +384,71 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
           ))}
         </div>
 
+        {showAi && currentQuestion && !isLocked && (
+          <section
+            data-component="ai-answer-mapping-panel"
+            className="mt-5 rounded-card bg-white/80 border border-sage-100 p-4 shadow-sm"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-sage-700">
+              <Sparkles size={16} />
+              <span>AI 帮我匹配答案</span>
+            </div>
+            <textarea
+              value={mappingText}
+              onChange={(event) => setMappingText(event.target.value)}
+              placeholder="例如：最近做作业时经常坐不住，会离开座位。"
+              className="mt-3 min-h-[76px] w-full resize-none rounded-2xl border border-cream-200 bg-cream-50 px-3 py-2 text-sm leading-6 text-foreground outline-none transition-smooth placeholder:text-muted focus:border-sage-300 focus:ring-2 focus:ring-sage-200"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-xs leading-5 text-muted">
+                AI 只给候选答案，最终选择仍由你确认。
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleMapCurrentQuestion}
+                disabled={mappingStatus !== 'idle'}
+                className="shrink-0"
+              >
+                {mappingStatus === 'mapping' ? '匹配中' : '匹配'}
+              </Button>
+            </div>
+
+            {mappingSuggestion && mappingSuggestion.mapping.score !== null && (
+              <div className="mt-3 rounded-2xl bg-sage-50 p-3">
+                <p className="text-sm text-foreground">
+                  建议选择：
+                  <span className="font-medium text-sage-700">
+                    {currentQuestion.options.find((item) => item.value === mappingSuggestion.mapping.score)?.label || `分值 ${mappingSuggestion.mapping.score}`}
+                  </span>
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  置信度 {Math.round(mappingSuggestion.mapping.confidence * 100)}%
+                  {mappingSuggestion.mapping.evidence ? ` · 依据：${mappingSuggestion.mapping.evidence}` : ''}
+                </p>
+                <Button
+                  type="button"
+                  variant={mappingSuggestion.needsConfirmation ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={handleApplyMappedSuggestion}
+                  disabled={mappingStatus !== 'idle'}
+                  className="mt-3 w-full"
+                >
+                  {mappingSuggestion.needsConfirmation
+                    ? (mappingStatus === 'confirming' ? '确认中' : '确认并选择')
+                    : '应用建议'}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* AI helper button (optional) */}
         {showAi && onOpenAi && (
           <button
             type="button"
-            onClick={onOpenAi}
+            onClick={() => onOpenAi(currentQuestion, currentIndex + 1)}
             className="mt-5 mx-auto flex items-center gap-1.5 text-sm text-sky-500 hover:text-sky-600 transition-smooth"
             data-hide-in-locked={isLocked || undefined}
           >

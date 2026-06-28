@@ -230,3 +230,16 @@ test("Phase 8 demo mode does not loosen production MCP or Skill authorization", 
     assert.doesNotMatch(source, /demo_mode|synthetic_data_only|DEMO_ONLY/, `${filePath} must not branch on demo mode`);
   }
 });
+
+test("MCP production tool audit writes canonical calls to McpToolLog", async () => {
+  const source = await readFile("lib/mcp/auth.ts", "utf8");
+
+  assert.match(source, /export async function logMcpToolCall/);
+  assert.match(source, /prisma\.mcpToolLog\.create/);
+  assert.match(source, /toolName:\s*input\.toolName/);
+  assert.match(source, /status:\s*input\.status/);
+  assert.match(source, /success:\s*input\.success/);
+  assert.match(source, /argumentsSummary:/);
+  assert.match(source, /resultSummary:/);
+  assert.doesNotMatch(source, /prisma\.mcpLog\.create/);
+});

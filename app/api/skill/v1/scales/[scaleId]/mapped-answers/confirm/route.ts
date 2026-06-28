@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { authenticateSkillRequest } from '@/lib/assessment-skill/request-auth';
 import { confirmMappedScaleAnswer } from '@/lib/assessment-skill/scale-service';
+import { recordLowConfidenceConfirmationDecision } from '@/lib/services/ai-decision-audit';
 
 const requestSchema = z.object({
   questionId: z.number(),
@@ -16,19 +17,30 @@ export async function POST(
   context: { params: Promise<{ scaleId: string }> }
 ) {
   try {
-    authenticateSkillRequest(request, 'skill:scales:evaluate');
+    const session = authenticateSkillRequest(request, 'skill:scales:evaluate');
     const body = requestSchema.parse(await request.json());
     const { scaleId } = await context.params;
+    const confirmedAnswer = confirmMappedScaleAnswer({
+      scaleId,
+      questionId: body.questionId,
+      score: body.score,
+      confidence: body.confidence,
+      evidence: body.evidence,
+    });
+
+    await recordLowConfidenceConfirmationDecision({
+      session,
+      scaleId,
+      questionId: body.questionId,
+      score: body.score,
+      confidence: body.confidence,
+      evidence: body.evidence,
+      result: confirmedAnswer,
+    });
 
     return NextResponse.json({
       success: true,
-      ...confirmMappedScaleAnswer({
-        scaleId,
-        questionId: body.questionId,
-        score: body.score,
-        confidence: body.confidence,
-        evidence: body.evidence,
-      }),
+      ...confirmedAnswer,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

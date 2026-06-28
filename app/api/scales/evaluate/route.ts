@@ -10,6 +10,10 @@ const requestSchema = z.object({
     estimated: z.boolean().optional(),
     selectedSymptomIds: z.array(z.string()).optional(),
     primarySymptomId: z.string().optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    evidence: z.string().optional(),
+    source: z.enum(["manual", "ai_mapped", "user_confirmed_mapping"]).optional(),
+    confirmedLowConfidence: z.boolean().optional(),
   })).optional(),
 });
 

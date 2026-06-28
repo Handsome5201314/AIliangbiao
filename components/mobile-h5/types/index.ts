@@ -52,6 +52,10 @@ export interface Answer {
   optionId: string;
   value: number;
   unsure?: boolean;     // doctor marked "parent unsure"
+  confidence?: number;
+  evidence?: string;
+  source?: 'manual' | 'ai_mapped' | 'user_confirmed_mapping';
+  confirmedLowConfidence?: boolean;
 }
 
 /* ===== Report ===== */

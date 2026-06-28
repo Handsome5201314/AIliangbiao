@@ -88,12 +88,20 @@ export interface ScaleAnswerDetailInput {
   estimated?: boolean;
   selectedSymptomIds?: string[];
   primarySymptomId?: string;
+  confidence?: number;
+  evidence?: string;
+  source?: 'manual' | 'ai_mapped' | 'user_confirmed_mapping';
+  confirmedLowConfidence?: boolean;
 }
 
 export type ScaleAnswerDetailMap = Record<string, ScaleAnswerDetailInput>;
 
 export interface NormalizedScaleAnswerDetail {
   estimated?: boolean;
+  confidence?: number;
+  evidence?: string;
+  source?: ScaleAnswerDetailInput["source"];
+  confirmedLowConfidence?: boolean;
   selectedSymptoms?: Array<{
     id: string;
     label: string;

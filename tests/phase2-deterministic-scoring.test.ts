@@ -91,3 +91,60 @@ test("natural language answer mapping marks low confidence suggestions for confi
   assert.match(source, /requiresExplicitSelection:\s*suggestion\.score !== null && suggestion\.confidence < 0\.6/);
   assert.match(handlers, /needsConfirmation:\s*mapping\.score !== null && mapping\.confidence < 0\.8/);
 });
+
+test("Skill answer mapping writes sanitized AiDecisionLog audit records", async () => {
+  const mapRoute = await fs.readFile(
+    "app/api/skill/v1/scales/[scaleId]/map-answer/route.ts",
+    "utf8"
+  );
+  const confirmRoute = await fs.readFile(
+    "app/api/skill/v1/scales/[scaleId]/mapped-answers/confirm/route.ts",
+    "utf8"
+  );
+  let auditSource = "";
+  try {
+    auditSource = await fs.readFile("lib/services/ai-decision-audit.ts", "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  assert.match(mapRoute, /recordAnswerMappingDecision/);
+  assert.match(mapRoute, /const session = authenticateSkillRequest\(request,\s*['"]skill:scales:read['"]\)/);
+  assert.match(mapRoute, /await recordAnswerMappingDecision\(/);
+
+  assert.match(confirmRoute, /recordLowConfidenceConfirmationDecision/);
+  assert.match(confirmRoute, /const session = authenticateSkillRequest\(request,\s*['"]skill:scales:evaluate['"]\)/);
+  assert.match(confirmRoute, /await recordLowConfidenceConfirmationDecision\(/);
+
+  assert.match(auditSource, /prisma\.aiDecisionLog\.create/);
+  assert.match(auditSource, /decisionType:\s*['"]ANSWER_MAPPING['"]/);
+  assert.match(auditSource, /decisionType:\s*['"]LOW_CONFIDENCE_CONFIRMATION['"]/);
+  assert.match(auditSource, /textHash/);
+  assert.match(auditSource, /textLength/);
+  assert.doesNotMatch(auditSource, /inputSummary:\s*body\.text/);
+  assert.doesNotMatch(auditSource, /metadata:\s*{[^}]*text\s*:/s);
+  assert.doesNotMatch(auditSource, /assessmentSessionId:\s*session\.session_id/);
+});
+
+test("Skill conversation analysis audits batch answer mapping without trusting client identity", async () => {
+  const skillRoute = await fs.readFile(
+    "app/api/skill/v1/scales/[scaleId]/analyze-conversation/route.ts",
+    "utf8"
+  );
+  const publicRoute = await fs.readFile("app/api/scales/analyze-conversation/route.ts", "utf8");
+  const auditSource = await fs.readFile("lib/services/ai-decision-audit.ts", "utf8");
+
+  assert.match(skillRoute, /recordConversationAnalysisDecision/);
+  assert.match(skillRoute, /const session = authenticateSkillRequest\(request,\s*['"]skill:scales:read['"]\)/);
+  assert.match(skillRoute, /await recordConversationAnalysisDecision\(/);
+
+  assert.match(auditSource, /export async function recordConversationAnalysisDecision/);
+  assert.match(auditSource, /decisionType:\s*['"]ANSWER_MAPPING['"]/);
+  assert.match(auditSource, /messagesHash/);
+  assert.match(auditSource, /messageCount/);
+  assert.doesNotMatch(auditSource, /content:\s*message\.content/);
+  assert.doesNotMatch(auditSource, /metadata:\s*{[^}]*messages\s*:/s);
+  assert.doesNotMatch(publicRoute, /userId:\s*body\.userId|memberProfileId:\s*body\.memberProfileId/);
+});

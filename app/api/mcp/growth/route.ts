@@ -83,15 +83,19 @@ export async function POST(req: NextRequest) {
       const isSuccessful = !isToolCallError(result);
 
       await touchMcpApiKey(apiKey.id, isSuccessful);
-      if (isSuccessful) {
-        await logMcpToolCall({
-          apiKeyId: apiKey.id,
-          userId: apiKey.userId,
-          action: name || 'unknown_tool',
-          scaleId: getScaleId(args),
-          entrypoint: 'growth_compat',
-        }).catch((err) => console.error('Failed to log MCP call:', err));
-      }
+      await logMcpToolCall({
+        apiKeyId: apiKey.id,
+        userId: apiKey.userId,
+        toolName: name || 'unknown_tool',
+        arguments: args,
+        resultSummary: {
+          isError: !isSuccessful,
+          resultKeys: result && typeof result === 'object' ? Object.keys(result).sort() : [],
+        },
+        status: isSuccessful ? 'SUCCESS' : 'ERROR',
+        success: isSuccessful,
+        entrypoint: 'growth_compat',
+      }).catch((err) => console.error('Failed to log MCP call:', err));
       
       return NextResponse.json({
         jsonrpc: "2.0",
@@ -122,16 +126,6 @@ export async function POST(req: NextRequest) {
       }
     }, { status: 500 });
   }
-}
-
-function getScaleId(args: unknown) {
-  if (!args || typeof args !== 'object' || !('scaleId' in args)) {
-    return null;
-  }
-
-  return typeof (args as { scaleId?: unknown }).scaleId === 'string'
-    ? ((args as { scaleId: string }).scaleId)
-    : null;
 }
 
 function isToolCallError(result: unknown) {

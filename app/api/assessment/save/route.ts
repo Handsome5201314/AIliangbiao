@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { QuotaManager } from '@/lib/auth/quotaManager';
 import { extractAppBearerToken, verifyAppSessionToken } from '@/lib/auth/app-session';
 import { evaluateScaleAnswers, getScaleDefinitionById } from '@/lib/scales/catalog';
+import { normalizeScaleAnswerDetails, summarizeEstimatedAnswerDetails } from '@/lib/scales/answer-details';
 import { assertDoctorCanWriteMember, logPatientWriteAction } from '@/lib/services/care-teams';
 import { ensurePendingDoctorReviewForAssessment } from '@/lib/services/doctor-care';
 import type { ExecutableScaleDefinition } from '@/lib/schemas/core/types';
@@ -13,6 +14,8 @@ type AssessmentOwner = {
   profileId: string | null;
   actorDoctorProfileId?: string;
 };
+
+const LOW_CONFIDENCE_CONFIRMATION_THRESHOLD = 0.8;
 
 async function resolveOwnedProfile(userId: string, profileId?: string | null) {
   if (!profileId) return null;
@@ -121,6 +124,31 @@ function normalizeDeterministicAnswers(scale: ExecutableScaleDefinition, rawAnsw
   };
 }
 
+function assertConfirmedLowConfidenceAnswers(answerDetails: unknown) {
+  if (!answerDetails || typeof answerDetails !== 'object' || Array.isArray(answerDetails)) {
+    return null;
+  }
+
+  const unconfirmedQuestionIds = Object.entries(answerDetails as Record<string, {
+    confidence?: unknown;
+    confirmedLowConfidence?: unknown;
+  }>)
+    .filter(([, detail]) => (
+      typeof detail.confidence === 'number' &&
+      Number.isFinite(detail.confidence) &&
+      detail.confidence < LOW_CONFIDENCE_CONFIRMATION_THRESHOLD &&
+      detail.confirmedLowConfidence !== true
+    ))
+    .map(([questionId]) => questionId);
+
+  return unconfirmedQuestionIds.length
+    ? {
+        error: 'LOW_CONFIDENCE_CONFIRMATION_REQUIRED',
+        questionIds: unconfirmedQuestionIds,
+      }
+    : null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -142,7 +170,26 @@ export async function POST(request: NextRequest) {
     }
 
     const deterministicAnswers = normalized.answers;
+    const lowConfidenceError = assertConfirmedLowConfidenceAnswers(body.answerDetails);
+    if (lowConfidenceError) {
+      return NextResponse.json(
+        {
+          error: '低置信度答案需要家长确认后才能保存',
+          code: lowConfidenceError.error,
+          questionIds: lowConfidenceError.questionIds,
+        },
+        { status: 400 }
+      );
+    }
+
     const result = evaluateScaleAnswers(scale.id, deterministicAnswers);
+    const normalizedAnswerDetails = normalizeScaleAnswerDetails(scale, body.answerDetails);
+    const estimateSummary = summarizeEstimatedAnswerDetails(normalizedAnswerDetails);
+    const resultDetails = {
+      ...(result.details || {}),
+      ...(normalizedAnswerDetails ? { answerDetails: normalizedAnswerDetails } : {}),
+      ...(estimateSummary ? { estimateSummary } : {}),
+    };
     const scaleVersion = scale.version || '1.0';
     const assessmentSession = sessionId
       ? await prisma.assessmentSession.findFirst({
@@ -169,7 +216,7 @@ export async function POST(request: NextRequest) {
           totalScore: result.totalScore,
           conclusion: result.conclusion,
           answers: serializedAnswers,
-          resultDetails: result.details ? JSON.parse(JSON.stringify(result.details)) : undefined,
+          resultDetails: Object.keys(resultDetails).length ? JSON.parse(JSON.stringify(resultDetails)) : undefined,
         },
       });
 
@@ -182,7 +229,7 @@ export async function POST(request: NextRequest) {
             currentQuestionIndex: scale.questions.length,
             totalScore: result.totalScore,
             conclusion: result.conclusion,
-            resultDetails: result.details ? JSON.parse(JSON.stringify(result.details)) : undefined,
+            resultDetails: Object.keys(resultDetails).length ? JSON.parse(JSON.stringify(resultDetails)) : undefined,
             assessmentHistoryId: created.id,
             completedAt: new Date(),
           },

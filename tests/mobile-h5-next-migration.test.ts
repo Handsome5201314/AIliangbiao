@@ -70,3 +70,52 @@ test("H5 guest login is backed by a real server-issued app session", async () =>
   assert.match(routeSource, /issueAppSessionToken/);
   assert.match(routeSource, /accountType:\s*['"]PATIENT['"]/);
 });
+
+test("migrated H5 runner maps current-question natural language answers through real Skill APIs", async () => {
+  const runnerSource = await readFile("components/mobile-h5/screens/shared/AssessmentRunner.tsx", "utf8");
+  const serviceSource = await readFile("components/mobile-h5/services/assessmentService.ts", "utf8");
+  const typesSource = await readFile("components/mobile-h5/types/index.ts", "utf8");
+  const appSource = await readFile("components/mobile-h5/MobileH5App.tsx", "utf8");
+
+  assert.match(serviceSource, /export async function mapNaturalLanguageAnswer/);
+  assert.match(serviceSource, /\/api\/skill\/v1\/scales\/\$\{encodeURIComponent\(params\.scaleId\)\}\/map-answer/);
+  assert.match(serviceSource, /export async function confirmMappedAnswer/);
+  assert.match(serviceSource, /\/api\/skill\/v1\/scales\/\$\{encodeURIComponent\(params\.scaleId\)\}\/mapped-answers\/confirm/);
+  assert.match(serviceSource, /getAuthHeaders\(\)/);
+
+  assert.match(runnerSource, /data-component="ai-answer-mapping-panel"/);
+  assert.match(runnerSource, /mapNaturalLanguageAnswer\(/);
+  assert.match(runnerSource, /confirmMappedAnswer\(/);
+  assert.match(runnerSource, /confirmedLowConfidence:\s*true/);
+  assert.match(runnerSource, /source:\s*['"]user_confirmed_mapping['"]/);
+  assert.match(runnerSource, /source:\s*['"]ai_mapped['"]/);
+
+  assert.match(typesSource, /confidence\?:\s*number/);
+  assert.match(typesSource, /source\?:\s*'manual'\s*\|\s*'ai_mapped'\s*\|\s*'user_confirmed_mapping'/);
+  assert.match(typesSource, /confirmedLowConfidence\?:\s*boolean/);
+
+  assert.match(appSource, /handleOpenAi\(question\?: Question,\s*questionNumber\?: number\)/);
+  assert.match(runnerSource, /onOpenAi\(currentQuestion,\s*currentIndex \+ 1\)/);
+});
+
+test("migrated H5 submission preserves AI answer details for deterministic backend scoring", async () => {
+  const serviceSource = await readFile("components/mobile-h5/services/assessmentService.ts", "utf8");
+  const saveRoute = await readFile("app/api/assessment/save/route.ts", "utf8");
+  const answerDetails = await readFile("lib/scales/answer-details.ts", "utf8");
+  const coreTypes = await readFile("lib/schemas/core/types.ts", "utf8");
+
+  assert.match(serviceSource, /function buildAnswerDetails/);
+  assert.match(serviceSource, /answerDetails:\s*buildAnswerDetails\(answers\)/);
+  assert.match(serviceSource, /confidence:\s*answer\.confidence/);
+  assert.match(serviceSource, /confirmedLowConfidence:\s*answer\.confirmedLowConfidence/);
+
+  assert.match(saveRoute, /normalizeScaleAnswerDetails/);
+  assert.match(saveRoute, /assertConfirmedLowConfidenceAnswers/);
+  assert.match(saveRoute, /answerDetails:\s*normalizedAnswerDetails/);
+  assert.match(saveRoute, /LOW_CONFIDENCE_CONFIRMATION_REQUIRED/);
+
+  assert.match(answerDetails, /source\?:\s*ScaleAnswerDetailInput\["source"\]/);
+  assert.match(coreTypes, /confidence\?:\s*number/);
+  assert.match(coreTypes, /confirmedLowConfidence\?:\s*boolean/);
+  assert.match(coreTypes, /source\?:\s*'manual'\s*\|\s*'ai_mapped'\s*\|\s*'user_confirmed_mapping'/);
+});
