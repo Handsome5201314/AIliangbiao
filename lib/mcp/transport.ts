@@ -14,6 +14,11 @@ import {
 
 import { handleToolCall, listTools } from './server-handlers';
 import { shouldOpenMcpSseGet } from './accept';
+import {
+  DEFAULT_MCP_PROTOCOL_VERSION,
+  getMcpResponseProtocolVersion,
+  negotiateMcpProtocolVersion,
+} from './protocol';
 
 // ─── Session Store ──────────────────────────────────────────────
 interface SessionState {
@@ -46,8 +51,8 @@ export async function handleSseGet(request: Request): Promise<Response> {
         service: 'Assessment Core MCP Endpoint',
         version: '1.0.0',
         status: 'active',
-        transport: 'sse-json-rpc-compatible',
-        protocolVersion: '2024-11-05',
+        transport: 'streamable-http-compatible',
+        protocolVersion: DEFAULT_MCP_PROTOCOL_VERSION,
         endpoint: '/api/mcp',
         sessionHeader: 'X-Session-Id',
         ...tools,
@@ -144,7 +149,7 @@ export async function handleSsePost(request: Request): Promise<Response> {
 
       return new Response(JSON.stringify(response), {
         status: isJsonRpcErrorResponse(response) ? 400 : 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: createJsonRpcHeaders(response),
       });
     } catch (error) {
       const errorMessage =
@@ -236,9 +241,14 @@ async function handleJsonRpcMessage(message: {
     let result: unknown;
 
     switch (method) {
-      case "initialize":
+      case "initialize": {
+        const requestedVersion =
+          params && typeof params === 'object' && 'protocolVersion' in params
+            ? (params as { protocolVersion?: unknown }).protocolVersion
+            : undefined;
+
         result = {
-          protocolVersion: "2024-11-05",
+          protocolVersion: negotiateMcpProtocolVersion(requestedVersion),
           capabilities: { tools: {} },
           serverInfo: {
             name: "ai-scale-engine",
@@ -246,6 +256,7 @@ async function handleJsonRpcMessage(message: {
           },
         };
         break;
+      }
 
       case "tools/list":
         result = await listTools();
@@ -294,6 +305,17 @@ function isSuccessfulToolCall(
 
 function isJsonRpcErrorResponse(response: unknown) {
   return Boolean(response && typeof response === 'object' && 'error' in response);
+}
+
+function createJsonRpcHeaders(response: unknown) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const protocolVersion = getMcpResponseProtocolVersion(response);
+
+  if (protocolVersion) {
+    headers['MCP-Protocol-Version'] = protocolVersion;
+  }
+
+  return headers;
 }
 
 // ─── 辅助函数 ───────────────────────────────────────────────────
