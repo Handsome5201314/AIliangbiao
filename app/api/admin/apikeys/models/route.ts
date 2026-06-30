@@ -5,8 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { ADMIN_ROLE } from '@/lib/auth/admin-role';
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
 import { prisma } from '@/lib/db/prisma';
+import { normalizeApiServiceType } from '@/lib/services/apiKeyProviderConfig';
 import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 各服务商的 API 端点配置
@@ -93,12 +95,23 @@ const SPEECH_MODELS: Record<string, Array<{ id: string; name: string; descriptio
   custom: []
 };
 
+const TTS_MODELS: Record<string, Array<{ id: string; name: string; description: string }>> = {
+  volcengine: [
+    { id: 'volcengine-tts', name: 'Volcengine TTS', description: '火山引擎项目侧 TTS adapter 默认模型' }
+  ],
+  openai: [
+    { id: 'tts-1', name: 'OpenAI TTS', description: 'OpenAI-compatible speech synthesis' }
+  ],
+  custom: []
+};
+
 export async function POST(request: NextRequest) {
   try {
-    await requireAdminRequest(request);
+    await requireAdminRequest(request, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
 
     const body = await request.json();
     const { provider, endpoint, apiKey, keyId, serviceType } = body;
+    const normalizedServiceType = normalizeApiServiceType(serviceType);
     let effectiveApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
 
     if (!effectiveApiKey && keyId) {
@@ -132,7 +145,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 如果是语音识别服务，直接返回语音模型列表
-    if (serviceType === 'speech') {
+    if (normalizedServiceType === 'asr') {
       const speechModels = SPEECH_MODELS[provider] || SPEECH_MODELS.custom;
       
       console.log(`[Get Models] Returning ${speechModels.length} speech models for ${provider}`);
@@ -140,8 +153,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         models: speechModels,
-        source: 'speech_models',
+        source: 'asr_models',
         message: '语音识别模型列表'
+      });
+    }
+
+    if (normalizedServiceType === 'tts') {
+      const ttsModels = TTS_MODELS[provider] || TTS_MODELS.custom;
+
+      return NextResponse.json({
+        success: true,
+        models: ttsModels,
+        source: 'tts_models',
+        message: '语音合成模型列表'
       });
     }
 

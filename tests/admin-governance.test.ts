@@ -240,6 +240,8 @@ test("hermes profile page should call the hermes profile API", async () => {
   assert.match(source, /\/api\/admin\/hermes-profiles/);
   assert.match(source, /Hermes Profile/);
   assert.match(source, /knowledgeDefaultMode/);
+  assert.match(source, /不承载上游模型供应商或 API Key/);
+  assert.match(source, /运行时扩展 JSON/);
 });
 
 test("organization admin page should call the organizations API", async () => {

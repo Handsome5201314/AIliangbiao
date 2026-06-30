@@ -6,74 +6,102 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
+import { ADMIN_ROLE } from '@/lib/auth/admin-role';
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { normalizeApiServiceType } from '@/lib/services/apiKeyProviderConfig';
 import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 各服务商的默认配置
 const PROVIDER_CONFIGS: Record<string, { 
   textEndpoint: string; 
   speechEndpoint: string;
+  ttsEndpoint: string;
   textModel: string; 
   speechModel: string;
+  ttsModel: string;
   name: string 
 }> = {
   siliconflow: {
     textEndpoint: 'https://api.siliconflow.cn/v1/chat/completions',
     speechEndpoint: 'https://api.siliconflow.cn/v1/audio/transcriptions',
+    ttsEndpoint: '',
     textModel: 'Qwen/Qwen2.5-7B-Instruct',
     speechModel: 'FunAudioLLM/SenseVoiceSmall', // ✅ 使用官方支持的模型
+    ttsModel: '',
     name: '硅基流动'
   },
   sophon: {
     textEndpoint: 'https://api.sophon.cn/v1/chat/completions',
     speechEndpoint: '',
+    ttsEndpoint: '',
     textModel: 'sophon-chat',
     speechModel: '',
+    ttsModel: '',
     name: '算能'
   },
   deepseek: {
     textEndpoint: 'https://api.deepseek.com/v1/chat/completions',
     speechEndpoint: '',
+    ttsEndpoint: '',
     textModel: 'deepseek-chat',
     speechModel: '',
+    ttsModel: '',
     name: 'DeepSeek'
   },
   qwen: {
     textEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
     speechEndpoint: '',
+    ttsEndpoint: '',
     textModel: 'qwen-turbo',
     speechModel: '',
+    ttsModel: '',
     name: '通义千问'
   },
   openai: {
     textEndpoint: 'https://api.openai.com/v1/chat/completions',
     speechEndpoint: 'https://api.openai.com/v1/audio/transcriptions',
+    ttsEndpoint: 'https://api.openai.com/v1/audio/speech',
     textModel: 'gpt-3.5-turbo',
     speechModel: 'whisper-1',
+    ttsModel: 'tts-1',
     name: 'OpenAI'
+  },
+  volcengine: {
+    textEndpoint: '',
+    speechEndpoint: '',
+    ttsEndpoint: 'https://openspeech.bytedance.com/api/v1/tts',
+    textModel: '',
+    speechModel: '',
+    ttsModel: 'volcengine-tts',
+    name: '火山引擎'
   },
   oneapi: {
     textEndpoint: 'http://104.197.139.51:3000/v1/chat/completions',
     speechEndpoint: '',
+    ttsEndpoint: '',
     textModel: 'gemini-3-flash-preview',
     speechModel: '',
+    ttsModel: '',
     name: 'OneAPI'
   },
   custom: {
     textEndpoint: '',
     speechEndpoint: '',
+    ttsEndpoint: '',
     textModel: '',
     speechModel: '',
+    ttsModel: '',
     name: '自定义'
   }
 };
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdminRequest(request);
+    await requireAdminRequest(request, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
 
     const body = await request.json();
     const { provider, endpoint, apiKey, model, keyId, serviceType } = body;
+    const normalizedServiceType = normalizeApiServiceType(serviceType);
     let effectiveApiKey = typeof apiKey === 'string' ? apiKey.trim() : '';
 
     if (!effectiveApiKey && keyId) {
@@ -100,18 +128,21 @@ export async function POST(request: NextRequest) {
     }
 
     // 确定服务类型（默认为文本）
-    const isSpeech = serviceType === 'speech';
+    const isSpeech = normalizedServiceType === 'asr';
+    const isTts = normalizedServiceType === 'tts';
     
     // 确定使用的 endpoint 和 model
     const providerConfig = PROVIDER_CONFIGS[provider] || PROVIDER_CONFIGS.custom;
-    const testEndpoint = endpoint || (isSpeech ? providerConfig.speechEndpoint : providerConfig.textEndpoint);
-    const testModel = model || (isSpeech ? providerConfig.speechModel : providerConfig.textModel);
+    const testEndpoint = endpoint || (isSpeech ? providerConfig.speechEndpoint : isTts ? providerConfig.ttsEndpoint : providerConfig.textEndpoint);
+    const testModel = model || (isSpeech ? providerConfig.speechModel : isTts ? providerConfig.ttsModel : providerConfig.textModel);
 
     if (!testEndpoint || !testModel) {
       return NextResponse.json({
         success: false,
-        error: isSpeech 
+        error: isSpeech
           ? '该服务商暂不支持语音识别服务'
+          : isTts
+            ? '该服务商暂不支持语音合成服务'
           : '缺少接口地址或模型名称'
       }, { status: 400 });
     }
@@ -123,7 +154,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log(`[Test Connection] Testing ${provider} ${isSpeech ? 'speech' : 'text'} at ${testEndpoint}`);
+    console.log(`[Test Connection] Testing ${provider} ${isSpeech ? 'asr' : isTts ? 'tts' : 'text'} at ${testEndpoint}`);
 
     // 开始计时
     const startTime = Date.now();
@@ -265,6 +296,50 @@ export async function POST(request: NextRequest) {
             responseTime
           });
         }
+      } else if (isTts) {
+        response = await fetch(testEndpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${effectiveApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: testModel,
+            input: '连接测试',
+            voice: 'default',
+            response_format: 'mp3'
+          }),
+          signal: AbortSignal.timeout(10000)
+        });
+
+        const responseTime = Date.now() - startTime;
+        if (keyId) {
+          await prisma.apiKey.update({
+            where: { id: keyId },
+            data: {
+              connectionStatus: response.ok ? 'online' : 'offline',
+              lastTestedAt: new Date(),
+              responseTime
+            }
+          });
+        }
+
+        if (!response.ok) {
+          return NextResponse.json({
+            success: false,
+            error: `TTS 连接失败：${response.status} ${response.statusText}`,
+            responseTime
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: 'TTS 连接成功',
+          responseTime,
+          provider: providerConfig.name,
+          endpoint: testEndpoint,
+          model: testModel
+        });
       } else {
         // 文本模型测试：发送一个简单的聊天请求
         response = await fetch(testEndpoint, {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { ADMIN_ROLE } from '@/lib/auth/admin-role';
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
 import {
   getAgentWorkspaceConfig,
@@ -8,7 +9,7 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminRequest(request);
+    await requireAdminRequest(request, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
     const config = await getAgentWorkspaceConfig();
     return NextResponse.json({ config });
   } catch (error) {
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdminRequest(request);
+    await requireAdminRequest(request, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
     const body = await request.json().catch(() => ({}));
     const config = body?.config ?? body;
 

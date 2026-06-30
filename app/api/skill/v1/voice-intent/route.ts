@@ -5,7 +5,7 @@ import { authenticateSkillRequest } from '@/lib/assessment-skill/request-auth';
 
 export async function POST(request: NextRequest) {
   try {
-    authenticateSkillRequest(request, 'skill:voice-intent');
+    const session = authenticateSkillRequest(request, 'skill:voice-intent');
     const body = await request.json();
 
     const forwardResponse = await fetch(getInternalApiUrl('/api/voice-intent', request), {
@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        userId: body.userId || session.sub,
+      }),
     });
 
     const text = await forwardResponse.text();

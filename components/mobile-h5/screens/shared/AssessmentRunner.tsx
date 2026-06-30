@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ChevronLeft,
   HelpCircle,
   X,
   AlertTriangle,
   Sparkles,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { cn } from '@/components/mobile-h5/lib/utils';
 import { Button } from '@/components/mobile-h5/components/ui/button';
@@ -20,6 +22,8 @@ import {
   loadLatestLocalDraftForScale,
   loadLocalDraft,
   mapNaturalLanguageAnswer,
+  recordVoiceAnswerEvent,
+  transcribeVoiceAnswer,
 } from '@/components/mobile-h5/services/assessmentService';
 import type {
   AssessmentMode,
@@ -77,12 +81,18 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
   const [mappingText, setMappingText] = useState('');
   const [mappingSuggestion, setMappingSuggestion] = useState<MappingSuggestion | null>(null);
   const [mappingStatus, setMappingStatus] = useState<'idle' | 'mapping' | 'confirming'>('idle');
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [conversationSessionId, setConversationSessionId] = useState('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const isLocked = mode === 'caregiver_handoff_locked';
   const isDoctor = mode === 'doctor_assisted';
   const total = questions.length;
   const currentQuestion = questions[currentIndex];
   const isLastQuestion = currentIndex === total - 1;
+  const canUseParentVoice = showAi && Boolean(currentQuestion) && !isLocked && !isDoctor;
 
   // Generate a stable session id for auto-save
   const [sessionId] = useState(
@@ -183,11 +193,12 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
   }, [answers, currentQuestion, flashToast, persistAnswers]);
 
   const saveMappedAnswer = useCallback(
-    (option: Option, detail: {
+    async (option: Option, detail: {
       confidence: number;
       evidence: string;
       source: 'ai_mapped' | 'user_confirmed_mapping';
       confirmedLowConfidence?: boolean;
+      conversationSessionId?: string;
     }) => {
       if (!currentQuestion) return;
 
@@ -206,13 +217,37 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
       };
       setAnswers(updated);
       persistAnswers(updated);
+
+      if (detail.conversationSessionId) {
+        const logged = await recordVoiceAnswerEvent({
+          conversationSessionId: detail.conversationSessionId,
+          scaleId: scale.id,
+          questionId: currentQuestion.id,
+          eventType: 'assessment_answer_committed',
+          confidence: detail.confidence,
+          confirmedLowConfidence: detail.confirmedLowConfidence,
+          transcriptText: mappingText.trim() || undefined,
+          summary: 'H5 mapped answer committed by application code',
+          metadata: {
+            answer: {
+              optionId: option.id,
+              score: option.value,
+              label: option.label,
+            },
+            source: detail.source,
+          },
+        });
+        if (logged.conversationSessionId) {
+          setConversationSessionId(logged.conversationSessionId);
+        }
+      }
     },
-    [answers, currentQuestion, persistAnswers],
+    [answers, currentQuestion, mappingText, persistAnswers, scale.id],
   );
 
-  const handleMapCurrentQuestion = useCallback(async () => {
+  const runMappingForText = useCallback(async (rawText: string, nextConversationSessionId?: string) => {
     if (!currentQuestion) return;
-    const text = mappingText.trim();
+    const text = rawText.trim();
     if (!text) {
       flashToast('请先写一句孩子的实际表现');
       return;
@@ -226,17 +261,147 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
         scaleId: scale.id,
         questionId: currentQuestion.id,
         text,
+        conversationSessionId: nextConversationSessionId || conversationSessionId || undefined,
       });
+      if (suggestion.conversationSessionId) {
+        setConversationSessionId(suggestion.conversationSessionId);
+      }
       setMappingSuggestion(suggestion);
       if (suggestion.mapping.score === null) {
-        flashToast('AI 暂时无法匹配，请手动选择');
+        flashToast(suggestion.followUpQuestion || 'AI 暂时无法匹配，请手动选择');
       }
     } catch (error) {
       flashToast(error instanceof Error ? error.message : 'AI 匹配失败，请手动选择');
     } finally {
       setMappingStatus('idle');
     }
-  }, [currentQuestion, flashToast, mappingText, scale.id]);
+  }, [conversationSessionId, currentQuestion, flashToast, scale.id]);
+
+  const handleMapCurrentQuestion = useCallback(async () => {
+    await runMappingForText(mappingText);
+  }, [mappingText, runMappingForText]);
+
+  const releaseVoiceStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  const handleVoiceBlob = useCallback(async (audio: Blob) => {
+    if (!currentQuestion) return;
+
+    setVoiceStatus('transcribing');
+    setMappingSuggestion(null);
+
+    try {
+      const transcription = await transcribeVoiceAnswer({
+        audio,
+        scaleId: scale.id,
+        questionId: currentQuestion.id,
+        conversationSessionId: conversationSessionId || undefined,
+      });
+      if (transcription.conversationSessionId) {
+        setConversationSessionId(transcription.conversationSessionId);
+      }
+      setMappingText(transcription.text);
+      await runMappingForText(transcription.text, transcription.conversationSessionId);
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : '语音识别失败，请手动输入或稍后重试');
+    } finally {
+      setVoiceStatus('idle');
+    }
+  }, [conversationSessionId, currentQuestion, flashToast, runMappingForText, scale.id]);
+
+  const startVoiceAnswer = useCallback(async () => {
+    if (!canUseParentVoice || !currentQuestion) return;
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === 'undefined'
+    ) {
+      flashToast('当前浏览器不支持录音，请手动输入答案');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType =
+        typeof MediaRecorder.isTypeSupported === 'function' &&
+        MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      streamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      recorder.onerror = () => {
+        releaseVoiceStream();
+        mediaRecorderRef.current = null;
+        audioChunksRef.current = [];
+        setVoiceStatus('idle');
+        flashToast('录音失败，请重新尝试');
+      };
+      recorder.onstop = () => {
+        const chunks = audioChunksRef.current;
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        releaseVoiceStream();
+
+        const audio = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        if (audio.size === 0) {
+          setVoiceStatus('idle');
+          flashToast('没有录到声音，请再试一次');
+          return;
+        }
+        void handleVoiceBlob(audio);
+      };
+
+      recorder.start();
+      setVoiceStatus('recording');
+    } catch (error) {
+      releaseVoiceStream();
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+      setVoiceStatus('idle');
+      flashToast(error instanceof Error ? error.message : '无法打开麦克风，请检查浏览器权限');
+    }
+  }, [canUseParentVoice, currentQuestion, flashToast, handleVoiceBlob, releaseVoiceStream]);
+
+  const stopVoiceAnswer = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      setVoiceStatus('idle');
+      return;
+    }
+    setVoiceStatus('transcribing');
+    recorder.stop();
+  }, []);
+
+  const handleVoiceAnswerToggle = useCallback(async () => {
+    if (voiceStatus === 'recording') {
+      stopVoiceAnswer();
+      return;
+    }
+    await startVoiceAnswer();
+  }, [startVoiceAnswer, stopVoiceAnswer, voiceStatus]);
+
+  useEffect(() => {
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.onstop = null;
+        recorder.stop();
+      }
+      releaseVoiceStream();
+    };
+  }, [releaseVoiceStream]);
 
   const handleApplyMappedSuggestion = useCallback(async () => {
     if (!currentQuestion || !mappingSuggestion || mappingSuggestion.mapping.score === null) {
@@ -252,6 +417,7 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
     if (mappingSuggestion.needsConfirmation) {
       setMappingStatus('confirming');
       try {
+        const currentConversationSessionId = mappingSuggestion.conversationSessionId || conversationSessionId || undefined;
         const confirmed = await confirmMappedAnswer({
           scaleId: scale.id,
           questionId: currentQuestion.id,
@@ -260,11 +426,35 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
           evidence: mappingSuggestion.mapping.evidence,
         });
 
-        saveMappedAnswer(option, {
+        if (currentConversationSessionId) {
+          const logged = await recordVoiceAnswerEvent({
+            conversationSessionId: currentConversationSessionId,
+            scaleId: scale.id,
+            questionId: currentQuestion.id,
+            eventType: 'answer_confirmation',
+            confidence: mappingSuggestion.mapping.confidence,
+            confirmedLowConfidence: true,
+            transcriptText: mappingText.trim() || undefined,
+            summary: 'Parent confirmed low-confidence or sensitive H5 mapped answer',
+            metadata: {
+              answer: {
+                score: option.value,
+                label: option.label,
+              },
+              source: mappingSuggestion.source || 'rule',
+            },
+          });
+          if (logged.conversationSessionId) {
+            setConversationSessionId(logged.conversationSessionId);
+          }
+        }
+
+        await saveMappedAnswer(option, {
           confidence: confirmed.confirmedAnswer.confidence,
           evidence: confirmed.confirmedAnswer.evidence,
           source: 'user_confirmed_mapping',
           confirmedLowConfidence: true,
+          conversationSessionId: currentConversationSessionId,
         });
         flashToast('已确认并选择该答案');
       } catch (error) {
@@ -275,17 +465,50 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
       return;
     }
 
-    saveMappedAnswer(option, {
-      confidence: mappingSuggestion.mapping.confidence,
-      evidence: mappingSuggestion.mapping.evidence,
-      source: 'ai_mapped',
-    });
-    flashToast('已应用 AI 建议，请确认后继续');
-  }, [currentQuestion, flashToast, mappingSuggestion, saveMappedAnswer, scale.id]);
+    try {
+      const currentConversationSessionId = mappingSuggestion.conversationSessionId || conversationSessionId || undefined;
+      if (currentConversationSessionId) {
+        const logged = await recordVoiceAnswerEvent({
+          conversationSessionId: currentConversationSessionId,
+          scaleId: scale.id,
+          questionId: currentQuestion.id,
+          eventType: 'answer_confirmation',
+          confidence: mappingSuggestion.mapping.confidence,
+          confirmedLowConfidence: false,
+          transcriptText: mappingText.trim() || undefined,
+          summary: 'Parent accepted high-confidence H5 mapped answer',
+          metadata: {
+            answer: {
+              score: option.value,
+              label: option.label,
+            },
+            source: mappingSuggestion.source || 'rule',
+          },
+        });
+        if (logged.conversationSessionId) {
+          setConversationSessionId(logged.conversationSessionId);
+        }
+      }
+
+      await saveMappedAnswer(option, {
+        confidence: mappingSuggestion.mapping.confidence,
+        evidence: mappingSuggestion.mapping.evidence,
+        source: 'ai_mapped',
+        conversationSessionId: currentConversationSessionId,
+      });
+      flashToast('已应用 AI 建议，请确认后继续');
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : '答案确认日志写入失败，请稍后重试');
+    }
+  }, [conversationSessionId, currentQuestion, flashToast, mappingSuggestion, mappingText, saveMappedAnswer, scale.id]);
 
   /* ---------- navigation ---------- */
   const handleNext = useCallback(async () => {
     if (!currentQuestion) return;
+    if (voiceStatus !== 'idle') {
+      flashToast('请先结束当前录音或等待识别完成');
+      return;
+    }
     if (!answers[currentQuestion.id]) {
       flashToast('请先选择一个选项');
       return;
@@ -297,16 +520,20 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
     } else {
       setCurrentIndex((i) => i + 1);
     }
-  }, [answers, currentQuestion, flashToast, isLastQuestion, onComplete, scale.id, sessionId]);
+  }, [answers, currentQuestion, flashToast, isLastQuestion, onComplete, scale.id, sessionId, voiceStatus]);
 
   const handlePrev = useCallback(() => {
+    if (voiceStatus !== 'idle') {
+      flashToast('请先结束当前录音或等待识别完成');
+      return;
+    }
     if (currentIndex === 0) {
       // show exit confirm dialog
       setShowExitConfirm(true);
     } else {
       setCurrentIndex((i) => i - 1);
     }
-  }, [currentIndex]);
+  }, [currentIndex, flashToast, voiceStatus]);
 
   const handleExitConfirm = useCallback(() => {
     setShowExitConfirm(false);
@@ -316,6 +543,14 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
   }, [answers, onBack, sessionId]);
 
   /* ---------- render ---------- */
+  const voiceButtonLabel =
+    voiceStatus === 'recording'
+      ? '停止录音'
+      : voiceStatus === 'transcribing'
+        ? '识别中'
+        : '语音答题';
+  const voiceButtonDisabled = voiceStatus !== 'recording' && (mappingStatus !== 'idle' || voiceStatus === 'transcribing');
+
   return (
     <div
       data-component="assessment-runner"
@@ -334,6 +569,7 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
           <button
             type="button"
             onClick={handlePrev}
+            disabled={voiceStatus !== 'idle'}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-sage-50 transition-smooth"
             aria-label="返回"
             data-hide-in-locked={isLocked || undefined}
@@ -393,6 +629,24 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
               <Sparkles size={16} />
               <span>AI 帮我匹配答案</span>
             </div>
+            {canUseParentVoice && (
+              <div className="mt-3 flex items-center gap-3 rounded-2xl border border-sage-100 bg-sage-50 px-3 py-3">
+                <Button
+                  type="button"
+                  variant={voiceStatus === 'recording' ? 'destructive' : 'secondary'}
+                  size="sm"
+                  onClick={handleVoiceAnswerToggle}
+                  disabled={voiceButtonDisabled}
+                  className="shrink-0 gap-1.5"
+                >
+                  {voiceStatus === 'recording' ? <MicOff size={15} /> : <Mic size={15} />}
+                  <span>{voiceButtonLabel}</span>
+                </Button>
+                <p className="text-xs leading-5 text-muted">
+                  录音会先转写，再进入 AI/Hermes 辅助映射，最终仍需确认。
+                </p>
+              </div>
+            )}
             <textarea
               value={mappingText}
               onChange={(event) => setMappingText(event.target.value)}
@@ -469,6 +723,7 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
             variant="secondary"
             size="sm"
             onClick={handlePrev}
+            disabled={voiceStatus !== 'idle'}
             className="flex-1"
           >
             上一题
@@ -492,6 +747,7 @@ const AssessmentRunner: React.FC<AssessmentRunnerProps> = ({
             variant="default"
             size="sm"
             onClick={handleNext}
+            disabled={voiceStatus !== 'idle'}
             className="flex-1"
           >
             {isLastQuestion ? '提交' : '下一题'}

@@ -134,6 +134,9 @@ type AnswerMappingResponse = {
   scaleId: string;
   scaleVersion?: string;
   questionId: number;
+  source?: 'rule' | 'hermes' | 'llm';
+  conversationSessionId?: string;
+  followUpQuestion?: string;
   mapping: {
     questionId: number;
     score: number | null;
@@ -144,6 +147,34 @@ type AnswerMappingResponse = {
   needsConfirmation: boolean;
   requiresExplicitSelection: boolean;
 };
+
+type QuestionnaireVoiceIntentResponse = {
+  mode: 'questionnaire';
+  source: 'rule' | 'hermes';
+  conversationSessionId?: string;
+  result: {
+    intent: string;
+    confidence: number;
+    answer?: {
+      questionId: number;
+      score: number;
+      label: string;
+    };
+    meta?: {
+      evidence?: string;
+      reason?: string;
+      followUpQuestion?: string;
+      needsConfirmation?: boolean;
+      needsFallbackPrompt?: boolean;
+    };
+  };
+};
+
+type VoiceAnswerEventType =
+  | 'answer_confirmation'
+  | 'fallback'
+  | 'error'
+  | 'assessment_answer_committed';
 
 type ConfirmMappedAnswerResponse = {
   success?: boolean;
@@ -394,19 +425,53 @@ export async function mapNaturalLanguageAnswer(params: {
   scaleId: string;
   questionId: string;
   text: string;
+  conversationSessionId?: string;
 }): Promise<AnswerMappingResponse> {
-  return apiRequest<AnswerMappingResponse>(
-    `/api/skill/v1/scales/${encodeURIComponent(params.scaleId)}/map-answer`,
+  const data = await apiRequest<QuestionnaireVoiceIntentResponse>(
+    '/api/skill/v1/voice-intent',
     {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
+        mode: 'questionnaire',
+        scaleId: params.scaleId,
         questionId: Number(params.questionId),
-        text: params.text,
+        transcript: params.text,
         language: 'zh',
+        conversationSessionId: params.conversationSessionId || undefined,
       }),
     },
   );
+
+  const answer = data.result.answer;
+  const score = data.result.intent === 'answer' && answer ? answer.score : null;
+  const evidence =
+    data.result.meta?.evidence ||
+    data.result.meta?.reason ||
+    data.result.meta?.followUpQuestion ||
+    '';
+
+  return {
+    success: true,
+    scaleId: params.scaleId,
+    questionId: Number(params.questionId),
+    source: data.source,
+    conversationSessionId: data.conversationSessionId,
+    followUpQuestion: data.result.meta?.followUpQuestion,
+    mapping: {
+      questionId: Number(params.questionId),
+      score,
+      confidence: data.result.confidence,
+      evidence,
+      method: score === null ? 'unmatched' : data.source === 'hermes' ? 'mapping_hint' : 'option_alias',
+    },
+    needsConfirmation:
+      score !== null &&
+      Boolean(data.result.meta?.needsConfirmation || data.result.confidence < 0.8),
+    requiresExplicitSelection:
+      score === null ||
+      Boolean(data.result.meta?.needsFallbackPrompt || data.result.confidence < 0.6),
+  };
 }
 
 export async function confirmMappedAnswer(params: {
@@ -426,6 +491,76 @@ export async function confirmMappedAnswer(params: {
         score: params.score,
         confidence: params.confidence,
         evidence: params.evidence,
+      }),
+    },
+  );
+}
+
+export async function transcribeVoiceAnswer(params: {
+  audio: Blob;
+  scaleId: string;
+  questionId: string;
+  conversationSessionId?: string;
+}): Promise<{
+  success: true;
+  text: string;
+  confidence?: number;
+  provider?: string;
+  model?: string;
+  conversationSessionId?: string;
+}> {
+  const formData = new FormData();
+  formData.append('audio', params.audio, 'h5-answer.webm');
+  formData.append('context', 'questionnaire');
+  formData.append('scaleId', params.scaleId);
+  formData.append('questionId', params.questionId);
+  if (params.conversationSessionId) {
+    formData.append('conversationSessionId', params.conversationSessionId);
+  }
+
+  const response = await fetch('/api/skill/v1/speech/transcribe', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: formData,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.success || !data.text) {
+    throw new Error(String(data.error || '语音识别失败'));
+  }
+
+  return {
+    success: true,
+    text: String(data.text),
+    confidence: typeof data.confidence === 'number' ? data.confidence : undefined,
+    provider: typeof data.provider === 'string' ? data.provider : undefined,
+    model: typeof data.model === 'string' ? data.model : undefined,
+    conversationSessionId:
+      typeof data.conversationSessionId === 'string' ? data.conversationSessionId : undefined,
+  };
+}
+
+export async function recordVoiceAnswerEvent(params: {
+  conversationSessionId?: string;
+  scaleId: string;
+  questionId: string;
+  eventType: VoiceAnswerEventType;
+  confidence?: number;
+  confirmedLowConfidence?: boolean;
+  transcriptText?: string;
+  assistantText?: string;
+  summary?: string;
+  errorMessage?: string;
+  fallbackReason?: string;
+  metadata?: unknown;
+}): Promise<{ success: true; conversationSessionId?: string; eventId?: string }> {
+  return apiRequest<{ success: true; conversationSessionId?: string; eventId?: string }>(
+    '/api/skill/v1/voice-events',
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        ...params,
+        questionId: Number(params.questionId),
       }),
     },
   );

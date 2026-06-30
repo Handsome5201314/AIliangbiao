@@ -17,6 +17,7 @@ import type {
   VoiceSessionMode,
 } from "@/lib/schemas/core/types";
 import { parseVoiceIntentResponse } from "@/lib/services/voiceProtocol";
+import { resolveLocalQuestionnaireVoiceIntent } from "@/lib/services/voice-answer-mapping";
 import {
   HIGH_CONFIDENCE_THRESHOLD,
   MEDIUM_CONFIDENCE_THRESHOLD,
@@ -62,6 +63,15 @@ interface UseVoiceSessionResult {
   togglePause: () => void;
   confirmPendingAnswer: (confirmed: boolean) => Promise<void>;
 }
+
+type ClientVoiceEventType =
+  | "assistant_prompt"
+  | "answer_confirmation"
+  | "tool_call"
+  | "tts_output"
+  | "fallback"
+  | "error"
+  | "assessment_answer_committed";
 
 const META_INTENT_PATTERNS = {
   repeat: [/再说一遍/, /重复/, /再重复/, /repeat/, /say that again/],
@@ -326,7 +336,8 @@ async function fetchQuestionnaireIntent(input: {
   language: LanguageCode;
   transcript: string;
   skillToken?: string;
-}): Promise<VoiceIntentResult> {
+  conversationSessionId?: string;
+}): Promise<{ result: VoiceIntentResult; conversationSessionId?: string }> {
   if (!input.skillToken) {
     throw new Error("Skill session is not ready yet.");
   }
@@ -343,6 +354,7 @@ async function fetchQuestionnaireIntent(input: {
       questionId: input.question.id,
       language: input.language,
       transcript: input.transcript,
+      conversationSessionId: input.conversationSessionId,
     }),
   });
 
@@ -352,7 +364,10 @@ async function fetchQuestionnaireIntent(input: {
   }
 
   const payload = await response.json();
-  return parseVoiceIntentResponse(payload.result ?? payload);
+  return {
+    result: parseVoiceIntentResponse(payload.result ?? payload),
+    conversationSessionId: payload.conversationSessionId,
+  };
 }
 
 export function useVoiceSession({
@@ -386,6 +401,7 @@ export function useVoiceSession({
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const conversationSessionIdRef = useRef<string>("");
 
   const isSupported = useMemo(() => {
     if (typeof window === "undefined") {
@@ -405,6 +421,79 @@ export function useVoiceSession({
     dispatch({ type: "STOP_SPEAKING" });
   }, []);
 
+  const recordVoiceEvent = useCallback(
+    async (input: {
+      eventType: ClientVoiceEventType;
+      provider?: string;
+      model?: string;
+      confidence?: number;
+      confirmedLowConfidence?: boolean;
+      transcriptText?: string;
+      assistantText?: string;
+      summary?: string;
+      errorMessage?: string;
+      fallbackReason?: string;
+      metadata?: unknown;
+      required?: boolean;
+    }) => {
+      if (!skillToken) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/skill/v1/voice-events", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${skillToken}`,
+          },
+          body: JSON.stringify({
+            conversationSessionId: conversationSessionIdRef.current || undefined,
+            scaleId,
+            questionId: question.id,
+            eventType: input.eventType,
+            provider: input.provider,
+            model: input.model,
+            confidence: input.confidence,
+            confirmedLowConfidence: input.confirmedLowConfidence,
+            transcriptText: input.transcriptText,
+            assistantText: input.assistantText,
+            summary: input.summary,
+            errorMessage: input.errorMessage,
+            fallbackReason: input.fallbackReason,
+            metadata: input.metadata,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to record voice event.");
+        }
+
+        if (data.conversationSessionId) {
+          conversationSessionIdRef.current = String(data.conversationSessionId);
+        }
+      } catch (error) {
+        dispatch({
+          type: "SET_ERROR",
+          payload: {
+            error: error instanceof Error ? error.message : "Failed to record voice event.",
+            statusText:
+              error instanceof Error
+                ? error.message
+                : language === "en"
+                  ? "Voice event logging failed."
+                  : "语音事件写入失败。",
+          },
+        });
+        if (input.required) {
+          throw error;
+        }
+      }
+    },
+    [language, question.id, scaleId, skillToken]
+  );
+
   const speakText = useCallback(
     (text: string) => {
       if (typeof window === "undefined" || !("speechSynthesis" in window) || !text) {
@@ -412,12 +501,26 @@ export function useVoiceSession({
       }
 
       cancelSpeaking();
+      void recordVoiceEvent({
+        eventType: "assistant_prompt",
+        provider: "browser",
+        model: "speechSynthesis",
+        assistantText: text,
+        summary: "Browser TTS prompt queued",
+      });
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = language === "en" ? "en-US" : "zh-CN";
       utterance.rate = 0.92;
       utterance.onend = () => {
         dispatch({ type: "STOP_SPEAKING" });
+        void recordVoiceEvent({
+          eventType: "tts_output",
+          provider: "browser",
+          model: "speechSynthesis",
+          assistantText: text,
+          summary: "Browser TTS playback completed",
+        });
       };
       utterance.onerror = () => {
         dispatch({
@@ -427,13 +530,21 @@ export function useVoiceSession({
             statusText: language === "en" ? "Voice playback failed." : "语音播报失败，请稍后重试。",
           },
         });
+        void recordVoiceEvent({
+          eventType: "error",
+          provider: "browser",
+          model: "speechSynthesis",
+          assistantText: text,
+          errorMessage: "Voice playback failed.",
+          fallbackReason: "browser_tts_failed",
+        });
       };
 
       utteranceRef.current = utterance;
       dispatch({ type: "START_SPEAKING", payload: { prompt: text } });
       window.speechSynthesis.speak(utterance);
     },
-    [cancelSpeaking, language]
+    [cancelSpeaking, language, recordVoiceEvent]
   );
 
   const repeatQuestion = useCallback(() => {
@@ -468,11 +579,44 @@ export function useVoiceSession({
       }
 
       if (confirmed) {
+        await recordVoiceEvent({
+          eventType: "answer_confirmation",
+          confirmedLowConfidence: true,
+          confidence: undefined,
+          transcriptText: session.lastUserTranscript,
+          summary: "Parent confirmed low-confidence or sensitive answer",
+          metadata: {
+            answer: session.pendingConfirmation,
+            confirmed: true,
+          },
+          required: true,
+        });
         dispatch({ type: "CLEAR_PENDING_CONFIRMATION" });
         await onAnswer(session.pendingConfirmation.score);
+        await recordVoiceEvent({
+          eventType: "assessment_answer_committed",
+          confirmedLowConfidence: true,
+          transcriptText: session.lastUserTranscript,
+          summary: "Confirmed voice answer committed by application code",
+          metadata: {
+            answer: session.pendingConfirmation,
+          },
+          required: true,
+        });
         return;
       }
 
+      await recordVoiceEvent({
+        eventType: "answer_confirmation",
+        confirmedLowConfidence: true,
+        transcriptText: session.lastUserTranscript,
+        summary: "Parent rejected mapped answer",
+        metadata: {
+          answer: session.pendingConfirmation,
+          confirmed: false,
+        },
+        required: true,
+      });
       dispatch({ type: "CLEAR_PENDING_CONFIRMATION" });
       dispatch({
         type: "FALLBACK_PROMPT",
@@ -485,7 +629,7 @@ export function useVoiceSession({
       });
       speakCurrentQuestion();
     },
-    [language, onAnswer, session.pendingConfirmation, speakCurrentQuestion]
+    [language, onAnswer, recordVoiceEvent, session.lastUserTranscript, session.pendingConfirmation, speakCurrentQuestion]
   );
 
   const interpretTranscript = useCallback(
@@ -515,16 +659,27 @@ export function useVoiceSession({
             transcript,
           });
         } else {
-          intentResult = await fetchQuestionnaireIntent({
+          const fetchedIntent = await fetchQuestionnaireIntent({
             scaleId,
             question,
             language,
             transcript,
             skillToken,
+            conversationSessionId: conversationSessionIdRef.current || undefined,
           });
+          intentResult = fetchedIntent.result;
+          if (fetchedIntent.conversationSessionId) {
+            conversationSessionIdRef.current = fetchedIntent.conversationSessionId;
+          }
         }
-      } catch {
-        intentResult = detectAnswerIntent(question, transcript);
+      } catch (error) {
+        await recordVoiceEvent({
+          eventType: "fallback",
+          transcriptText: transcript,
+          fallbackReason: error instanceof Error ? error.message : "voice_intent_failed",
+          summary: "Voice intent route failed, using local rules for confirmation prompt",
+        });
+        intentResult = resolveLocalQuestionnaireVoiceIntent({ question, transcript, language });
       }
       dispatch({ type: "SET_INTENT", payload: { intent: intentResult } });
 
@@ -613,6 +768,18 @@ export function useVoiceSession({
 
           if (shouldAutoAccept(intentResult.confidence) || intentResult.confidence >= MEDIUM_CONFIDENCE_THRESHOLD) {
             await onAnswer(intentResult.answer.score);
+            await recordVoiceEvent({
+              eventType: "assessment_answer_committed",
+              confidence: intentResult.confidence,
+              transcriptText: transcript,
+              summary: "High-confidence voice answer committed by application code",
+              metadata: {
+                answer: intentResult.answer,
+                intent: intentResult.intent,
+                source: "voice_session",
+              },
+              required: true,
+            });
             dispatch({
               type: "SET_STATUS",
               payload: {
@@ -636,6 +803,17 @@ export function useVoiceSession({
                   : "我还没有识别到明确选项，您可以直接说选项内容，或者让我重复一遍。",
             },
           });
+          void recordVoiceEvent({
+            eventType: "fallback",
+            confidence: intentResult.confidence,
+            transcriptText: transcript,
+            assistantText: intentResult.meta?.followUpQuestion,
+            fallbackReason: intentResult.meta?.reason || "voice_intent_irrelevant",
+            summary: "Voice answer requires follow-up or clearer option",
+            metadata: {
+              intent: intentResult,
+            },
+          });
           speakText(
             language === "en"
               ? "I didn't catch the option. Please answer with the option text, or say repeat."
@@ -649,7 +827,10 @@ export function useVoiceSession({
       goPrevious,
       language,
       onAnswer,
+      onPrevious,
       question,
+      recordVoiceEvent,
+      resolveQuestionnaireIntentOverride,
       scaleId,
       skillToken,
       repeatQuestion,
@@ -683,6 +864,11 @@ export function useVoiceSession({
         const formData = new FormData();
         formData.append("audio", audioBlob, "recording.webm");
         formData.append("context", "questionnaire");
+        if (conversationSessionIdRef.current) {
+          formData.append("conversationSessionId", conversationSessionIdRef.current);
+        }
+        formData.append("scaleId", scaleId);
+        formData.append("questionId", String(question.id));
 
         const response = await fetch("/api/skill/v1/speech/transcribe", {
           method: "POST",
@@ -698,6 +884,9 @@ export function useVoiceSession({
         }
 
         const data = await response.json();
+        if (data.conversationSessionId) {
+          conversationSessionIdRef.current = String(data.conversationSessionId);
+        }
         if (!data.success || !data.text) {
           throw new Error(language === "en" ? "No speech detected." : "未识别到有效语音。");
         }
@@ -720,7 +909,7 @@ export function useVoiceSession({
         dispatch({ type: "STOP_TRANSCRIBING" });
       }
     },
-    [interpretTranscript, language, skillToken, transcribeAudio]
+    [interpretTranscript, language, question.id, scaleId, skillToken, transcribeAudio]
   );
 
   const startRecording = useCallback(async () => {

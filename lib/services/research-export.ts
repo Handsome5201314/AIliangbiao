@@ -10,6 +10,8 @@ export type ResearchExportTableName =
   | 'assessment_history'
   | 'scale_score'
   | 'ai_interaction'
+  | 'ai_conversation_session'
+  | 'ai_conversation_event'
   | 'followup'
   | 'report_view'
   | 'inpatient_record'
@@ -63,7 +65,12 @@ export const DIRECT_IDENTIFIER_FIELDS = new Set<string>([
   'outpatientNo',
   'inpatientNo',
   'admissionId',
+  'transcriptText',
+  'assistantText',
+  'rawTranscript',
 ]);
+
+const AI_CONVERSATION_RESEARCH_EXPORT_POLICY = 'confirmed_answer_only';
 
 export const RESEARCH_DERIVED_FIELD_DICTIONARY = [
   { name: 'research_subject_id', required: true, description: 'HMAC 脱敏研究编号' },
@@ -109,6 +116,8 @@ const EXPORT_TABLE_ORDER: ResearchExportTableName[] = [
   'assessment_history',
   'scale_score',
   'ai_interaction',
+  'ai_conversation_session',
+  'ai_conversation_event',
   'followup',
   'report_view',
   'inpatient_record',
@@ -567,6 +576,8 @@ async function buildResearchTables(): Promise<{
     assessmentHistories,
     scaleScores,
     aiInteractions,
+    aiConversationSessions,
+    aiConversationEvents,
     followUps,
     reportViews,
     inpatientRecords,
@@ -580,6 +591,18 @@ async function buildResearchTables(): Promise<{
     readModelRows('assessmentHistory', { where: { profileId: memberWhere }, orderBy: { createdAt: 'asc' } }),
     readModelRows('scaleScore', { where: { memberProfileId: memberWhere }, orderBy: { createdAt: 'asc' } }),
     readModelRows('aiInteraction', { where: { memberProfileId: memberWhere }, orderBy: { createdAt: 'asc' } }),
+    readModelRows('aiConversationSession', { where: { memberProfileId: memberWhere }, orderBy: { createdAt: 'asc' } }),
+    readModelRows('aiConversationEvent', {
+      where: {
+        memberProfileId: memberWhere,
+        OR: [
+          { confirmedLowConfidence: true },
+          { eventType: 'answer_confirmation' },
+          { eventType: 'assessment_answer_committed' },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
     readModelRows('followUp', { where: { memberProfileId: memberWhere }, orderBy: { createdAt: 'asc' } }),
     readModelRows('reportView', { where: { memberProfileId: memberWhere }, orderBy: { viewedAt: 'asc' } }),
     readModelRows('inpatientRecord', { where: { memberProfileId: memberWhere }, orderBy: { createdAt: 'asc' } }),
@@ -621,6 +644,19 @@ async function buildResearchTables(): Promise<{
     ),
     scale_score: scaleScores.map((record: RawResearchRecord) => deidentifyRecord(record)),
     ai_interaction: aiInteractions.map((record: RawResearchRecord) => deidentifyRecord(record)),
+    ai_conversation_session: aiConversationSessions.map((record: RawResearchRecord) =>
+      deidentifyRecord(record, {
+        export_policy: AI_CONVERSATION_RESEARCH_EXPORT_POLICY,
+        ai_conversation_session_key: createExportRowId(getString(record.id)),
+      })
+    ),
+    ai_conversation_event: aiConversationEvents.map((record: RawResearchRecord) =>
+      deidentifyRecord(record, {
+        export_policy: AI_CONVERSATION_RESEARCH_EXPORT_POLICY,
+        ai_conversation_event_key: createExportRowId(getString(record.id)),
+        ai_conversation_session_key: createExportRowId(getString(record.sessionId)),
+      })
+    ),
     followup: followUps.map((record: RawResearchRecord) => deidentifyRecord(record)),
     report_view: reportViews.map((record: RawResearchRecord) => deidentifyRecord(record)),
     inpatient_record: inpatientRecords.map((record: RawResearchRecord) => deidentifyRecord(record)),

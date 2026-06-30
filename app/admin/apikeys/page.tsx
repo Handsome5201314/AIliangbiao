@@ -20,20 +20,41 @@ const PROVIDER_OPTIONS = [
   { value: 'deepseek', label: 'DeepSeek', description: '深度求索，性价比高' },
   { value: 'qwen', label: '通义千问 (Qwen)', description: '阿里云出品' },
   { value: 'openai', label: 'OpenAI', description: '国际领先' },
+  { value: 'volcengine', label: '火山引擎 (Volcengine)', description: '第一阶段 API TTS adapter' },
   { value: 'oneapi', label: 'OneAPI (OpenAI兼容)', description: '支持 OneAPI 网关与 Gemini 系列模型' },
   { value: 'custom', label: '自定义 (OpenAI兼容)', description: '支持OpenAI格式API' }
 ];
 
 // 默认endpoint配置
-const DEFAULT_ENDPOINTS: Record<string, string> = {
-  siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
-  sophon: 'https://api.sophon.cn/v1/chat/completions',
-  deepseek: 'https://api.deepseek.com/v1/chat/completions',
-  qwen: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
-  openai: 'https://api.openai.com/v1/chat/completions',
-  oneapi: 'http://104.197.139.51:3000/v1/chat/completions',
-  custom: ''
+const DEFAULT_ENDPOINTS: Record<string, { text: string; asr: string; tts: string }> = {
+  siliconflow: {
+    text: 'https://api.siliconflow.cn/v1/chat/completions',
+    asr: 'https://api.siliconflow.cn/v1/audio/transcriptions',
+    tts: '',
+  },
+  sophon: { text: 'https://api.sophon.cn/v1/chat/completions', asr: '', tts: '' },
+  deepseek: { text: 'https://api.deepseek.com/v1/chat/completions', asr: '', tts: '' },
+  qwen: { text: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', asr: '', tts: '' },
+  openai: {
+    text: 'https://api.openai.com/v1/chat/completions',
+    asr: 'https://api.openai.com/v1/audio/transcriptions',
+    tts: 'https://api.openai.com/v1/audio/speech',
+  },
+  volcengine: { text: '', asr: '', tts: 'https://openspeech.bytedance.com/api/v1/tts' },
+  oneapi: { text: 'http://104.197.139.51:3000/v1/chat/completions', asr: '', tts: '' },
+  custom: { text: '', asr: '', tts: '' }
 };
+
+function normalizeServiceType(value?: string | null): 'text' | 'asr' | 'tts' {
+  if (value === 'asr' || value === 'speech') return 'asr';
+  if (value === 'tts') return 'tts';
+  return 'text';
+}
+
+function getDefaultEndpoint(provider: string, serviceType?: string | null) {
+  const config = DEFAULT_ENDPOINTS[provider] || DEFAULT_ENDPOINTS.custom;
+  return config[normalizeServiceType(serviceType)];
+}
 
 interface ApiKeyItem {
   id: string;
@@ -70,7 +91,7 @@ export default function ApiKeysPage() {
     keyValue: '',
     customEndpoint: '',
     customModel: '',
-    serviceType: 'text' // text 或 speech
+    serviceType: 'text'
   });
   const [isUserManualInput, setIsUserManualInput] = useState(false); // 标记用户是否手动输入了模型
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
@@ -104,7 +125,7 @@ export default function ApiKeysPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: newKey.provider,
-          endpoint: newKey.customEndpoint || DEFAULT_ENDPOINTS[newKey.provider],
+          endpoint: newKey.customEndpoint || getDefaultEndpoint(newKey.provider, newKey.serviceType),
           apiKey: newKey.keyValue,
           serviceType: newKey.serviceType // 传递服务类型
         })
@@ -121,8 +142,11 @@ export default function ApiKeysPage() {
         if (data.source === 'fallback') {
           console.log('使用备用模型列表:', data.message);
         }
-        if (data.source === 'speech_models') {
-          console.log('使用语音模型列表');
+        if (data.source === 'asr_models') {
+          console.log('使用 ASR 模型列表');
+        }
+        if (data.source === 'tts_models') {
+          console.log('使用 TTS 模型列表');
         }
       } else {
         alert(data.error || '获取模型列表失败');
@@ -202,7 +226,7 @@ export default function ApiKeysPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: key.provider,
-          endpoint: key.customEndpoint || DEFAULT_ENDPOINTS[key.provider],
+          endpoint: key.customEndpoint || getDefaultEndpoint(key.provider, key.serviceType),
           model: key.customModel,
           keyId: key.id,
           serviceType: key.serviceType || 'text' // 传递服务类型，默认为文本
@@ -251,7 +275,7 @@ export default function ApiKeysPage() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <PageHeader title="API 密钥管理" description="仅管理 AI 服务商密钥，用于文本模型与语音识别调用，不包含 MCP 服务凭证。" />
+        <PageHeader title="API 密钥管理" description="仅管理项目自己的 AI 服务商密钥，用于 text / asr / tts 调用，不包含 MCP 服务凭证，也不负责 Hermes Runtime 自己的上游模型配置。" />
         <Button onClick={() => setShowAddModal(true)}>
           <Plus className="w-4 h-4" />
           <span>添加密钥</span>
@@ -267,7 +291,8 @@ export default function ApiKeysPage() {
           <li>填写 API Key 后自动获取可用模型列表</li>
           <li>支持自定义接口 URL（OpenAI 兼容格式）</li>
           <li>点击"测速"按钮测试连接状态和响应速度</li>
-          <li>系统会自动使用在线的密钥进行 AI 服务调用</li>
+          <li>系统会自动使用在线的密钥进行项目侧 AI 服务调用</li>
+          <li>Hermes 容器自己的上游模型供应商配置不在这里管理</li>
         </ul>
       </Card>
 
@@ -413,7 +438,7 @@ export default function ApiKeysPage() {
                     setNewKey({
                       ...newKey,
                       provider,
-                      customEndpoint: DEFAULT_ENDPOINTS[provider] || '',
+                      customEndpoint: getDefaultEndpoint(provider, newKey.serviceType),
                       customModel: ''
                     });
                     setAvailableModels([]);
@@ -438,50 +463,41 @@ export default function ApiKeysPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   服务类型 <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="serviceType"
-                      value="text"
-                      checked={newKey.serviceType === 'text'}
-                      onChange={(e) => {
-                        setNewKey({
-                          ...newKey,
-                          serviceType: e.target.value,
-                          customModel: ''
-                        });
-                        setAvailableModels([]);
-                        setIsUserManualInput(false); // 重置手动输入标记
-                      }}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-slate-700">文本对话模型</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="serviceType"
-                      value="speech"
-                      checked={newKey.serviceType === 'speech'}
-                      onChange={(e) => {
-                        setNewKey({
-                          ...newKey,
-                          serviceType: e.target.value,
-                          customModel: ''
-                        });
-                        setAvailableModels([]);
-                        setIsUserManualInput(false); // 重置手动输入标记
-                      }}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-slate-700">语音识别模型</span>
-                  </label>
+                <div className="flex flex-wrap gap-4">
+                  {[
+                    ['text', '文本对话模型'],
+                    ['asr', '语音识别 ASR'],
+                    ['tts', '语音合成 TTS'],
+                  ].map(([value, label]) => (
+                    <label key={value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="serviceType"
+                        value={value}
+                        checked={newKey.serviceType === value}
+                        onChange={(e) => {
+                          const nextServiceType = e.target.value;
+                          setNewKey({
+                            ...newKey,
+                            serviceType: nextServiceType,
+                            customEndpoint: getDefaultEndpoint(newKey.provider, nextServiceType),
+                            customModel: ''
+                          });
+                          setAvailableModels([]);
+                          setIsUserManualInput(false);
+                        }}
+                        className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-slate-700">{label}</span>
+                    </label>
+                  ))}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  {newKey.serviceType === 'text' 
+                  {newKey.serviceType === 'text'
                     ? '用于 AI 对话、分诊推荐等功能'
-                    : '用于语音识别转文本功能'}
+                    : newKey.serviceType === 'asr'
+                      ? '用于浏览器录音后的语音识别转文本'
+                      : '用于项目侧 API TTS；浏览器 TTS 仍可作为默认模式'}
                 </p>
               </div>
 
@@ -516,8 +532,8 @@ export default function ApiKeysPage() {
                 </p>
               </div>
 
-              {/* 自定义接口配置（仅自定义服务商且为文本模型显示） */}
-              {(newKey.provider === 'custom' || newKey.provider === 'oneapi') && newKey.serviceType === 'text' && (
+              {/* 自定义接口配置 */}
+              {(newKey.provider === 'custom' || newKey.provider === 'oneapi') && (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -539,14 +555,21 @@ export default function ApiKeysPage() {
                 </>
               )}
 
-              {/* 语音模型的自定义端点 */}
-              {newKey.serviceType === 'speech' && (
+              {/* ASR / TTS 默认端点提示 */}
+              {newKey.serviceType === 'asr' && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-sm text-blue-800">
-                    <strong>💡 提示：</strong>语音识别模型使用标准的 API 端点，无需自定义配置。
+                    <strong>提示：</strong>ASR 第一阶段默认兼容 SiliconFlow SenseVoiceSmall 链路。
                     {newKey.provider === 'siliconflow' && (
                       <span className="block mt-1">端点：https://api.siliconflow.cn/v1/audio/transcriptions</span>
                     )}
+                  </p>
+                </div>
+              )}
+              {newKey.serviceType === 'tts' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800">
+                    <strong>提示：</strong>API TTS 第一阶段只提供项目侧 adapter；正式使用前请通过测速确认 provider 端点和鉴权。
                   </p>
                 </div>
               )}
@@ -651,7 +674,7 @@ export default function ApiKeysPage() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             provider: newKey.provider,
-                            endpoint: newKey.customEndpoint || DEFAULT_ENDPOINTS[newKey.provider],
+                            endpoint: newKey.customEndpoint || getDefaultEndpoint(newKey.provider, newKey.serviceType),
                             apiKey: newKey.keyValue,
                             model: newKey.customModel,
                             serviceType: newKey.serviceType // 传递服务类型

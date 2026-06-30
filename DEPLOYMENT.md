@@ -8,6 +8,8 @@
 - 运行拓扑：生产保持 `app + db + hermes` 三容器拓扑。
 - 数据库镜像：PostgreSQL 使用 `pgvector/pgvector:0.8.3-pg16`，确保 `vector` 扩展可用。
 - 生产 env：`/opt/ai-scale-system/shared/.env.production` 留在服务器，不进入 Git，不打包进 release。
+- `/admin/apikeys` 与 `/admin/agent` 是项目自己的 AI 控制面；项目侧 provider key 存在数据库，不写入 release。
+- `HERMES_API_SERVER_*` 只用于 app 连接内部 Hermes Runtime；Hermes 上游模型供应商配置留在 Hermes 自己的数据目录。
 - 生产迁移：禁止 `prisma db push`；只允许备份、审查、`prisma migrate deploy` 和经确认的 `prisma migrate resolve`。
 - 生产写库：任何写生产数据库的操作前，必须先完成备份和本地恢复演练，并把 SQL/迁移、备份路径、回滚方案提交人工确认。
 - 回滚优先级：先回滚应用版本并保留数据库 volume；只有确实需要数据回退时，才恢复已验证的 dump。
@@ -37,6 +39,24 @@
 - `node_modules`
 - `.next`
 - 临时文件和构建缓存
+
+## AI 配置边界
+
+这套部署有三层容易混淆的配置：
+
+- 项目 AI 控制面：`/admin/apikeys` 管理项目自己的 provider/key/endpoint/model 池，`/admin/agent` 管理 Agent 的 provider/model 偏好。
+- app -> Hermes Runtime：`/opt/ai-scale-system/shared/.env.production` 中的 `HERMES_API_SERVER_BASE_URL`、`HERMES_API_SERVER_KEY`、`HERMES_API_SERVER_MODEL` 只负责应用容器连接内部 Hermes API。
+- Hermes 上游模型配置：保存在 Hermes 自己的数据目录（容器内 `/opt/data` 的 `.env` / `config.yaml`，宿主机对应 Hermes volume）。
+
+其中 `HERMES_API_SERVER_KEY` 不是 DeepSeek/OpenAI 的上游供应商密钥；它只是 app 调 Hermes 时的内部鉴权口令。历史上示例 env 里出现过 `DEEPSEEK_API_KEY`，但它不是 Hermes 自动读取的上游切换入口。
+
+第一阶段家长语音答题的正式数据源只在项目数据库：
+
+- `AiConversationSession` / `AiConversationEvent` 记录 ASR、转写、用户原话、Hermes 辅助映射、确认、fallback、tool call、TTS 和最终答案提交轨迹。
+- `/admin/ai-logs` 是超级管理员复盘入口；OpenWebUI / Hermes 控制台只能作为调试链接，新标签页打开，不作为审计或科研导出来源。
+- 科研导出复用项目 `research-export` 服务，默认脱敏并优先导出已确认答案相关事件。
+- ASR/TTS 属于项目侧 adapter。ASR 第一阶段默认兼容 SiliconFlow SenseVoiceSmall；TTS 默认 browser，可按后台配置切到项目侧 provider adapter。
+- Hermes 是 Runtime，只做对话理解、模糊回答追问和结构化候选输出；最终答案合法性、入库、计分、报告、权限与审计必须由项目代码完成。
 
 ## 本地演示
 
@@ -143,6 +163,7 @@ sudo chmod 600 /opt/ai-scale-system/shared/.env.production
 - 第三方服务所需的可选配置
 
 容器内 `DATABASE_URL` / `DIRECT_URL` 必须指向 `db:5432`，不能指向 `localhost`。
+`HERMES_API_SERVER_KEY` 只用于 app -> Hermes 的内部鉴权，不是 DeepSeek/OpenAI 的服务商 key。若要配置项目自己的 AI 服务商，请在首次登录后通过 `/admin/apikeys` 管理；若要修改 Hermes 自己直连的上游 provider，请改 Hermes 数据目录中的 `.env` / `config.yaml`。
 
 ### 4. 首次启动与迁移
 

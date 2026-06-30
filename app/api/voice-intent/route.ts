@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { resolveAgentApiKeyByService } from "@/lib/agent/model-resolver";
-import { getSystemApiKeyByService } from "@/lib/services/apiKeyService";
 import { getAgentWorkspaceConfig } from "@/lib/agent/config";
+import { requestHermesQuestionnaireAnswerMapping } from "@/lib/realtime/hermes";
+import { getSystemApiKeyByService } from "@/lib/services/apiKeyService";
 import {
   buildScaleRecommendationCopy,
   detectLocalTriageIntent,
@@ -15,6 +16,16 @@ import {
   type TriageContext,
 } from "@/lib/services/triageFlow";
 import { parseVoiceIntentResponse, voiceIntentResultSchema } from "@/lib/services/voiceProtocol";
+import {
+  buildHermesMappingFallbackIntent,
+  resolveLocalQuestionnaireVoiceIntent,
+  shouldEscalateToHermes,
+} from "@/lib/services/voice-answer-mapping";
+import {
+  createPromptHash,
+  recordAiConversationEvent,
+  type AiConversationContext,
+} from "@/lib/services/ai-conversation-log";
 import { getScaleDefinitionById } from "@/lib/scales/catalog";
 import { resolveLocalizedText } from "@/lib/schemas/core/i18n";
 import type { LanguageCode, ScaleOption, ScaleQuestion, VoiceIntentResult } from "@/lib/schemas/core/types";
@@ -25,6 +36,13 @@ const questionnaireRequestSchema = z.object({
   questionId: z.number(),
   transcript: z.string().min(1),
   language: z.enum(["zh", "en"]).default("zh"),
+  conversationSessionId: z.string().optional(),
+  userId: z.string().optional(),
+  memberProfileId: z.string().optional(),
+  assessmentSessionId: z.string().optional(),
+  assessmentHistoryId: z.string().optional(),
+  doctorProfileId: z.string().optional(),
+  hermesConversationId: z.string().optional(),
 });
 
 const triageContextSchema = z.object({
@@ -460,22 +478,157 @@ async function resolveQuestionnaireIntent(input: z.infer<typeof questionnaireReq
     throw new Error(`Question ${input.questionId} not found`);
   }
 
-  const localResult = detectQuestionnaireIntent(question, input.transcript);
-  if (localResult.intent !== "irrelevant" && localResult.confidence >= 0.55) {
-    return { result: localResult, source: "rule" as const };
+  const auditContext: AiConversationContext = {
+    conversationSessionId: input.conversationSessionId,
+    userId: input.userId,
+    memberProfileId: input.memberProfileId,
+    assessmentSessionId: input.assessmentSessionId,
+    assessmentHistoryId: input.assessmentHistoryId,
+    doctorProfileId: input.doctorProfileId,
+    scaleId: input.scaleId,
+    questionId: input.questionId,
+    hermesConversationId: input.hermesConversationId || input.conversationSessionId,
+  };
+  const promptHash = createPromptHash(`questionnaire-answer-mapping:${input.scaleId}:${input.questionId}`);
+
+  const utteranceEvent = await recordAiConversationEvent({
+    ...auditContext,
+    eventType: "user_utterance",
+    transcriptText: input.transcript,
+    summary: "Parent voice utterance for questionnaire answer mapping",
+    promptHash,
+    metadata: {
+      mode: "questionnaire",
+      language: input.language,
+    },
+  });
+  const conversationSessionId = String(utteranceEvent.session.id);
+  const nextAuditContext: AiConversationContext = {
+    ...auditContext,
+    conversationSessionId,
+    hermesConversationId: auditContext.hermesConversationId || conversationSessionId,
+  };
+
+  const localResult = resolveLocalQuestionnaireVoiceIntent({
+    question,
+    transcript: input.transcript,
+    language: input.language,
+  });
+  await recordAiConversationEvent({
+    ...nextAuditContext,
+    eventType: "answer_mapping_local",
+    transcriptText: input.transcript,
+    confidence: localResult.confidence,
+    promptHash,
+    metadata: {
+      source: "local_rules",
+      result: localResult,
+    },
+  });
+
+  if (!shouldEscalateToHermes(localResult)) {
+    return { result: localResult, source: "rule" as const, conversationSessionId };
   }
 
   try {
-    const llmResult = await callSystemTextModel({
-      systemPrompt:
-        "You are a structured questionnaire voice-intent parser. Only return JSON. Never add extra explanation.",
-      userPrompt: buildQuestionnaireIntentPrompt(question, input.transcript, input.language),
-      parse: (raw) => parseVoiceIntentResponse(JSON.parse(extractJsonObject(raw))),
+    const hermes = await requestHermesQuestionnaireAnswerMapping({
+      conversationId: nextAuditContext.hermesConversationId || conversationSessionId,
+      scaleId: input.scaleId,
+      question,
+      transcript: input.transcript,
+      language: input.language,
     });
-    return { result: llmResult, source: "llm" as const };
-  } catch {
-    return { result: localResult, source: "rule" as const };
+    const hermesResult = validateQuestionnaireIntent(question, hermes.result, input.transcript, input.language);
+
+    await recordAiConversationEvent({
+      ...nextAuditContext,
+      eventType: "answer_mapping_hermes",
+      transcriptText: input.transcript,
+      assistantText: hermesResult.meta?.followUpQuestion,
+      provider: hermes.provider,
+      model: hermes.model,
+      confidence: hermesResult.confidence,
+      promptHash,
+      metadata: {
+        source: "hermes_runtime",
+        rawText: hermes.rawText,
+        result: hermesResult,
+      },
+    });
+
+    return { result: hermesResult, source: "hermes" as const, conversationSessionId };
+  } catch (error) {
+    const fallbackResult = buildHermesMappingFallbackIntent({
+      transcript: input.transcript,
+      language: input.language,
+      reason: error instanceof Error ? error.message : "Hermes answer mapping failed",
+    });
+
+    await recordAiConversationEvent({
+      ...nextAuditContext,
+      eventType: "error",
+      transcriptText: input.transcript,
+      errorMessage: error instanceof Error ? error.message : "Hermes answer mapping failed",
+      fallbackReason: "hermes_mapping_failed",
+      promptHash,
+      metadata: {
+        source: "hermes_runtime",
+      },
+    });
+    await recordAiConversationEvent({
+      ...nextAuditContext,
+      eventType: "fallback",
+      transcriptText: input.transcript,
+      assistantText: fallbackResult.meta?.followUpQuestion,
+      confidence: fallbackResult.confidence,
+      fallbackReason: "hermes_mapping_failed",
+      promptHash,
+      metadata: {
+        source: "local_confirmation_prompt",
+        result: fallbackResult,
+      },
+    });
+
+    return { result: fallbackResult, source: "rule" as const, conversationSessionId };
   }
+}
+
+function validateQuestionnaireIntent(
+  question: ScaleQuestion,
+  result: VoiceIntentResult,
+  transcript: string,
+  language: LanguageCode
+): VoiceIntentResult {
+  if (result.intent !== "answer" || !result.answer) {
+    return result;
+  }
+
+  const matchedOption = question.options.find((option) => option.score === result.answer?.score);
+  if (!matchedOption) {
+    return buildHermesMappingFallbackIntent({
+      transcript,
+      language,
+      reason: "Hermes returned an option score outside the current question",
+    });
+  }
+
+  return {
+    ...result,
+    answer: {
+      questionId: question.id,
+      score: matchedOption.score,
+      label: matchedOption.label,
+    },
+    meta: {
+      ...result.meta,
+      rawTranscript: result.meta?.rawTranscript || transcript,
+      needsConfirmation:
+        question.riskLevel === "sensitive" ||
+        question.riskLevel === "high" ||
+        result.meta?.needsConfirmation ||
+        result.confidence < 0.8,
+    },
+  };
 }
 
 async function resolveTriageIntent(input: z.infer<typeof triageRequestSchema>) {
@@ -552,6 +705,7 @@ export async function POST(request: NextRequest) {
         mode: "questionnaire",
         source: resolved.source,
         result: resolved.result,
+        conversationSessionId: resolved.conversationSessionId,
       });
     }
 

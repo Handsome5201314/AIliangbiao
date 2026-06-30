@@ -48,7 +48,7 @@ export async function getSpeechApiKey(preferredProvider?: string): Promise<{
 } | null> {
   try {
     if (!preferredProvider) {
-      const agentPreferred = await resolveAgentApiKeyByService('speech');
+      const agentPreferred = await resolveAgentApiKeyByService('asr');
       if (agentPreferred) {
         return {
           apiKey: agentPreferred.key,
@@ -58,7 +58,7 @@ export async function getSpeechApiKey(preferredProvider?: string): Promise<{
         };
       }
 
-      const systemFallback = await getSystemApiKeyByService('speech');
+      const systemFallback = await getSystemApiKeyByService('asr');
       return {
         apiKey: systemFallback.key,
         provider: systemFallback.provider,
@@ -72,7 +72,7 @@ export async function getSpeechApiKey(preferredProvider?: string): Promise<{
       where: {
         purpose: 'AI',
         provider: preferredProvider || 'siliconflow',
-        serviceType: 'speech', // ✅ 关键：只查询语音识别服务的 API Key
+        serviceType: { in: ['asr', 'speech'] }, // 兼容旧 speech，长期语义收口为 asr
         isActive: true,
         NOT: { provider: 'mcp' },
       },

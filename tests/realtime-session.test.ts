@@ -227,6 +227,7 @@ test("production env example should include Hermes runtime variables", async () 
   assert.match(env, /HERMES_API_SERVER_BASE_URL/);
   assert.match(env, /HERMES_API_SERVER_KEY/);
   assert.match(env, /HERMES_API_SERVER_MODEL/);
+  assert.match(env, /not a DeepSeek\/OpenAI provider key/);
 });
 
 test("development compose should include Hermes service wiring", async () => {
@@ -244,6 +245,18 @@ test("local env example should include Hermes runtime variables", async () => {
   assert.match(env, /HERMES_API_SERVER_BASE_URL/);
   assert.match(env, /HERMES_API_SERVER_KEY/);
   assert.match(env, /HERMES_API_SERVER_MODEL/);
+  assert.match(env, /not Hermes's own upstream provider config/);
+});
+
+test("docs should explain the control-plane boundary between app AI and Hermes", async () => {
+  const file = await import("node:fs/promises");
+  const readme = await file.readFile("README.md", "utf8");
+  const deployment = await file.readFile("DEPLOYMENT.md", "utf8");
+
+  assert.match(readme, /AI 控制面与 Hermes 分工/);
+  assert.match(readme, /`HERMES_API_SERVER_KEY` 是 app -> Hermes 的内部鉴权口令/);
+  assert.match(deployment, /## AI 配置边界/);
+  assert.match(deployment, /不是 DeepSeek\/OpenAI 的上游供应商密钥/);
 });
 
 test("package scripts should expose a one-command local full startup entry", async () => {

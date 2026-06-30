@@ -290,6 +290,7 @@ export interface VoiceIntentMeta {
   rawTranscript?: string;
   normalizedText?: string;
   evidence?: string;
+  followUpQuestion?: string;
   needsConfirmation?: boolean;
   needsFallbackPrompt?: boolean;
 }

@@ -82,6 +82,14 @@ test("Agent admin model loading should use keyId instead of keyValue", async () 
   assert.match(source, /keyId:\s*matchingKey\.id/);
 });
 
+test("AI control plane copy should distinguish project-side keys from Hermes upstream config", async () => {
+  const apiKeySource = await readFile("app/admin/apikeys/page.tsx", "utf8");
+  const agentSource = await readFile("app/admin/agent/page.tsx", "utf8");
+
+  assert.match(apiKeySource, /Hermes Runtime 自己的上游模型配置/);
+  assert.match(agentSource, /不会直接写入 Hermes Runtime 自己的上游 provider 配置/);
+});
+
 test("MCP API keys should validate by hash and list only previews", async () => {
   const authSource = await readFile("lib/mcp/auth.ts", "utf8");
   const routeSource = await readFile("app/api/admin/mcpkeys/route.ts", "utf8");

@@ -255,7 +255,7 @@ export default function AdminDashboard() {
     {
       href: '/admin/hermes-profiles',
       title: 'Hermes Profile',
-      description: '管理组织级默认 profile 与独立医生 profile 的运行配置',
+      description: '管理组织/独立医生的 Hermes 运行策略、知识模式与回退规则',
       style: 'from-slate-900 to-cyan-700',
       icon: <Bot className="mb-3 h-8 w-8" />,
       roles: [ADMIN_ROLE.SUPER_ADMIN],
@@ -430,13 +430,16 @@ export default function AdminDashboard() {
                   <span className="text-sm font-medium text-slate-700">Hermes Runtime</span>
                   <p className="mt-1 text-xs text-slate-500">
                     {dashboard.mcpStatus.hermes.configured
-                      ? `上游状态 ${dashboard.mcpStatus.hermes.upstreamStatus || '未知'}`
-                      : '尚未配置'}
+                      ? `内部运行时状态 ${dashboard.mcpStatus.hermes.upstreamStatus || '未知'}`
+                      : '缺少 app -> Hermes 连接配置'}
                   </p>
                 </div>
                 <Badge variant={dashboard.mcpStatus.hermes.status === 'ok' ? 'success' : 'warning'}>
                   {dashboard.mcpStatus.hermes.status === 'ok' ? '健康' : '降级'}
                 </Badge>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                这里只检查 app 到内部 Hermes Runtime 的连通与鉴权，不代表 DeepSeek/OpenAI 等项目侧密钥池状态。
               </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-sm font-medium text-slate-700">canonical MCP 鉴权</span>

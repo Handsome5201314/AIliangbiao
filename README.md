@@ -38,9 +38,9 @@ AI量表系统是面向儿童评估、医生协作、平台知识治理和外部
 
 - 管理员登录与后台概览。
 - 医生审核、组织与团队管理。
-- Hermes profile 管理。
+- Hermes Profile 运行策略管理。
 - 平台知识文档、知识审核、审计日志。
-- API Key / MCP Key / 渠道配置 / 平台策略管理。
+- 项目 AI 服务商密钥 / MCP Key / 渠道配置 / 平台策略管理。
 
 ### 外部接入
 
@@ -61,8 +61,27 @@ AI量表系统是面向儿童评估、医生协作、平台知识治理和外部
 
 - `app`: Next.js 应用容器，只监听宿主机 `127.0.0.1:3000`
 - `db`: PostgreSQL 16 + pgvector，Docker 内网访问，不对公网开放
-- `hermes`: Hermes API Server，Docker 内网访问
+- `hermes`: 内部 Hermes Runtime，Docker 内网访问
 - 外部入口由服务器已有 Nginx / HTTPS 层转发到 `127.0.0.1:3000`
+
+## AI 控制面与 Hermes 分工
+
+当前实现里，AI 相关能力分成三层：
+
+- 项目自己的智能体 / 业务编排层：负责 ASR/TTS 路由、答案确认、量表入库、确定性评分、报告、权限、审计、fallback 和科研导出。
+- 项目 AI 控制面：`/admin/apikeys` 管理项目侧 `text / asr / tts` provider/key/endpoint/model 池，`/admin/agent` 管理 Agent、Hermes 调试链接和语音 adapter 偏好。这一层不会直接改 Hermes 自己的上游模型配置。
+- Hermes Runtime：`app` 通过 `HERMES_API_SERVER_BASE_URL`、`HERMES_API_SERVER_KEY`、`HERMES_API_SERVER_MODEL` 调用内部 Hermes API。`HERMES_API_SERVER_KEY` 是 app -> Hermes 的内部鉴权口令，不是 DeepSeek/OpenAI 的服务商 key。
+- Hermes 上游模型配置：保存在 Hermes 自己的数据目录（容器内 `/opt/data` 的 `.env` / `config.yaml`）。如果未来要让后台统一切换 Hermes 上游 provider，必须新增显式契约，不能默认复用 `/admin/apikeys`。
+
+家长 Web/H5 纯语音答题第一阶段的数据流是：
+
+1. 浏览器录音后由项目侧 ASR adapter 转写，默认兼容 SiliconFlow SenseVoiceSmall。
+2. 项目代码先做本地答案映射；明确的“是 / 不是 / 有 / 没有 / 会 / 不会”可以高置信度映射。
+3. “不清楚 / 可能 / 大概 / 偶尔 / 三天转两回 / 说不好”等模糊表达必须进入 Hermes 辅助理解或追问，不直接提交答案。
+4. Hermes 只返回候选答案、confidence、evidence、followUpQuestion 和确认需求；最终选项合法性、确认、入库、计分和报告仍由项目代码完成。
+5. `AiConversationSession` / `AiConversationEvent` 是 AI 交互和语音逐轮事件的项目内 source of truth，记录 ASR、用户原话、Hermes 映射、确认、fallback、tool call、TTS 和最终答案提交。
+6. `/admin/ai-logs` 是超级管理员 AI 会话复盘入口；OpenWebUI / Hermes 控制台只作为新标签页调试链接，不作为正式审计或科研导出数据源。
+7. 科研导出从项目数据库读取并默认脱敏，优先导出已确认答案相关事件，不提供原始未脱敏训练集一键导出。
 
 ## 目录说明
 
@@ -77,6 +96,7 @@ AI量表系统是面向儿童评估、医生协作、平台知识治理和外部
 | `packages/assessment-skill/` | 外部接入包与 skill facade |
 | `prisma/schema.prisma` | 当前数据库 schema source of truth |
 | `prisma/migrations/20260627_baseline/` | 当前正式 Prisma baseline migration |
+| `prisma/migrations/20260630_parent_voice_ai_control_phase1/` | 家长语音答题与 AI 会话日志第一阶段迁移 |
 | `prisma/migrations_archive/pre_20260627_baseline/` | 旧不完整 migration 链归档 |
 | `scripts/docker-redeploy.py` | Git 跟踪文件 release + 生产 redeploy 脚本 |
 | `docker-compose.dev.yml` | 本地依赖服务 |
@@ -141,6 +161,7 @@ npm run dev:services:down
 7. 启动 `app` 并检查 `/api/health`。
 
 生产 env 永远留在服务器，不进入 Git。
+服务器侧 `.env.production` 只放 app -> Hermes 的连接配置与应用密钥，不作为 DeepSeek/OpenAI/OneAPI 的统一控制面。
 
 ## 已有生产库升级到新基线
 

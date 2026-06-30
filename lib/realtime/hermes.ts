@@ -1,4 +1,6 @@
-import type { LanguageCode, ScaleDefinition } from "@/lib/schemas/core/types";
+import type { LanguageCode, ScaleDefinition, ScaleQuestion } from "@/lib/schemas/core/types";
+import { parseVoiceIntentResponse } from "@/lib/services/voiceProtocol";
+import { buildQuestionnaireMappingContext } from "@/lib/services/voice-answer-mapping";
 import { TRIAGE_SYSTEM_PROMPT, parseAIResponse, type TriageAIResponse } from "@/lib/services/triageFlow";
 
 type HermesApiConfig = {
@@ -23,6 +25,13 @@ type HermesDoctorBotReply = {
 type HermesAgentReply = {
   rawText: string;
   aiResponse: TriageAIResponse;
+};
+
+type HermesQuestionnaireAnswerMappingReply = {
+  rawText: string;
+  provider: "hermes";
+  model: string;
+  result: ReturnType<typeof parseVoiceIntentResponse>;
 };
 
 type HermesAgentTenantContext = {
@@ -95,6 +104,8 @@ function normalizeResponsesEndpoint(baseUrl: string) {
   return url.toString();
 }
 
+// Hermes runtime connectivity is configured only through app-side env vars.
+// Upstream provider selection for Hermes lives outside this module.
 export function getHermesApiConfig(): HermesApiConfig {
   const baseUrl = process.env.HERMES_API_SERVER_BASE_URL?.trim() || "";
   const apiKey = process.env.HERMES_API_SERVER_KEY?.trim() || "";
@@ -155,6 +166,47 @@ function buildAgentTriageInstructions(input: {
     formatAgentTenantContext(input.tenantContext),
     "",
     "请严格只返回 JSON 对象，不要输出 Markdown，不要输出代码块。",
+  ].join("\n");
+}
+
+function buildQuestionnaireMappingInstructions(input: {
+  language: LanguageCode;
+}) {
+  return [
+    "You are Hermes, a runtime-only questionnaire answer understanding assistant.",
+    "Return JSON only. No markdown.",
+    "You may only map the parent utterance to candidate questionnaire intent data.",
+    "Never write answers to a database, never calculate scores, never make a final business decision.",
+    "The application code will validate allowed options, ask confirmation, persist answers, score, audit, and export.",
+    "",
+    "Output schema:",
+    JSON.stringify({
+      intent:
+        "answer | irrelevant | pause | repeat | previous | change_answer | resume | explain | skip | quit | switch_member | switch_language | slower | faster | risk_escalation",
+      confidence: "0-1",
+      language: input.language,
+      answer: {
+        questionId: "number",
+        score: "number from the supplied options only",
+        label: "string",
+      },
+      meta: {
+        reason: "short reasoning summary",
+        rawTranscript: "original utterance",
+        normalizedText: "normalized utterance",
+        evidence: "words that support the candidate mapping",
+        followUpQuestion: "one caregiver-friendly follow-up question when needed",
+        needsConfirmation: "boolean",
+        needsFallbackPrompt: "boolean",
+      },
+    }),
+    "",
+    "Rules:",
+    "- If the parent is uncertain, vague, or gives a frequency not clearly matching one option, prefer irrelevant with needsFallbackPrompt=true and a followUpQuestion.",
+    "- If confidence is below 0.8, set needsConfirmation=true.",
+    "- If confidence is below 0.6, do not return a committed answer; ask a follow-up instead.",
+    "- For sensitive or risk-like answers, set needsConfirmation=true.",
+    "- Only use one of the supplied option scores.",
   ].join("\n");
 }
 
@@ -496,6 +548,42 @@ export async function requestHermesAgentTriageReply(input: {
     rawText,
     aiResponse: parseAIResponse(rawText),
   } satisfies HermesAgentReply;
+}
+
+export async function requestHermesQuestionnaireAnswerMapping(input: {
+  conversationId: string;
+  scaleId: string;
+  question: ScaleQuestion;
+  transcript: string;
+  language: LanguageCode;
+}): Promise<HermesQuestionnaireAnswerMappingReply> {
+  const config = getHermesApiConfig();
+  const rawText = await requestHermesResponseText({
+    conversationId: input.conversationId,
+    content: JSON.stringify(
+      buildQuestionnaireMappingContext({
+        scaleId: input.scaleId,
+        question: input.question,
+        transcript: input.transcript,
+        language: input.language,
+      })
+    ),
+    instructions: buildQuestionnaireMappingInstructions({
+      language: input.language,
+    }),
+  });
+
+  const parsed = tryParseJsonObject(rawText);
+  if (!parsed) {
+    throw new Error("Hermes answer mapping response is not valid JSON");
+  }
+
+  return {
+    rawText,
+    provider: "hermes",
+    model: config.model,
+    result: parseVoiceIntentResponse(parsed),
+  };
 }
 
 export async function requestHermesAgentTriageReplyStream(input: {

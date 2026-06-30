@@ -5,6 +5,7 @@ import {
   Bot,
   BrainCircuit,
   Database,
+  ExternalLink,
   Loader2,
   Mic,
   Save,
@@ -165,20 +166,23 @@ export default function AdminAgentPage() {
   const [config, setConfig] = useState<AgentConfig>(DEFAULT_AGENT_WORKSPACE_CONFIG);
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [textModels, setTextModels] = useState<ModelOption[]>([]);
-  const [speechModels, setSpeechModels] = useState<ModelOption[]>([]);
+  const [asrModels, setAsrModels] = useState<ModelOption[]>([]);
+  const [ttsModels, setTtsModels] = useState<ModelOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
-  const [modelLoading, setModelLoading] = useState<{ text: boolean; speech: boolean }>({
+  const [modelLoading, setModelLoading] = useState<{ text: boolean; asr: boolean; tts: boolean }>({
     text: false,
-    speech: false,
+    asr: false,
+    tts: false,
   });
 
   const providerOptions = useMemo(() => {
     const providers = new Set<string>([
       config.models.textProvider,
-      config.models.speechProvider,
+      config.models.asrProvider,
+      config.models.ttsProvider,
       ...apiKeys
         .filter((item) => item.isActive && !item.userId)
         .map((item) => item.provider),
@@ -188,19 +192,19 @@ export default function AdminAgentPage() {
       value: provider,
       label: formatProvider(provider),
     }));
-  }, [apiKeys, config.models.speechProvider, config.models.textProvider]);
+  }, [apiKeys, config.models.asrProvider, config.models.textProvider, config.models.ttsProvider]);
 
   const loadModelsByKeys = useCallback(
     async (
       provider: string,
-      serviceType: 'text' | 'speech',
+      serviceType: 'text' | 'asr' | 'tts',
       sourceKeys: ApiKeyRecord[]
     ) => {
       const matchingKey =
         sourceKeys.find(
           (item) =>
             item.provider === provider &&
-            item.serviceType === serviceType &&
+            (item.serviceType === serviceType || (serviceType === 'asr' && item.serviceType === 'speech')) &&
             item.isActive &&
             !item.userId
         ) || null;
@@ -208,8 +212,10 @@ export default function AdminAgentPage() {
       if (!matchingKey) {
         if (serviceType === 'text') {
           setTextModels([]);
+        } else if (serviceType === 'asr') {
+          setAsrModels([]);
         } else {
-          setSpeechModels([]);
+          setTtsModels([]);
         }
         return;
       }
@@ -232,14 +238,18 @@ export default function AdminAgentPage() {
 
         if (serviceType === 'text') {
           setTextModels(models);
+        } else if (serviceType === 'asr') {
+          setAsrModels(models);
         } else {
-          setSpeechModels(models);
+          setTtsModels(models);
         }
       } catch {
         if (serviceType === 'text') {
           setTextModels([]);
+        } else if (serviceType === 'asr') {
+          setAsrModels([]);
         } else {
-          setSpeechModels([]);
+          setTtsModels([]);
         }
       } finally {
         setModelLoading((prev) => ({ ...prev, [serviceType]: false }));
@@ -249,7 +259,7 @@ export default function AdminAgentPage() {
   );
 
   const loadModels = useCallback(
-    async (provider: string, serviceType: 'text' | 'speech') => {
+    async (provider: string, serviceType: 'text' | 'asr' | 'tts') => {
       await loadModelsByKeys(provider, serviceType, apiKeys);
     },
     [apiKeys, loadModelsByKeys]
@@ -286,7 +296,8 @@ export default function AdminAgentPage() {
 
       await Promise.all([
         loadModelsByKeys(nextConfig.models.textProvider, 'text', nextKeys),
-        loadModelsByKeys(nextConfig.models.speechProvider, 'speech', nextKeys),
+        loadModelsByKeys(nextConfig.models.asrProvider, 'asr', nextKeys),
+        loadModelsByKeys(nextConfig.models.ttsProvider, 'tts', nextKeys),
       ]);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '加载 Agent 配置失败');
@@ -305,8 +316,14 @@ export default function AdminAgentPage() {
   }, []);
 
   const handleProviderChange = useCallback(
-    async (serviceType: 'text' | 'speech', provider: string) => {
-      updateConfig(`models.${serviceType === 'text' ? 'textProvider' : 'speechProvider'}`, provider);
+    async (serviceType: 'text' | 'asr' | 'tts', provider: string) => {
+      const providerPath =
+        serviceType === 'text'
+          ? 'textProvider'
+          : serviceType === 'asr'
+            ? 'asrProvider'
+            : 'ttsProvider';
+      updateConfig(`models.${providerPath}`, provider);
       await loadModels(provider, serviceType);
     },
     [loadModels, updateConfig]
@@ -420,7 +437,7 @@ export default function AdminAgentPage() {
         <div className="space-y-6">
           <SectionCard
             title="AI 配置"
-            description="这里为 Agent 单独选择文本与语音的 provider/model 偏好。AI 服务商密钥负责管理可用密钥池，Agent 配置中心只选择要优先使用的服务商和模型；运行时会从密钥池中挑选同 provider、同 serviceType 的可用系统密钥执行。"
+            description="这里是项目自己的 AI 控制面，为 Agent 单独选择文本与语音的 provider/model 偏好。AI 服务商密钥负责管理可用密钥池，Agent 配置中心只选择要优先使用的服务商和模型；运行时会从密钥池中挑选同 provider、同 serviceType 的可用系统密钥执行，不会直接写入 Hermes Runtime 自己的上游 provider 配置。"
             icon={<BrainCircuit className="h-5 w-5" />}
           >
             <div className="grid gap-5 md:grid-cols-2">
@@ -459,45 +476,180 @@ export default function AdminAgentPage() {
                 </div>
               </div>
               <div>
-                <FieldLabel>语音服务商（来自 AI 服务商密钥）</FieldLabel>
+                <FieldLabel>ASR 服务商（来自 AI 服务商密钥）</FieldLabel>
                 <select
-                  value={config.models.speechProvider}
-                  onChange={(event) => void handleProviderChange('speech', event.target.value)}
+                  value={config.models.asrProvider}
+                  onChange={(event) => void handleProviderChange('asr', event.target.value)}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
                 >
                   {providerOptions.map((option) => (
-                    <option key={`speech-${option.value}`} value={option.value}>
+                    <option key={`asr-${option.value}`} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <FieldLabel>语音模型（基于所选服务商可用模型）</FieldLabel>
+                <FieldLabel>ASR 模型（默认兼容 SenseVoiceSmall）</FieldLabel>
                 <div className="space-y-2">
                   <select
-                    value={config.models.speechModel}
-                    onChange={(event) => updateConfig('models.speechModel', event.target.value)}
+                    value={config.models.asrModel}
+                    onChange={(event) => updateConfig('models.asrModel', event.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
                   >
-                    <option value={config.models.speechModel}>{config.models.speechModel}</option>
-                    {speechModels
-                      .filter((model) => model.id !== config.models.speechModel)
+                    <option value={config.models.asrModel}>{config.models.asrModel}</option>
+                    {asrModels
+                      .filter((model) => model.id !== config.models.asrModel)
                       .map((model) => (
                         <option key={model.id} value={model.id}>
                           {model.name}
                         </option>
                       ))}
                   </select>
-                  {modelLoading.speech ? <p className="text-xs text-slate-500">正在拉取语音模型列表...</p> : null}
+                  {modelLoading.asr ? <p className="text-xs text-slate-500">正在拉取 ASR 模型列表...</p> : null}
                 </div>
+              </div>
+              <div>
+                <FieldLabel>TTS 服务商（API TTS adapter）</FieldLabel>
+                <select
+                  value={config.models.ttsProvider}
+                  onChange={(event) => void handleProviderChange('tts', event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                >
+                  {providerOptions.map((option) => (
+                    <option key={`tts-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <FieldLabel>TTS 模型</FieldLabel>
+                <div className="space-y-2">
+                  <select
+                    value={config.models.ttsModel}
+                    onChange={(event) => updateConfig('models.ttsModel', event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                  >
+                    <option value={config.models.ttsModel}>{config.models.ttsModel}</option>
+                    {ttsModels
+                      .filter((model) => model.id !== config.models.ttsModel)
+                      .map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                  </select>
+                  {modelLoading.tts ? <p className="text-xs text-slate-500">正在拉取 TTS 模型列表...</p> : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div>
+                <FieldLabel>TTS 模式</FieldLabel>
+                <select
+                  value={config.voice.ttsMode}
+                  onChange={(event) => updateConfig('voice.ttsMode', event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                >
+                  <option value="browser">browser（默认浏览器播报）</option>
+                  <option value="provider">provider（项目侧 API TTS）</option>
+                  <option value="auto">auto（优先 provider，失败可见后回浏览器）</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>voiceId</FieldLabel>
+                <Input
+                  value={config.voice.voiceId}
+                  onChange={(event) => updateConfig('voice.voiceId', event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                />
+              </div>
+              <div>
+                <FieldLabel>speed</FieldLabel>
+                <Input
+                  type="number"
+                  step="0.05"
+                  min="0.5"
+                  max="2"
+                  value={config.voice.speed}
+                  onChange={(event) => updateConfig('voice.speed', Number(event.target.value || 1))}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                />
+              </div>
+              <div>
+                <FieldLabel>pitch</FieldLabel>
+                <Input
+                  type="number"
+                  step="0.05"
+                  min="0.5"
+                  max="2"
+                  value={config.voice.pitch}
+                  onChange={(event) => updateConfig('voice.pitch', Number(event.target.value || 1))}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                />
+              </div>
+              <div>
+                <FieldLabel>format</FieldLabel>
+                <select
+                  value={config.voice.format}
+                  onChange={(event) => updateConfig('voice.format', event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                >
+                  <option value="mp3">mp3</option>
+                  <option value="wav">wav</option>
+                  <option value="ogg">ogg</option>
+                </select>
               </div>
             </div>
 
             <div className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-4 text-sm leading-7 text-cyan-900">
               当前采用"按 provider + model"方式运行，而不是绑定某一条具体 API Key。
               Agent 配置中心只保存模型偏好；真正执行时，系统会去 "AI 服务商密钥" 中选择同 provider、同 serviceType 的可用系统密钥。
-              如果当前没有匹配的可用密钥，且允许回退，则会使用系统默认可用模型。
+              如果当前没有匹配的可用密钥，且允许回退，则会使用系统默认可用模型。Hermes 容器自己直连的上游模型供应商配置不在这里切换。
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-900">
+              OpenWebUI 只用于工程调试，不用于正式审计或科研导出。正式复盘、脱敏导出和训练素材治理必须从项目数据库的 AI 会话日志中心读取。
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <Input
+                  value={config.consoleLinks.hermesUrl}
+                  onChange={(event) => updateConfig('consoleLinks.hermesUrl', event.target.value)}
+                  placeholder="Hermes 调试控制台 URL（未配置则隐藏链接）"
+                  className="rounded-2xl border-amber-200 bg-white"
+                />
+                <Input
+                  value={config.consoleLinks.openWebuiUrl}
+                  onChange={(event) => updateConfig('consoleLinks.openWebuiUrl', event.target.value)}
+                  placeholder="OpenWebUI 调试 URL（未配置则隐藏链接）"
+                  className="rounded-2xl border-amber-200 bg-white"
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {config.consoleLinks.hermesUrl ? (
+                  <a
+                    href={config.consoleLinks.hermesUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Hermes 调试入口
+                  </a>
+                ) : null}
+                {config.consoleLinks.openWebuiUrl ? (
+                  <a
+                    href={config.consoleLinks.openWebuiUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    OpenWebUI 调试入口
+                  </a>
+                ) : null}
+              </div>
             </div>
 
             <label className="mt-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">

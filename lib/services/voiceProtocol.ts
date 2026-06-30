@@ -50,6 +50,7 @@ export const voiceIntentResultSchema = z.object({
       rawTranscript: z.string().optional(),
       normalizedText: z.string().optional(),
       evidence: z.string().optional(),
+      followUpQuestion: z.string().optional(),
       needsConfirmation: z.boolean().optional(),
       needsFallbackPrompt: z.boolean().optional(),
     })

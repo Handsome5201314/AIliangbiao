@@ -17,6 +17,21 @@ export async function POST(request: NextRequest) {
     if (context) {
       nextFormData.append('context', context);
     }
+    for (const key of [
+      'conversationSessionId',
+      'memberProfileId',
+      'assessmentSessionId',
+      'assessmentHistoryId',
+      'doctorProfileId',
+      'scaleId',
+      'questionId',
+      'hermesConversationId',
+    ]) {
+      const value = formData.get(key);
+      if (typeof value === 'string' && value.trim()) {
+        nextFormData.append(key, value);
+      }
+    }
     nextFormData.append('deviceId', session.device_id);
     nextFormData.append('userId', session.sub);
 

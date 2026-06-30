@@ -78,7 +78,8 @@ test("migrated H5 runner maps current-question natural language answers through 
   const appSource = await readFile("components/mobile-h5/MobileH5App.tsx", "utf8");
 
   assert.match(serviceSource, /export async function mapNaturalLanguageAnswer/);
-  assert.match(serviceSource, /\/api\/skill\/v1\/scales\/\$\{encodeURIComponent\(params\.scaleId\)\}\/map-answer/);
+  assert.match(serviceSource, /\/api\/skill\/v1\/voice-intent/);
+  assert.match(serviceSource, /mode:\s*['"]questionnaire['"]/);
   assert.match(serviceSource, /export async function confirmMappedAnswer/);
   assert.match(serviceSource, /\/api\/skill\/v1\/scales\/\$\{encodeURIComponent\(params\.scaleId\)\}\/mapped-answers\/confirm/);
   assert.match(serviceSource, /getAuthHeaders\(\)/);

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
+import { ADMIN_ROLE } from '@/lib/auth/admin-role';
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
+import { normalizeApiServiceType } from '@/lib/services/apiKeyProviderConfig';
 import { BUSINESS_SECRET_VERSION, encryptBusinessSecret, maskBusinessSecret } from '@/lib/utils/businessSecrets';
 
 // 获取所有API密钥
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminRequest(request);
+    await requireAdminRequest(request, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
 
     const keys = await prisma.apiKey.findMany({
       where: {
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
 // 添加新API密钥（系统级）
 export async function POST(req: NextRequest) {
   try {
-    await requireAdminRequest(req);
+    await requireAdminRequest(req, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
 
     const { provider, keyName, keyValue, customEndpoint, customModel, serviceType } = await req.json();
 
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
         secretCiphertext: encryptBusinessSecret(trimmedKey),
         secretPreview: maskBusinessSecret(trimmedKey),
         secretVersion: BUSINESS_SECRET_VERSION,
-        serviceType: serviceType || 'text', // 默认为文本模型
+        serviceType: normalizeApiServiceType(serviceType), // 默认为文本模型，旧 speech 兼容为 asr
         customEndpoint: customEndpoint || null,
         customModel: customModel || null,
         isActive: true,
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
 // 删除API密钥
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAdminRequest(req);
+    await requireAdminRequest(req, { roles: [ADMIN_ROLE.SUPER_ADMIN] });
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');

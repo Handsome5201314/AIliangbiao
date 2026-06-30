@@ -8,6 +8,7 @@ import {
   Bot,
   Building2,
   Database,
+  FileClock,
   Key,
   LayoutDashboard,
   LogOut,
@@ -110,7 +111,13 @@ const navItems: AdminNavItem[] = [
     name: 'Agent 配置',
     icon: <Bot className="h-5 w-5" />,
     href: '/admin/agent',
-    roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.OPS],
+    roles: [ADMIN_ROLE.SUPER_ADMIN],
+  },
+  {
+    name: 'AI 会话日志',
+    icon: <FileClock className="h-5 w-5" />,
+    href: '/admin/ai-logs',
+    roles: [ADMIN_ROLE.SUPER_ADMIN],
   },
   {
     name: 'MCP 监控',
@@ -128,7 +135,7 @@ const navItems: AdminNavItem[] = [
     name: 'AI 服务商密钥',
     icon: <Key className="h-5 w-5" />,
     href: '/admin/apikeys',
-    roles: [ADMIN_ROLE.SUPER_ADMIN, ADMIN_ROLE.OPS],
+    roles: [ADMIN_ROLE.SUPER_ADMIN],
   },
   {
     name: '大模型与计费',

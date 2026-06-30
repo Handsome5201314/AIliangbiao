@@ -304,7 +304,7 @@ export default function AdminHermesProfilesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Hermes Profile"
-        description="管理组织级默认 profile 与独立医生 profile。组织内医生继承组织级配置，只有独立医生可以持有 doctor-level Hermes Profile。"
+        description="管理组织级默认 profile 与独立医生 profile 的 Hermes 运行策略。这里只控制知识模式、fallback 和归属，不承载上游模型供应商或 API Key。"
       />
 
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
@@ -315,7 +315,7 @@ export default function AdminHermesProfilesPage() {
                 {form.id ? '编辑 Hermes Profile' : '新建 Hermes Profile'}
               </h3>
               <p className="mt-1 text-sm text-slate-500">
-                运行时配置会写入 configJson，并统一归一化到 knowledgeDefaultMode 与 doctorBotFallbackEnabled。
+                运行时配置会写入 configJson，并统一归一化到 knowledgeDefaultMode 与 doctorBotFallbackEnabled；这里不保存 provider、model 或 API Key。
               </p>
             </div>
             {form.id ? (
@@ -426,7 +426,7 @@ export default function AdminHermesProfilesPage() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">knowledgeDefaultMode</span>
+              <span className="text-sm font-medium text-slate-700">默认知识模式</span>
               <select
                 value={form.knowledgeDefaultMode}
                 onChange={(event) =>
@@ -440,6 +440,9 @@ export default function AdminHermesProfilesPage() {
                 <option value="platform_proxy">platform_proxy</option>
                 <option value="direct_fastgpt">direct_fastgpt</option>
               </select>
+              <p className="text-xs text-slate-500">
+                决定当前 Profile 默认走平台知识代理还是直连已配置的 FastGPT 通道。
+              </p>
             </label>
 
             <label className="flex items-start gap-3 rounded-2xl border border-slate-200 px-4 py-3">
@@ -455,7 +458,7 @@ export default function AdminHermesProfilesPage() {
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
               />
               <span className="text-sm text-slate-700">
-                启用 doctorBotFallbackEnabled
+                允许 Doctor Bot 回退
                 <span className="mt-1 block text-xs text-slate-500">
                   当 Hermes 路径不可用时，允许 doctor bot 回退到既有知识通道。
                 </span>
@@ -463,7 +466,7 @@ export default function AdminHermesProfilesPage() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">policyJson</span>
+              <span className="text-sm font-medium text-slate-700">策略扩展 JSON</span>
               <textarea
                 rows={6}
                 value={form.policyJsonText}
@@ -476,7 +479,7 @@ export default function AdminHermesProfilesPage() {
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-slate-700">configJson</span>
+              <span className="text-sm font-medium text-slate-700">运行时扩展 JSON</span>
               <textarea
                 rows={6}
                 value={form.configJsonText}
@@ -484,8 +487,11 @@ export default function AdminHermesProfilesPage() {
                   setForm((current) => ({ ...current, configJsonText: event.target.value }))
                 }
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-sm text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                placeholder='例如：{"knowledgeDefaultMode":"platform_proxy"}'
+                placeholder='例如：{"knowledgeDefaultMode":"platform_proxy","doctorBotFallbackEnabled":true}'
               />
+              <p className="text-xs text-slate-500">
+                仅用于少量运行时扩展字段，不保存 provider、model 或 API Key。
+              </p>
             </label>
           </div>
 
@@ -504,7 +510,7 @@ export default function AdminHermesProfilesPage() {
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
-            当前可创建候选：组织 {organizationCandidates.length} 个，独立医生 {doctorCandidates.length} 个。
+            当前可创建候选：组织 {organizationCandidates.length} 个，独立医生 {doctorCandidates.length} 个。Hermes 上游模型供应商配置仍位于 Hermes 自己的数据目录。
           </div>
         </Card>
 

@@ -1,22 +1,31 @@
 import { prisma } from '@/lib/db/prisma';
 import { getAgentWorkspaceConfig } from '@/lib/agent/config';
-import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyProviderConfig';
+import {
+  getProviderEndpoint,
+  normalizeApiServiceType,
+  PROVIDER_CONFIGS,
+  type LegacyApiServiceType,
+} from '@/lib/services/apiKeyProviderConfig';
 import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
-export async function getAgentModelConfig(serviceType: ApiServiceType) {
+export async function getAgentModelConfig(serviceType: LegacyApiServiceType) {
+  const normalizedServiceType = normalizeApiServiceType(serviceType);
   const config = await getAgentWorkspaceConfig();
   const provider =
-    serviceType === 'speech'
-      ? config.models.speechProvider
-      : config.models.textProvider;
+    normalizedServiceType === 'asr'
+      ? config.models.asrProvider
+      : normalizedServiceType === 'tts'
+        ? config.models.ttsProvider
+        : config.models.textProvider;
   const model =
-    serviceType === 'speech'
-      ? config.models.speechModel
-      : config.models.textModel;
+    normalizedServiceType === 'asr'
+      ? config.models.asrModel
+      : normalizedServiceType === 'tts'
+        ? config.models.ttsModel
+        : config.models.textModel;
 
   const providerConfig = PROVIDER_CONFIGS[provider] || PROVIDER_CONFIGS.custom;
-  const endpoint =
-    serviceType === 'speech' ? providerConfig.speechEndpoint : providerConfig.textEndpoint;
+  const endpoint = getProviderEndpoint(providerConfig, normalizedServiceType);
 
   return {
     provider,
@@ -26,14 +35,19 @@ export async function getAgentModelConfig(serviceType: ApiServiceType) {
   };
 }
 
-export async function resolveAgentApiKeyByService(serviceType: ApiServiceType) {
+export async function resolveAgentApiKeyByService(serviceType: LegacyApiServiceType) {
+  const normalizedServiceType = normalizeApiServiceType(serviceType);
   const preferred = await getAgentModelConfig(serviceType);
+  const serviceTypeFilter =
+    normalizedServiceType === 'asr'
+      ? { in: ['asr', 'speech'] }
+      : normalizedServiceType;
 
   const preferredKey = await prisma.apiKey.findFirst({
     where: {
       purpose: 'AI',
       provider: preferred.provider,
-      serviceType,
+      serviceType: serviceTypeFilter,
       isActive: true,
       userId: null,
       NOT: { provider: 'mcp' },
@@ -46,7 +60,7 @@ export async function resolveAgentApiKeyByService(serviceType: ApiServiceType) {
 
   if (preferredKey) {
     if (!preferredKey.secretCiphertext) {
-      throw new Error(`Agent ${serviceType} API 密钥需要重新录入`);
+      throw new Error(`Agent ${normalizedServiceType} API 密钥需要重新录入`);
     }
 
     const endpoint =
@@ -73,7 +87,7 @@ export async function resolveAgentApiKeyByService(serviceType: ApiServiceType) {
   }
 
   if (!preferred.allowFallbackToSystemDefault) {
-    throw new Error(`Agent 未找到可用的 ${serviceType} 模型密钥配置`);
+    throw new Error(`Agent 未找到可用的 ${normalizedServiceType} 模型密钥配置`);
   }
 
   return null;

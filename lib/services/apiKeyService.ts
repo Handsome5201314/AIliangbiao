@@ -1,5 +1,12 @@
 import { prisma } from '@/lib/db/prisma';
-import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyProviderConfig';
+import {
+  getProviderEndpoint,
+  getProviderModel,
+  normalizeApiServiceType,
+  PROVIDER_CONFIGS,
+  type ApiServiceType,
+  type LegacyApiServiceType,
+} from '@/lib/services/apiKeyProviderConfig';
 import { decryptBusinessSecret } from '@/lib/utils/businessSecrets';
 
 export { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyProviderConfig';
@@ -8,19 +15,25 @@ export async function getSystemApiKey() {
   return getSystemApiKeyByService('text');
 }
 
-export async function getSystemApiKeyByService(serviceType: ApiServiceType): Promise<{
+export async function getSystemApiKeyByService(serviceType: LegacyApiServiceType): Promise<{
   key: string;
   provider: string;
   endpoint: string;
   model: string;
 }> {
+  const normalizedServiceType = normalizeApiServiceType(serviceType);
+  const serviceTypeFilter =
+    normalizedServiceType === 'asr'
+      ? { in: ['asr', 'speech'] }
+      : normalizedServiceType;
+
   try {
     const apiKeys = await prisma.apiKey.findMany({
       where: {
         purpose: 'AI',
         isActive: true,
         userId: null,
-        serviceType,
+        serviceType: serviceTypeFilter,
         NOT: { provider: 'mcp' },
       },
       select: {
@@ -39,7 +52,7 @@ export async function getSystemApiKeyByService(serviceType: ApiServiceType): Pro
     });
 
     if (apiKeys.length === 0) {
-      throw new Error(`系统暂未配置 ${serviceType} 类型的 API 密钥，请联系管理员`);
+      throw new Error(`系统暂未配置 ${normalizedServiceType} 类型的 API 密钥，请联系管理员`);
     }
 
     const onlineKey = apiKeys.find((item) => item.connectionStatus === 'online');
@@ -47,17 +60,17 @@ export async function getSystemApiKeyByService(serviceType: ApiServiceType): Pro
     const providerConfig = PROVIDER_CONFIGS[selectedKey.provider] || PROVIDER_CONFIGS.custom;
     const endpoint =
       selectedKey.customEndpoint ||
-      (serviceType === 'speech' ? providerConfig.speechEndpoint : providerConfig.textEndpoint);
+      getProviderEndpoint(providerConfig, normalizedServiceType);
     const model =
       selectedKey.customModel ||
-      (serviceType === 'speech' ? providerConfig.speechModel : providerConfig.textModel);
+      getProviderModel(providerConfig, normalizedServiceType);
 
     if (!endpoint) {
       throw new Error(`服务商 ${selectedKey.provider} 的接口地址未配置`);
     }
 
     if (!selectedKey.secretCiphertext) {
-      throw new Error(`系统 ${serviceType} API 密钥需要重新录入`);
+      throw new Error(`系统 ${normalizedServiceType} API 密钥需要重新录入`);
     }
 
     await prisma.apiKey.update({
@@ -75,7 +88,7 @@ export async function getSystemApiKeyByService(serviceType: ApiServiceType): Pro
       model,
     };
   } catch (error) {
-    console.error(`Failed to get system API key for ${serviceType}:`, error);
+    console.error(`Failed to get system API key for ${normalizedServiceType}:`, error);
     throw error;
   }
 }

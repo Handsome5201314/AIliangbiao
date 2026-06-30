@@ -12,6 +12,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transcribeWithRetry, estimateAudioDuration, AudioFormat } from '@/lib/utils/audioToText';
 import { checkSpeechQuota, recordSpeechUsage, validateAudioFile } from '@/lib/services/speechService';
 import { QuotaManager } from '@/lib/auth/quotaManager';
+import {
+  recordAiConversationEvent,
+  type AiConversationContext,
+} from '@/lib/services/ai-conversation-log';
 
 // 配置 Next.js 支持大文件上传
 export const config = {
@@ -36,7 +40,22 @@ function inferAudioFormat(mimeType: string): AudioFormat {
   return 'webm';
 }
 
+function readOptionalString(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readOptionalNumber(formData: FormData, key: string) {
+  const value = readOptionalString(formData, key);
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export async function POST(request: NextRequest) {
+  let auditContext: AiConversationContext = {};
   try {
     // 解析请求
     const formData = await request.formData();
@@ -44,6 +63,17 @@ export async function POST(request: NextRequest) {
     const deviceId = formData.get('deviceId') as string;
     const context = formData.get('context') as string; // triage, questionnaire, command
     const userId = formData.get('userId') as string; // 可选
+    auditContext = {
+      conversationSessionId: readOptionalString(formData, 'conversationSessionId'),
+      userId: readOptionalString(formData, 'userId'),
+      memberProfileId: readOptionalString(formData, 'memberProfileId'),
+      assessmentSessionId: readOptionalString(formData, 'assessmentSessionId'),
+      assessmentHistoryId: readOptionalString(formData, 'assessmentHistoryId'),
+      doctorProfileId: readOptionalString(formData, 'doctorProfileId'),
+      scaleId: readOptionalString(formData, 'scaleId'),
+      questionId: readOptionalNumber(formData, 'questionId'),
+      hermesConversationId: readOptionalString(formData, 'hermesConversationId'),
+    };
 
     // 参数验证
     if (!audioFile) {
@@ -110,6 +140,23 @@ export async function POST(request: NextRequest) {
       format,
     });
 
+    const uploadedEvent = await recordAiConversationEvent({
+      ...auditContext,
+      eventType: 'audio_uploaded',
+      summary: 'Parent voice audio uploaded for ASR',
+      metadata: {
+        context,
+        audioSize,
+        audioType: audioFile.type,
+        estimatedDuration,
+        format,
+      },
+    });
+    auditContext = {
+      ...auditContext,
+      conversationSessionId: String(uploadedEvent.session.id),
+    };
+
     // 调用语音识别服务（带重试）
     const result = await transcribeWithRetry(audioBlob, format, 3);
 
@@ -127,14 +174,46 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success) {
+      await recordAiConversationEvent({
+        ...auditContext,
+        eventType: 'error',
+        provider: result.provider,
+        model: result.model,
+        confidence: result.confidence,
+        errorMessage: result.error || '语音识别失败',
+        fallbackReason: 'asr_failed',
+        metadata: {
+          context,
+          audioSize,
+          estimatedDuration,
+          format,
+        },
+      });
       return NextResponse.json(
         {
           error: result.error || '语音识别失败',
           success: false,
+          conversationSessionId: auditContext.conversationSessionId,
         },
         { status: 500 }
       );
     }
+
+    await recordAiConversationEvent({
+      ...auditContext,
+      eventType: 'asr_result',
+      provider: result.provider,
+      model: result.model,
+      confidence: result.confidence,
+      transcriptText: result.text,
+      summary: 'ASR transcript generated',
+      metadata: {
+        context,
+        audioSize,
+        estimatedDuration,
+        format,
+      },
+    });
 
     // 返回结果
     return NextResponse.json({
@@ -145,6 +224,7 @@ export async function POST(request: NextRequest) {
       remaining: quotaCheck.remaining - 1, // 扣除本次使用
       provider: result.provider,
       model: result.model,
+      conversationSessionId: auditContext.conversationSessionId,
     });
   } catch (error: any) {
     console.error('[Speech API] Error:', error);

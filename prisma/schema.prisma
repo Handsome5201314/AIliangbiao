@@ -283,6 +283,8 @@ model User {
   researchImportBatchesRequested ResearchImportBatch[] @relation("ResearchImportBatchRequestedByUser")
   aiDecisionLogs         AiDecisionLog[]
   mcpToolLogs            McpToolLog[]
+  aiConversationSessions AiConversationSession[]
+  aiConversationEvents   AiConversationEvent[]
   @@index([role])
   @@index([accountType])
 }
@@ -346,6 +348,8 @@ model MemberProfile {
   followUpTasks      FollowUpTask[]
   reminderLogs       ReminderLog[]
   aiDecisionLogs     AiDecisionLog[]
+  aiConversationSessions AiConversationSession[]
+  aiConversationEvents   AiConversationEvent[]
 
   @@index([userId, relation])
   @@index([contactPhone])
@@ -407,6 +411,8 @@ model AssessmentHistory {
   completedFollowUpTasks FollowUpTask[] @relation("FollowUpTaskCompletedHistory")
   aiDecisionLogs      AiDecisionLog[]
   mcpToolLogs         McpToolLog[]
+  aiConversationSessions AiConversationSession[]
+  aiConversationEvents   AiConversationEvent[]
 
   @@index([userId, createdAt])
   @@index([profileId, createdAt])
@@ -448,6 +454,8 @@ model AssessmentSession {
   completedFollowUpTasks FollowUpTask[] @relation("FollowUpTaskCompletedSession")
   aiDecisionLogs      AiDecisionLog[]
   mcpToolLogs         McpToolLog[]
+  aiConversationSessions AiConversationSession[]
+  aiConversationEvents   AiConversationEvent[]
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   completedAt         DateTime?
@@ -535,6 +543,8 @@ model DoctorProfile {
   reminderLogs       ReminderLog[]
   researchImportBatches ResearchImportBatch[] @relation("ResearchImportBatchUploadedByDoctor")
   aiDecisionLogs     AiDecisionLog[]
+  aiConversationSessions AiConversationSession[]
+  aiConversationEvents   AiConversationEvent[]
   neonateArchives    DoctorNeonateArchive[]
   careTeamMemberships CareTeamMembership[]
   grantedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessGrantedByDoctor")
@@ -1388,6 +1398,88 @@ model ResearchDerivedDataset {
   @@index([datasetVersion, createdAt])
   @@index([contentHash])
   @@map("research_derived_dataset")
+}
+
+model AiConversationSession {
+  id                  String             @id @default(cuid())
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberProfileId     String?
+  memberProfile       MemberProfile?     @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession? @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory? @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  doctorProfileId     String?
+  doctorProfile       DoctorProfile?     @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  scaleId             String?
+  questionId          Int?
+  hermesConversationId String?
+  source              String             @default("parent_voice")
+  status              String             @default("ACTIVE")
+  provider            String?
+  model               String?
+  promptHash          String?
+  configVersion       String?
+  metadata            Json?
+  events              AiConversationEvent[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  completedAt         DateTime?
+
+  @@index([userId, createdAt])
+  @@index([memberProfileId, createdAt])
+  @@index([assessmentSessionId, createdAt])
+  @@index([assessmentHistoryId, createdAt])
+  @@index([doctorProfileId, createdAt])
+  @@index([scaleId, questionId, createdAt])
+  @@index([hermesConversationId])
+  @@index([status, createdAt])
+  @@map("ai_conversation_session")
+}
+
+model AiConversationEvent {
+  id                  String                @id @default(cuid())
+  sessionId           String
+  session             AiConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId              String?
+  user                User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberProfileId     String?
+  memberProfile       MemberProfile?        @relation(fields: [memberProfileId], references: [id], onDelete: SetNull)
+  assessmentSessionId String?
+  assessmentSession   AssessmentSession?    @relation(fields: [assessmentSessionId], references: [id], onDelete: SetNull)
+  assessmentHistoryId String?
+  assessmentHistory   AssessmentHistory?    @relation(fields: [assessmentHistoryId], references: [id], onDelete: SetNull)
+  doctorProfileId     String?
+  doctorProfile       DoctorProfile?        @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
+  eventType           String
+  scaleId             String?
+  questionId          Int?
+  hermesConversationId String?
+  provider            String?
+  model               String?
+  confidence          Float?
+  confirmedLowConfidence Boolean            @default(false)
+  promptHash          String?
+  configVersion       String?
+  transcriptText      String?
+  assistantText       String?
+  summary             String?
+  errorMessage        String?
+  fallbackReason      String?
+  metadata            Json?
+  createdAt           DateTime              @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([memberProfileId, createdAt])
+  @@index([assessmentSessionId, createdAt])
+  @@index([assessmentHistoryId, createdAt])
+  @@index([doctorProfileId, createdAt])
+  @@index([scaleId, questionId, createdAt])
+  @@index([provider, model, createdAt])
+  @@index([confirmedLowConfidence, createdAt])
+  @@map("ai_conversation_event")
 }
 
 model AiDecisionLog {

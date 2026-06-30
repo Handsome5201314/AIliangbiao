@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/db/prisma';
-import { PROVIDER_CONFIGS, type ApiServiceType } from '@/lib/services/apiKeyProviderConfig';
+import {
+  getProviderModel,
+  normalizeApiServiceType,
+  PROVIDER_CONFIGS,
+  type ApiServiceType,
+} from '@/lib/services/apiKeyProviderConfig';
 import { TRIAGE_SYSTEM_PROMPT } from '@/lib/services/triageFlow';
 
 export const AGENT_WORKSPACE_CONFIG_KEY = 'agentWorkspaceConfig';
@@ -15,9 +20,26 @@ export const DEFAULT_AGENT_WORKSPACE_CONFIG = {
   models: {
     textProvider: 'qwen',
     textModel: 'qwen-max',
-    speechProvider: 'siliconflow',
-    speechModel: 'FunAudioLLM/SenseVoiceSmall',
+    asrProvider: 'siliconflow',
+    asrModel: 'FunAudioLLM/SenseVoiceSmall',
+    ttsProvider: 'volcengine',
+    ttsModel: 'volcengine-tts',
     allowFallbackToSystemDefault: true,
+  },
+  voice: {
+    asrProvider: 'siliconflow',
+    asrModel: 'FunAudioLLM/SenseVoiceSmall',
+    ttsMode: 'browser',
+    ttsProvider: 'volcengine',
+    ttsModel: 'volcengine-tts',
+    voiceId: '',
+    speed: 1,
+    pitch: 1,
+    format: 'mp3',
+  },
+  consoleLinks: {
+    hermesUrl: '',
+    openWebuiUrl: '',
   },
   quota: {
     guestAgentDailyLimit: 5,
@@ -324,6 +346,32 @@ function normalizeStoredJson(value?: string | null) {
   }
 }
 
+function normalizeAgentWorkspaceConfigInput(value: unknown): unknown {
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const next: Record<string, unknown> = { ...value };
+  if (isPlainObject(next.models)) {
+    const models = { ...next.models };
+    const legacySpeechProvider = typeof models.speechProvider === 'string' ? models.speechProvider : '';
+    const legacySpeechModel = typeof models.speechModel === 'string' ? models.speechModel : '';
+
+    if (!models.asrProvider && legacySpeechProvider) {
+      models.asrProvider = legacySpeechProvider;
+    }
+    if (!models.asrModel && legacySpeechModel) {
+      models.asrModel = legacySpeechModel;
+    }
+
+    delete models.speechProvider;
+    delete models.speechModel;
+    next.models = models;
+  }
+
+  return next;
+}
+
 type SystemAiKeyCandidate = {
   provider: string;
   serviceType: string;
@@ -338,11 +386,26 @@ function resolveModelForService(input: {
   preferredModel?: string;
   candidates: SystemAiKeyCandidate[];
 }) {
-  const serviceCandidates = input.candidates.filter((item) => item.serviceType === input.serviceType);
+  const serviceCandidates = input.candidates.filter(
+    (item) => normalizeApiServiceType(item.serviceType) === input.serviceType
+  );
+  const defaultProvider =
+    input.serviceType === 'asr'
+      ? DEFAULT_AGENT_WORKSPACE_CONFIG.models.asrProvider
+      : input.serviceType === 'tts'
+        ? DEFAULT_AGENT_WORKSPACE_CONFIG.models.ttsProvider
+        : DEFAULT_AGENT_WORKSPACE_CONFIG.models.textProvider;
+  const defaultModel =
+    input.serviceType === 'asr'
+      ? DEFAULT_AGENT_WORKSPACE_CONFIG.models.asrModel
+      : input.serviceType === 'tts'
+        ? DEFAULT_AGENT_WORKSPACE_CONFIG.models.ttsModel
+        : DEFAULT_AGENT_WORKSPACE_CONFIG.models.textModel;
+
   if (!serviceCandidates.length) {
     return {
-      provider: input.preferredProvider || DEFAULT_AGENT_WORKSPACE_CONFIG.models[input.serviceType === 'speech' ? 'speechProvider' : 'textProvider'],
-      model: input.preferredModel || DEFAULT_AGENT_WORKSPACE_CONFIG.models[input.serviceType === 'speech' ? 'speechModel' : 'textModel'],
+      provider: input.preferredProvider || defaultProvider,
+      model: input.preferredModel || defaultModel,
     };
   }
 
@@ -353,8 +416,7 @@ function resolveModelForService(input: {
   const selected = matchingPreferred || serviceCandidates[0];
   const provider = selected.provider;
   const providerConfig = PROVIDER_CONFIGS[provider] || PROVIDER_CONFIGS.custom;
-  const fallbackModel =
-    input.serviceType === 'speech' ? providerConfig.speechModel : providerConfig.textModel;
+  const fallbackModel = getProviderModel(providerConfig, input.serviceType);
 
   return {
     provider,
@@ -394,9 +456,16 @@ async function hydrateAgentModelDefaults(config: typeof DEFAULT_AGENT_WORKSPACE_
   });
 
   const speech = resolveModelForService({
-    serviceType: 'speech',
-    preferredProvider: config.models.speechProvider,
-    preferredModel: config.models.speechModel,
+    serviceType: 'asr',
+    preferredProvider: config.models.asrProvider,
+    preferredModel: config.models.asrModel,
+    candidates,
+  });
+
+  const tts = resolveModelForService({
+    serviceType: 'tts',
+    preferredProvider: config.models.ttsProvider,
+    preferredModel: config.models.ttsModel,
     candidates,
   });
 
@@ -406,8 +475,17 @@ async function hydrateAgentModelDefaults(config: typeof DEFAULT_AGENT_WORKSPACE_
       ...config.models,
       textProvider: text.provider,
       textModel: text.model,
-      speechProvider: speech.provider,
-      speechModel: speech.model,
+      asrProvider: speech.provider,
+      asrModel: speech.model,
+      ttsProvider: tts.provider,
+      ttsModel: tts.model,
+    },
+    voice: {
+      ...config.voice,
+      asrProvider: config.voice.asrProvider || speech.provider,
+      asrModel: config.voice.asrModel || speech.model,
+      ttsProvider: config.voice.ttsProvider || tts.provider,
+      ttsModel: config.voice.ttsModel || tts.model,
     },
   };
 }
@@ -417,13 +495,16 @@ export async function getAgentWorkspaceConfig() {
     where: { configKey: AGENT_WORKSPACE_CONFIG_KEY },
   });
 
-  const parsed = normalizeStoredJson(stored?.configValue);
+  const parsed = normalizeAgentWorkspaceConfigInput(normalizeStoredJson(stored?.configValue));
   const merged = deepMerge(DEFAULT_AGENT_WORKSPACE_CONFIG, parsed || {});
   return hydrateAgentModelDefaults(merged);
 }
 
 export async function saveAgentWorkspaceConfig(config: unknown) {
-  const normalized = deepMerge(DEFAULT_AGENT_WORKSPACE_CONFIG, config || {});
+  const normalized = deepMerge(
+    DEFAULT_AGENT_WORKSPACE_CONFIG,
+    normalizeAgentWorkspaceConfigInput(config || {}) || {}
+  );
 
   await prisma.systemConfig.upsert({
     where: { configKey: AGENT_WORKSPACE_CONFIG_KEY },
