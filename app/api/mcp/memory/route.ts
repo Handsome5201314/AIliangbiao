@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createMcpOptionsResponse, withMcpCors } from '@/lib/mcp/cors';
 import {
   createJsonRpcAuthError,
   logMcpToolCall,
@@ -15,6 +16,10 @@ import {
 import { memoryTools, handleMemoryToolCall } from '@/lib/mcp/skills/memory/handlers';
 
 export const dynamic = 'force-dynamic';
+
+function mcpJson(body: unknown, init?: ResponseInit) {
+  return withMcpCors(NextResponse.json(body, init));
+}
 
 /**
  * POST 处理器 - 接收 MCP JSON-RPC 请求
@@ -29,7 +34,7 @@ export async function POST(req: NextRequest) {
   try {
     const apiKey = await validateMcpApiKey(req.headers.get('Authorization'));
     if (!apiKey) {
-      return NextResponse.json(createJsonRpcAuthError(null), { status: 401 });
+      return mcpJson(createJsonRpcAuthError(null), { status: 401 });
     }
 
     const body = await req.json();
@@ -40,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     if (method === 'initialize') {
       await touchMcpApiKey(apiKey.id);
-      return NextResponse.json({
+      return mcpJson({
         jsonrpc: '2.0',
         id,
         result: {
@@ -56,7 +61,7 @@ export async function POST(req: NextRequest) {
 
     if (method === 'ping') {
       await touchMcpApiKey(apiKey.id);
-      return NextResponse.json({
+      return mcpJson({
         jsonrpc: '2.0',
         id,
         result: {},
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
     // 1. 响应工具列表请求
     if (method === "tools/list") {
       await touchMcpApiKey(apiKey.id);
-      return NextResponse.json({
+      return mcpJson({
         jsonrpc: "2.0",
         id,
         result: { tools: memoryTools }
@@ -97,7 +102,7 @@ export async function POST(req: NextRequest) {
         entrypoint: 'memory_compat',
       }).catch((err) => console.error('Failed to log MCP call:', err));
       
-      return NextResponse.json({
+      return mcpJson({
         jsonrpc: "2.0",
         id,
         result: {
@@ -108,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. 方法不存在
-    return NextResponse.json({
+    return mcpJson({
       jsonrpc: "2.0",
       id,
       error: { code: -32601, message: "Method not found" }
@@ -117,7 +122,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[Memory MCP Error]:", error);
     
-    return NextResponse.json({
+    return mcpJson({
       jsonrpc: "2.0",
       id: requestId,
       error: { 
@@ -141,10 +146,14 @@ function isToolCallError(result: unknown) {
  * GET 处理器 - 返回服务状态（可选）
  */
 export async function GET() {
-  return NextResponse.json({
+  return mcpJson({
     service: "Memory Skill",
     version: "1.0.0",
     status: "active",
     tools: memoryTools.map(t => t.name)
   });
+}
+
+export async function OPTIONS() {
+  return createMcpOptionsResponse();
 }

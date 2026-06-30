@@ -12,36 +12,23 @@ import {
   handleSseGet,
   handleSsePost,
 } from "@/lib/mcp/transport";
+import {
+  createMcpOptionsResponse,
+  withMcpCors,
+} from "@/lib/mcp/cors";
 
 export const dynamic = "force-dynamic";
 
-const corsHeaders: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Session-Id, Mcp-Session-Id",
-  "Access-Control-Expose-Headers": "X-Session-Id, Mcp-Session-Id",
-};
-
-function withCors(response: Response) {
-  Object.entries(corsHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-  return response;
-}
-
 // GET锛氬缓绔?SSE 娴?
 export async function GET(request: Request) {
-  return withCors(await handleSseGet(request));
+  return withMcpCors(await handleSseGet(request));
 }
 
 // POST锛氬鐞嗘秷鎭?
 export async function POST(request: Request) {
-  return withCors(await handleSsePost(request));
+  return withMcpCors(await handleSsePost(request));
 }
 
 export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders,
-  });
+  return createMcpOptionsResponse();
 }

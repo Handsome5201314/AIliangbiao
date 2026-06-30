@@ -195,6 +195,7 @@ export default function MCPKeysPage() {
           <li>先创建一个 MCP 密钥。</li>
           <li>把密钥配置到外部智能体平台的 Bearer Token 中。</li>
           <li>外部平台协议优先选择 streamableHTTP；SSE 只作为兼容方案。</li>
+          <li>若平台自动发送 `MCP-Protocol-Version` 或 `Last-Event-ID`，当前接口已支持 CORS 预检。</li>
           <li>统一使用标准入口 `/api/mcp`，不再使用旧的 FastGPT 专用兼容入口。</li>
           <li>工具调用顺序与规范以 `packages/assessment-skill/README.md` 为准。</li>
         </ol>

@@ -23,6 +23,8 @@ Accept: application/json, text/event-stream
 
 Create the MCP key in the AIliangbiao admin console at `/admin/mcpkeys`. Store it in the calling platform secret manager or environment variables. Never write real keys into this skill folder, examples, logs, prompts, or committed files.
 
+Some skill platforms automatically send `MCP-Protocol-Version` or `Last-Event-ID` during streamableHTTP/SSE checks. The server allows those headers in CORS preflight; do not add them manually unless the platform requires it.
+
 ## Core Rules
 
 - Prefer the canonical endpoint `/api/mcp`; use compatibility endpoints only when a client cannot call the canonical route.

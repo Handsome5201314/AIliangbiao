@@ -107,6 +107,15 @@ test("MCP key creation should surface failures and prefer streamableHTTP guidanc
   const pageSource = await readFile("app/admin/mcpkeys/page.tsx", "utf8");
   const routeSource = await readFile("app/api/admin/mcpkeys/route.ts", "utf8");
   const skillSource = await readFile("skills/ailiangbiao-mcp/SKILL.md", "utf8");
+  const corsSource = await readFile("lib/mcp/cors.ts", "utf8");
+  const canonicalMcpRoute = await readFile("app/api/mcp/route.ts", "utf8");
+  const compatRoutes = await Promise.all(
+    [
+      "app/api/mcp/scale/route.ts",
+      "app/api/mcp/memory/route.ts",
+      "app/api/mcp/growth/route.ts",
+    ].map((filePath) => readFile(filePath, "utf8"))
+  );
 
   assert.match(pageSource, /createError/);
   assert.match(pageSource, /creatingKey/);
@@ -114,6 +123,8 @@ test("MCP key creation should surface failures and prefer streamableHTTP guidanc
   assert.match(pageSource, /创建中/);
   assert.match(pageSource, /streamableHTTP（推荐）/);
   assert.match(pageSource, /Accept:\s*application\/json,\s*text\/event-stream/);
+  assert.match(pageSource, /MCP-Protocol-Version/);
+  assert.match(pageSource, /Last-Event-ID/);
 
   assert.match(routeSource, /normalizeMcpKeyName/);
   assert.match(routeSource, /MCP_KEY_CREATE_FAILED/);
@@ -121,6 +132,20 @@ test("MCP key creation should surface failures and prefer streamableHTTP guidanc
 
   assert.match(skillSource, /streamableHTTP/);
   assert.match(skillSource, /SSE compatibility/i);
+  assert.match(skillSource, /MCP-Protocol-Version/);
+  assert.match(skillSource, /Last-Event-ID/);
+
+  assert.match(corsSource, /MCP-Protocol-Version/);
+  assert.match(corsSource, /Last-Event-ID/);
+  assert.match(corsSource, /Access-Control-Allow-Headers/);
+  assert.match(corsSource, /Access-Control-Expose-Headers/);
+  assert.match(canonicalMcpRoute, /withMcpCors/);
+  assert.match(canonicalMcpRoute, /createMcpOptionsResponse/);
+  for (const compatRoute of compatRoutes) {
+    assert.match(compatRoute, /withMcpCors/);
+    assert.match(compatRoute, /createMcpOptionsResponse/);
+    assert.match(compatRoute, /export async function OPTIONS/);
+  }
 });
 
 test("system API key route should not expose usable API secrets", async () => {
