@@ -141,6 +141,7 @@ test("MCP key creation should surface failures and prefer streamableHTTP guidanc
   assert.match(corsSource, /Access-Control-Expose-Headers/);
   assert.match(canonicalMcpRoute, /withMcpCors/);
   assert.match(canonicalMcpRoute, /createMcpOptionsResponse/);
+  assert.match(await readFile("lib/mcp/accept.ts", "utf8"), /shouldOpenMcpSseGet/);
   for (const compatRoute of compatRoutes) {
     assert.match(compatRoute, /withMcpCors/);
     assert.match(compatRoute, /createMcpOptionsResponse/);

@@ -13,6 +13,7 @@ import {
 } from '@/lib/mcp/auth';
 
 import { handleToolCall, listTools } from './server-handlers';
+import { shouldOpenMcpSseGet } from './accept';
 
 // ─── Session Store ──────────────────────────────────────────────
 interface SessionState {
@@ -38,7 +39,7 @@ export async function handleSseGet(request: Request): Promise<Response> {
   await touchMcpApiKey(apiKey.id);
 
   const accept = request.headers.get('Accept') || request.headers.get('accept') || '';
-  if (!accept.includes('text/event-stream')) {
+  if (!shouldOpenMcpSseGet(accept)) {
     const tools = await listTools();
     return new Response(
       JSON.stringify({
