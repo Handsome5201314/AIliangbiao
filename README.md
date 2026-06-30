@@ -9,6 +9,12 @@ AI量表系统是面向儿童评估、医生协作、平台知识治理和外部
 
 生产部署与运维请以 [DEPLOYMENT.md](./DEPLOYMENT.md) 为准。
 
+腾讯云生产更新推荐使用 Gitee 镜像仓库作为发布源：
+
+- Gitee：`https://gitee.com/lishuaishuai1314520/AIliangbiao.git`
+- 服务器侧一键升级脚本：`scripts/tencent-gitee-upgrade.sh`
+- 升级顺序：先 `--diff-only` 看差异，再备份、构建、`prisma migrate deploy`、健康检查和切换 `current`
+
 ## 核心原则
 
 - 量表题目、确定性评分、结果落库和医生审核由本地代码负责。
@@ -163,6 +169,16 @@ npm run dev:services:down
 生产 env 永远留在服务器，不进入 Git。
 服务器侧 `.env.production` 只放 app -> Hermes 的连接配置与应用密钥，不作为 DeepSeek/OpenAI/OneAPI 的统一控制面。
 
+腾讯云已有生产库的日常升级请优先使用服务器侧 Gitee 脚本：
+
+```bash
+cd /opt/ai-scale-system/current
+bash scripts/tencent-gitee-upgrade.sh --diff-only
+bash scripts/tencent-gitee-upgrade.sh --skip-cleanup
+```
+
+DeepSeek、OpenAI、SiliconFlow、ASR、TTS 等项目侧 API Key 首次登录后在 `/admin/apikeys` 配置；Hermes 自己的上游模型 key 仍在 Hermes 独立容器的数据目录或配置文件中管理。
+
 ## 已有生产库升级到新基线
 
 当前正式 baseline：
@@ -190,7 +206,15 @@ npx prisma migrate deploy
 
 ## 日常更新
 
-先看云端 diff：
+腾讯云推荐在服务器上从 Gitee 拉取已确认版本：
+
+```bash
+cd /opt/ai-scale-system/current
+bash scripts/tencent-gitee-upgrade.sh --diff-only
+bash scripts/tencent-gitee-upgrade.sh --skip-cleanup
+```
+
+本地打包上传脚本保留为应急路径。先看云端 diff：
 
 ```bash
 DEPLOY_PASSWORD='use-env-only' python scripts/docker-redeploy.py --host tongyimohe.cloud --diff-only

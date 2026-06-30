@@ -108,6 +108,7 @@ test("GET /api/scales skips invalid manifest files instead of failing the whole 
   const tempManifestPath = path.join(process.cwd(), "data", "scales", "__invalid-test.scale.json");
   const { GET } = await import("../app/api/scales/route");
 
+  await fs.mkdir(path.dirname(tempManifestPath), { recursive: true });
   await fs.writeFile(tempManifestPath, JSON.stringify([{ id: 1 }], null, 2), "utf8");
 
   try {

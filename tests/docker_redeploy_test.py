@@ -225,11 +225,14 @@ class DockerRedeployTests(unittest.TestCase):
                 self.assertNotIn("npm run db:dev:push", source)
                 self.assertNotIn("npx prisma db push", source)
 
-    def test_prisma_migrations_use_single_baseline_and_archive_old_chain(self) -> None:
+    def test_prisma_migrations_keep_baseline_then_phase9_incremental_migration(self) -> None:
         migrations_dir = REPO_ROOT / "prisma" / "migrations"
         migration_names = sorted(path.name for path in migrations_dir.iterdir() if path.is_dir())
 
-        self.assertEqual(migration_names, ["20260627_baseline"])
+        self.assertEqual(
+            migration_names,
+            ["20260627_baseline", "20260630_parent_voice_ai_control_phase1"],
+        )
 
         archived_dir = REPO_ROOT / "prisma" / "migrations_archive" / "pre_20260627_baseline"
         archived_names = sorted(path.name for path in archived_dir.iterdir() if path.is_dir())
