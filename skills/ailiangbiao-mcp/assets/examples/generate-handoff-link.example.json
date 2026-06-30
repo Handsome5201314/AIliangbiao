@@ -1,0 +1,32 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://tongyimohe.cloud/api/mcp",
+    "headers": {
+      "Authorization": "Bearer <MCP_API_KEY>",
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": "handoff-link-1",
+      "method": "tools/call",
+      "params": {
+        "name": "generate_assessment_link",
+        "arguments": {
+          "scaleId": "M_CHAT_R",
+          "deviceId": "external-demo-session-001",
+          "memberSnapshot": {
+            "displayName": "Synthetic Child",
+            "ageMonths": 30,
+            "sex": "unspecified"
+          },
+          "callbackMetadata": {
+            "source": "skill-platform-demo",
+            "containsRealChildData": false
+          }
+        }
+      }
+    }
+  }
+}

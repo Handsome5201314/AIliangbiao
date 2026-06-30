@@ -103,6 +103,26 @@ test("MCP API keys should validate by hash and list only previews", async () => 
   assert.match(routeSource, /hashBusinessSecret/);
 });
 
+test("MCP key creation should surface failures and prefer streamableHTTP guidance", async () => {
+  const pageSource = await readFile("app/admin/mcpkeys/page.tsx", "utf8");
+  const routeSource = await readFile("app/api/admin/mcpkeys/route.ts", "utf8");
+  const skillSource = await readFile("skills/ailiangbiao-mcp/SKILL.md", "utf8");
+
+  assert.match(pageSource, /createError/);
+  assert.match(pageSource, /creatingKey/);
+  assert.match(pageSource, /res\.ok/);
+  assert.match(pageSource, /创建中/);
+  assert.match(pageSource, /streamableHTTP（推荐）/);
+  assert.match(pageSource, /Accept:\s*application\/json,\s*text\/event-stream/);
+
+  assert.match(routeSource, /normalizeMcpKeyName/);
+  assert.match(routeSource, /MCP_KEY_CREATE_FAILED/);
+  assert.match(routeSource, /BUSINESS_SECRET_ENCRYPTION_KEY/);
+
+  assert.match(skillSource, /streamableHTTP/);
+  assert.match(skillSource, /SSE compatibility/i);
+});
+
 test("system API key route should not expose usable API secrets", async () => {
   const source = await readFile("app/api/system/apikey/route.ts", "utf8");
 

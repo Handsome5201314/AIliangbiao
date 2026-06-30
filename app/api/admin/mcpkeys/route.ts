@@ -5,6 +5,21 @@ import crypto from 'crypto';
 import { createAdminUnauthorizedResponse, requireAdminRequest } from '@/lib/auth/require-admin';
 import { hashBusinessSecret, maskBusinessSecret } from '@/lib/utils/businessSecrets';
 
+const DEFAULT_MCP_KEY_NAME = 'Assessment Core MCP Key';
+const MAX_MCP_KEY_NAME_LENGTH = 80;
+
+function normalizeMcpKeyName(value: unknown) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) {
+    return DEFAULT_MCP_KEY_NAME;
+  }
+  return trimmed.slice(0, MAX_MCP_KEY_NAME_LENGTH);
+}
+
+function createMcpKeyErrorResponse(error: string, message: string, status = 500) {
+  return NextResponse.json({ success: false, error, message }, { status });
+}
+
 /**
  * 生成API密钥
  */
@@ -62,6 +77,7 @@ export async function POST(req: NextRequest) {
     await requireAdminRequest(req);
 
     const { keyName } = await req.json();
+    const normalizedKeyName = normalizeMcpKeyName(keyName);
 
     const keyValue = generateApiKey();
 
@@ -69,7 +85,7 @@ export async function POST(req: NextRequest) {
       data: {
         purpose: 'MCP',
         provider: 'mcp',  // MCP服务专用
-        keyName: keyName || 'MCP API Key',
+        keyName: normalizedKeyName,
         secretHash: hashBusinessSecret(keyValue),
         secretPreview: maskBusinessSecret(keyValue),
         secretVersion: 'bs:hmac:v1',
@@ -90,11 +106,27 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
-      return createAdminUnauthorizedResponse();
+      return createMcpKeyErrorResponse('UNAUTHORIZED', '管理员登录已失效，请重新登录', 401);
+    }
+
+    if (
+      error instanceof Error &&
+      error.message.includes('BUSINESS_SECRET_ENCRYPTION_KEY')
+    ) {
+      console.error('Failed to create API key:', error);
+      return createMcpKeyErrorResponse(
+        'BUSINESS_SECRET_ENCRYPTION_KEY_MISSING',
+        '生产环境缺少 BUSINESS_SECRET_ENCRYPTION_KEY，无法安全创建 MCP 密钥。',
+        500
+      );
     }
 
     console.error('Failed to create API key:', error);
-    return NextResponse.json({ error: 'Failed to create API key' }, { status: 500 });
+    return createMcpKeyErrorResponse(
+      'MCP_KEY_CREATE_FAILED',
+      '创建 MCP 密钥失败，请检查数据库迁移、生产环境变量和服务器日志。',
+      500
+    );
   }
 }
 

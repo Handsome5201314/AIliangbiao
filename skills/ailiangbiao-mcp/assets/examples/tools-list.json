@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://tongyimohe.cloud/api/mcp",
+    "headers": {
+      "Authorization": "Bearer <MCP_API_KEY>",
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": "tools-list-1",
+      "method": "tools/list",
+      "params": {}
+    }
+  }
+}

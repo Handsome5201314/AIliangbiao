@@ -19,6 +19,30 @@ interface McpKey {
   createdAt: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getCreateErrorMessage(status: number, data: unknown) {
+  if (status === 401) {
+    return '管理员登录已失效，请重新登录后再创建 MCP 密钥。';
+  }
+
+  if (isRecord(data) && typeof data.message === 'string' && data.message.trim()) {
+    return data.message;
+  }
+
+  if (isRecord(data) && typeof data.error === 'string' && data.error.trim()) {
+    return data.error;
+  }
+
+  if (status >= 500) {
+    return '创建 MCP 密钥失败，请检查 BUSINESS_SECRET_ENCRYPTION_KEY、数据库迁移和服务器日志。';
+  }
+
+  return '创建 MCP 密钥失败，请稍后重试。';
+}
+
 export default function MCPKeysPage() {
   const [keys, setKeys] = useState<McpKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +50,8 @@ export default function MCPKeysPage() {
   const [newKeyName, setNewKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadKeys();
@@ -43,7 +69,31 @@ export default function MCPKeysPage() {
     }
   };
 
+  const openCreateModal = () => {
+    setCreatedKey(null);
+    setCreateError(null);
+    setShowAddModal(true);
+  };
+
+  const closeCreateModal = () => {
+    if (creatingKey) {
+      return;
+    }
+
+    setShowAddModal(false);
+    setCreatedKey(null);
+    setCreateError(null);
+    setNewKeyName('');
+  };
+
   const handleCreateKey = async () => {
+    if (creatingKey) {
+      return;
+    }
+
+    setCreatingKey(true);
+    setCreateError(null);
+
     try {
       const res = await fetch('/api/admin/mcpkeys', {
         method: 'POST',
@@ -51,14 +101,27 @@ export default function MCPKeysPage() {
         body: JSON.stringify({ keyName: newKeyName || 'Assessment Core MCP Key' }),
       });
 
-      const data = await res.json();
-      if (data.success) {
+      const data: unknown = await res.json().catch(() => null);
+      if (
+        res.ok &&
+        isRecord(data) &&
+        data.success === true &&
+        isRecord(data.key) &&
+        typeof data.key.keyValue === 'string'
+      ) {
         setCreatedKey(data.key.keyValue);
+        setCreateError(null);
         setNewKeyName('');
         void loadKeys();
+        return;
       }
+
+      setCreateError(getCreateErrorMessage(res.status, data));
     } catch (error) {
       console.error('Failed to create key:', error);
+      setCreateError('网络请求失败，请检查登录状态和服务器连接后重试。');
+    } finally {
+      setCreatingKey(false);
     }
   };
 
@@ -90,7 +153,7 @@ export default function MCPKeysPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <PageHeader title="MCP API 密钥管理" description="管理外部智能体接入 Assessment Core MCP 服务时使用的专用密钥。" />
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={openCreateModal}>
           <Plus className="h-4 w-4" />
           <span>创建密钥</span>
         </Button>
@@ -114,7 +177,13 @@ export default function MCPKeysPage() {
           <div>
             <p className="mb-1 text-sm text-indigo-100">协议</p>
             <code className="block rounded-lg bg-white/20 px-4 py-2 font-mono text-sm">
-              MCP JSON-RPC 2.0 / SSE
+              streamableHTTP（推荐） / SSE（兼容）
+            </code>
+          </div>
+          <div>
+            <p className="mb-1 text-sm text-indigo-100">推荐请求头</p>
+            <code className="block rounded-lg bg-white/20 px-4 py-2 font-mono text-sm">
+              Accept: application/json, text/event-stream
             </code>
           </div>
         </div>
@@ -125,6 +194,7 @@ export default function MCPKeysPage() {
         <ol className="list-inside list-decimal space-y-1 text-sm text-cyan-800">
           <li>先创建一个 MCP 密钥。</li>
           <li>把密钥配置到外部智能体平台的 Bearer Token 中。</li>
+          <li>外部平台协议优先选择 streamableHTTP；SSE 只作为兼容方案。</li>
           <li>统一使用标准入口 `/api/mcp`，不再使用旧的 FastGPT 专用兼容入口。</li>
           <li>工具调用顺序与规范以 `packages/assessment-skill/README.md` 为准。</li>
         </ol>
@@ -141,7 +211,7 @@ export default function MCPKeysPage() {
           <div className="p-12 text-center text-slate-500">
             <Key className="mx-auto mb-4 h-12 w-12 opacity-50" />
             <p>暂无 MCP API 密钥</p>
-            <Button variant="link" onClick={() => setShowAddModal(true)} className="mt-4">创建第一个密钥</Button>
+            <Button variant="link" onClick={openCreateModal} className="mt-4">创建第一个密钥</Button>
           </div>
         ) : (
           <div className="divide-y divide-slate-200">
@@ -196,15 +266,38 @@ export default function MCPKeysPage() {
                   <label className="mb-2 block text-sm font-medium text-slate-700">
                     密钥名称
                   </label>
-                  <Input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="例如：生产环境 MCP Key" />
+                  <Input
+                    value={newKeyName}
+                    onChange={(e) => {
+                      setNewKeyName(e.target.value);
+                      setCreateError(null);
+                    }}
+                    placeholder="例如：生产环境 MCP Key"
+                    disabled={creatingKey}
+                  />
                 </div>
 
+                {createError ? (
+                  <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {createError}
+                  </div>
+                ) : null}
+
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowAddModal(false)}>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={closeCreateModal}
+                    disabled={creatingKey}
+                  >
                     取消
                   </Button>
-                  <Button className="flex-1" onClick={() => void handleCreateKey()}>
-                    创建
+                  <Button
+                    className="flex-1"
+                    onClick={() => void handleCreateKey()}
+                    disabled={creatingKey}
+                  >
+                    {creatingKey ? '创建中...' : '创建'}
                   </Button>
                 </div>
               </>
@@ -239,10 +332,7 @@ export default function MCPKeysPage() {
                   </div>
                 </div>
 
-                <Button className="w-full" onClick={() => {
-                    setShowAddModal(false);
-                    setCreatedKey(null);
-                  }}>
+                <Button className="w-full" onClick={closeCreateModal}>
                   完成
                 </Button>
               </>
@@ -259,29 +349,30 @@ export default function MCPKeysPage() {
 
         <div className="space-y-4">
           <div>
-            <p className="mb-2 text-sm font-medium text-slate-700">SSE 会话建立</p>
+            <p className="mb-2 text-sm font-medium text-slate-700">streamableHTTP JSON-RPC 调用</p>
             <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
-{`curl -N ${mcpEndpoint} \\
-  -D - \\
-  -H "Accept: text/event-stream" \\
-  -H "Authorization: Bearer sk-your-api-key"`}
+{`curl -X POST ${mcpEndpoint} \\
+  -H "Authorization: Bearer sk-your-api-key" \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "1",
+    "method": "tools/list",
+    "params": {}
+  }'`}
             </pre>
           </div>
 
           <div>
             <p className="mb-2 text-sm font-medium text-slate-700">
-              使用返回的会话继续发送 JSON-RPC
+              SSE 兼容会话
             </p>
             <pre className="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
-{`curl -X POST ${mcpEndpoint} \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "X-Session-Id: <session-id>" \\
-  -d '{
-    "jsonrpc": "2.0",
-    "id": "1",
-    "method": "tools/list"
-  }'`}
+{`curl -N ${mcpEndpoint} \\
+  -D - \\
+  -H "Accept: text/event-stream" \\
+  -H "Authorization: Bearer sk-your-api-key"`}
             </pre>
           </div>
 
