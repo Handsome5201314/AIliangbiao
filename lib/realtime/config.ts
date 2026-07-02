@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 export type RealtimeSurface = "agent" | "doctor_bot";
 
 export type RealtimeRuntimeConfig = {
-  provider: "hermes";
+  provider: "internal";
   mode: "sdk";
   allowedSurfaces: RealtimeSurface[];
   fallbacks: {
@@ -14,7 +14,7 @@ export type RealtimeRuntimeConfig = {
 };
 
 const DEFAULT_REALTIME_RUNTIME_CONFIG: RealtimeRuntimeConfig = {
-  provider: "hermes",
+  provider: "internal",
   mode: "sdk",
   allowedSurfaces: ["agent", "doctor_bot"],
   fallbacks: {

@@ -208,7 +208,7 @@ export default function DoctorTeamPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="团队协作" description="负责人可维护团队成员，并将患者档案或新生儿病房档案共享给团队医生。" />
+      <PageHeader title="团队协作" description="负责人可维护团队成员，并将患者档案共享给团队医生。" />
 
       {status ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{status}</div> : null}
       {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}

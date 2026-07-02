@@ -23,18 +23,9 @@ type OrganizationSummary = {
   status: string;
 } | null;
 
-type HermesProfileSummary = {
-  id: string;
-  ownerType: string;
-  status: string;
-  displayName: string | null;
-  configJson: Record<string, unknown> | null;
-} | null;
-
 type TenantContext = {
   activeDoctorProfile: any | null;
   organization: OrganizationSummary;
-  hermesProfile: HermesProfileSummary;
   tenantRole: AgentTenantRole;
 };
 
@@ -162,70 +153,13 @@ async function resolveOrganizationSummary(organizationId?: string | null): Promi
   });
 }
 
-async function resolveHermesProfileSummary(input: {
-  organizationId?: string | null;
-  doctorProfileId?: string | null;
-}): Promise<HermesProfileSummary> {
-  const hermesProfileModel = (prisma as any).hermesProfile;
-  if (!hermesProfileModel?.findFirst) {
-    return null;
-  }
-
-  if (input.organizationId) {
-    const organizationProfile = await hermesProfileModel.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        status: {
-          not: 'DISABLED',
-        },
-      },
-      select: {
-        id: true,
-        ownerType: true,
-        status: true,
-        displayName: true,
-        configJson: true,
-      },
-    });
-
-    if (organizationProfile) {
-      return organizationProfile;
-    }
-  }
-
-  if (input.doctorProfileId) {
-    return hermesProfileModel.findFirst({
-      where: {
-        doctorProfileId: input.doctorProfileId,
-        status: {
-          not: 'DISABLED',
-        },
-      },
-      select: {
-        id: true,
-        ownerType: true,
-        status: true,
-        displayName: true,
-        configJson: true,
-      },
-    });
-  }
-
-  return null;
-}
-
 async function resolveDoctorTenantContext(input: { user: any }): Promise<TenantContext> {
   const activeDoctorProfile = input.user.doctorProfile || null;
   const organization = await resolveOrganizationSummary(activeDoctorProfile?.organizationId || null);
-  const hermesProfile = await resolveHermesProfileSummary({
-    organizationId: organization?.id || null,
-    doctorProfileId: activeDoctorProfile?.id || null,
-  });
 
   return {
     activeDoctorProfile,
     organization,
-    hermesProfile,
     tenantRole: organization ? 'ORG_DOCTOR' : 'DOCTOR_SELF',
   };
 }
@@ -237,15 +171,10 @@ async function resolvePatientTenantContext(input: {
   const assignment = await getActiveDoctorAssignment(input.memberId);
   const activeDoctorProfile = (assignment?.doctorProfile as any) || null;
   const organization = await resolveOrganizationSummary(activeDoctorProfile?.organizationId || null);
-  const hermesProfile = await resolveHermesProfileSummary({
-    organizationId: organization?.id || null,
-    doctorProfileId: activeDoctorProfile?.id || null,
-  });
 
   return {
     activeDoctorProfile,
     organization,
-    hermesProfile,
     tenantRole: input.user.isGuest ? 'GUEST_MEMBER' : 'PATIENT_MEMBER',
   };
 }

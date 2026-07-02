@@ -22,31 +22,15 @@ type MemberSnapshotInput = {
 
 type KnowledgeDefaultMode = "platform_proxy" | "direct_fastgpt";
 
-function readHermesProfileRuntimeConfig(configJson: unknown) {
-  const raw =
-    configJson && typeof configJson === "object" && !Array.isArray(configJson)
-      ? (configJson as Record<string, unknown>)
-      : {};
-
-  return {
-    knowledgeDefaultMode:
-      raw.knowledgeDefaultMode === "direct_fastgpt"
-        ? ("direct_fastgpt" as const)
-        : ("platform_proxy" as const),
-    doctorBotFallbackEnabled: raw.doctorBotFallbackEnabled !== false,
-  };
-}
-
 function resolveKnowledgeDefaultMode(input: {
   surface: RealtimeSurface;
-  hermesProfileConfig?: unknown;
   doctorBotConfig?: { knowledgeMode?: KnowledgeDefaultMode | null } | null;
 }) {
   if (input.surface === "doctor_bot") {
     return input.doctorBotConfig?.knowledgeMode || "platform_proxy";
   }
 
-  return readHermesProfileRuntimeConfig(input.hermesProfileConfig).knowledgeDefaultMode;
+  return "platform_proxy";
 }
 
 export type RealtimeSessionBootstrapInput = {
@@ -81,7 +65,6 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
     accountType: resolved.activeAccountType,
     doctorProfileId: resolved.activeAccountType === "DOCTOR" ? resolved.activeDoctorProfile?.id : undefined,
     organizationId: resolved.organization?.id || undefined,
-    hermesProfileId: resolved.hermesProfile?.id || undefined,
     tenantRole: resolved.tenantRole,
     channel: resolveAgentChannel({
       channel: input.channel,
@@ -128,20 +111,15 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
         : "self_service";
 
   const voiceMode = runtime.fallbacks.voiceIntent ? "stable" : "experimental";
-  const hermesProfileRuntime = readHermesProfileRuntimeConfig(
-    resolved.hermesProfile?.configJson || null
-  );
   const knowledgeDefaultMode = resolveKnowledgeDefaultMode({
     surface: input.surface,
-    hermesProfileConfig: resolved.hermesProfile?.configJson || null,
     doctorBotConfig: doctorBotPublic?.config as
       | { knowledgeMode?: KnowledgeDefaultMode | null }
       | null
       | undefined,
   });
   const fastgptAvailable = Boolean(doctorBotPublic?.config.fastgptBaseUrl);
-  const doctorBotFallbackEnabled =
-    runtime.fallbacks.doctorBot && hermesProfileRuntime.doctorBotFallbackEnabled;
+  const doctorBotFallbackEnabled = runtime.fallbacks.doctorBot;
 
   return {
     runtime,
@@ -160,7 +138,6 @@ export async function buildRealtimeSessionBootstrap(input: RealtimeSessionBootst
       doctorProfileId: resolved.user.doctorProfile?.id || null,
       tenantRole: resolved.tenantRole,
       organization: resolved.organization,
-      hermesProfile: resolved.hermesProfile,
     },
     member: {
       id: resolved.member.id,

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, HelpCircle, Loader2, ShieldCheck, X } from 'lucide-react';
 
 import { useAuthSession } from '@/contexts/AuthSessionContext';
 import { getOrCreateGuestSessionId } from '@/lib/utils/guestSession';
@@ -63,6 +63,7 @@ export default function ClinicQrPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const [submitResult, setSubmitResult] = useState<SubmitPayload | null>(null);
+  const [explanationOpen, setExplanationOpen] = useState(false);
 
   const [respondentName, setRespondentName] = useState('');
   const [gender, setGender] = useState<'boy' | 'girl'>('boy');
@@ -135,6 +136,7 @@ export default function ClinicQrPage() {
   const selectAnswer = (score: number) => {
     const nextAnswers = answers.map((value, index) => (index === currentIndex ? score : value));
     setAnswers(nextAnswers);
+    setExplanationOpen(false);
     if (currentIndex < nextAnswers.length - 1) {
       setCurrentIndex(currentIndex + 1);
     }
@@ -227,35 +229,36 @@ export default function ClinicQrPage() {
     return null;
   }
 
+  const progressCount = answers.filter((value) => value >= 0).length;
+  const progressPercent = data.scale.questions.length
+    ? Math.round((progressCount / data.scale.questions.length) * 100)
+    : 0;
+
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">
-                <ShieldCheck className="h-4 w-4" />
-                <span>门诊长期二维码 · 固定量表入口</span>
-              </div>
-              <h1 className="text-3xl font-bold text-slate-900">{readText(data.scale.title)}</h1>
-              <p className="text-sm leading-7 text-slate-500">{readText(data.scale.description)}</p>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                点位：{data.point.name}
-                {data.point.locationLabel ? ` · ${data.point.locationLabel}` : ''}
-                {data.point.departmentLabel ? ` · ${data.point.departmentLabel}` : ''}
-              </div>
-            </div>
+    <div className="min-h-screen bg-[var(--seed-bg,#f7f8f4)] px-4 py-4">
+      <div className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <header className="border-b border-slate-100 bg-white px-5 pb-4 pt-5">
+          <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">
+            <ShieldCheck className="h-4 w-4" />
+            <span>门诊筛查二维码</span>
           </div>
-        </section>
+          <h1 className="mt-3 text-xl font-bold leading-7 text-slate-900">{readText(data.scale.title)}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{readText(data.scale.description)}</p>
+          <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+            点位：{data.point.name}
+            {data.point.locationLabel ? ` · ${data.point.locationLabel}` : ''}
+            {data.point.departmentLabel ? ` · ${data.point.departmentLabel}` : ''}
+          </div>
+        </header>
 
         {step === 'identity' && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">填写基础信息</h2>
+          <section className="flex-1 overflow-y-auto px-5 py-5">
+            <h2 className="text-lg font-semibold text-slate-900">填写基础信息</h2>
             <p className="mt-2 text-sm text-slate-500">
               系统会先以匿名临时身份完成筛查。填写完成后，后续可以通过手机号/邮箱加密码登录或注册来认领本次记录。
             </p>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">姓名</label>
                 <input value={respondentName} onChange={(event) => setRespondentName(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-cyan-300" placeholder="请输入本人/孩子姓名" />
@@ -281,8 +284,8 @@ export default function ClinicQrPage() {
 
             {error && <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>}
 
-            <div className="mt-6 flex items-center justify-end">
-              <button type="button" onClick={startQuestions} className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-cyan-600">
+            <div className="mt-6">
+              <button type="button" onClick={startQuestions} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-cyan-600">
                 <span>开始填写量表</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
@@ -291,44 +294,38 @@ export default function ClinicQrPage() {
         )}
 
         {step === 'questions' && currentQuestion && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-6">
+          <section className="relative flex flex-1 flex-col overflow-hidden">
+            <div className="border-b border-slate-100 px-5 py-4">
               <div className="mb-2 flex justify-between text-sm text-slate-500">
-                <span>已完成 {answers.filter((value) => value >= 0).length} / {data.scale.questions.length}</span>
-                <span>{Math.round(((answers.filter((value) => value >= 0).length) / data.scale.questions.length) * 100)}%</span>
+                <span>已完成 {progressCount} / {data.scale.questions.length}</span>
+                <span>{progressPercent}%</span>
               </div>
               <div className="h-2 w-full rounded-full bg-slate-200">
                 <div
                   className="h-2 rounded-full bg-cyan-600 transition-all duration-300"
-                  style={{ width: `${((answers.filter((value) => value >= 0).length) / data.scale.questions.length) * 100}%` }}
+                  style={{ width: `${progressPercent}%` }}
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-sm font-semibold text-cyan-700">第 {currentIndex + 1} / {data.scale.questions.length} 题</div>
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">标准题干</div>
-                  <h2 className="mt-2 text-2xl font-semibold leading-9 text-slate-900">{questionText}</h2>
-                </div>
-                {hasSupportiveExplanation && (
-                  <div className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/80 px-4 py-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-700">辅助理解</div>
-                    <p className="mt-2 text-sm leading-7 text-slate-700">{supportiveExplanation}</p>
-                    <div className="mt-2 text-xs text-cyan-700/80">仅用于帮助理解，不替代量表原题。</div>
-                    {fallbackExamples.length > 0 && (
-                      <div className="mt-3 text-xs leading-6 text-slate-500">
-                        例如：{fallbackExamples.join('；')}
-                      </div>
-                    )}
-                  </div>
-                )}
+            <div className="flex-1 overflow-y-auto px-5 py-5">
+              <div className="text-sm font-semibold text-cyan-700">第 {currentIndex + 1} / {data.scale.questions.length} 题</div>
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">标准题干</div>
+                <h2 className="mt-3 text-2xl font-semibold leading-9 text-slate-900">{questionText}</h2>
               </div>
-              <div className="hidden text-sm text-slate-500 md:block">已完成 {answers.filter((value) => value >= 0).length} 题</div>
-            </div>
+              {hasSupportiveExplanation || fallbackExamples.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setExplanationOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  <span>查看题目解释</span>
+                </button>
+              ) : null}
 
-            <div className="mt-6 space-y-3">
+              <div className="mt-6 space-y-3">
               {currentQuestion.options.map((option) => {
                 const selected = answers[currentIndex] === option.score;
                 return (
@@ -349,11 +346,13 @@ export default function ClinicQrPage() {
                   </button>
                 );
               })}
+              </div>
             </div>
 
             {error && <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>}
 
-            <div className="mt-6 flex items-center justify-between">
+            <div className="border-t border-slate-100 bg-white px-5 py-4">
+              <div className="flex items-center justify-between">
               <button type="button" onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))} disabled={currentIndex === 0} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40">
                 <ArrowLeft className="h-4 w-4" />
                 <span>上一题</span>
@@ -362,12 +361,51 @@ export default function ClinicQrPage() {
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 <span>{submitting ? '提交中...' : '提交量表'}</span>
               </button>
+              </div>
             </div>
+
+            {explanationOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="关闭题目解释"
+                  className="fixed inset-0 z-40 bg-slate-950/30"
+                  onClick={() => setExplanationOpen(false)}
+                />
+                <div className="fixed bottom-0 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 rounded-t-3xl bg-white px-5 pb-6 pt-4 shadow-2xl">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-700">题目解释</div>
+                      <h3 className="mt-1 text-base font-semibold text-slate-900">第 {currentIndex + 1} 题</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExplanationOpen(false)}
+                      className="rounded-full bg-slate-100 p-2 text-slate-500"
+                      aria-label="关闭"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {hasSupportiveExplanation ? (
+                    <p className="text-sm leading-7 text-slate-700">{supportiveExplanation}</p>
+                  ) : (
+                    <p className="text-sm leading-7 text-slate-700">请按孩子最近一段时间的真实表现作答。</p>
+                  )}
+                  {fallbackExamples.length > 0 && (
+                    <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-500">
+                      例如：{fallbackExamples.join('；')}
+                    </div>
+                  )}
+                  <p className="mt-4 text-xs leading-5 text-cyan-700">解释仅帮助理解题意，不替代标准题干和医生判断。</p>
+                </div>
+              </>
+            )}
           </section>
         )}
 
         {step === 'submitted' && submitResult && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="flex-1 overflow-y-auto px-5 py-6">
             <CheckCircle2 className="h-12 w-12 text-emerald-500" />
             <h2 className="mt-4 text-2xl font-bold text-slate-900">量表已提交</h2>
             <p className="mt-2 text-sm text-slate-500">本次筛查记录已进入门诊记录池和医生后台。内测阶段不向前端展示量表分数或结论，请记录下方筛查编号，后续可登录认领。</p>

@@ -22,7 +22,6 @@ export async function POST(
       visitorSessionId: body.visitorSessionId,
       content: body.content,
       language: body.language,
-      requestedBackend: 'hermes',
     });
 
     return NextResponse.json({

@@ -41,7 +41,6 @@ const aiToyWebhookSchema = z.object({
   message: z.string().optional(),
   transcript: z.string().optional(),
   language: z.enum(["zh", "en"]).optional(),
-  conversationBackend: z.enum(["legacy", "hermes"]).default("hermes"),
   triageContext: triageContextSchema,
   memberSnapshot: z
     .object({
@@ -129,7 +128,6 @@ async function handleAiToyWebhook(request: Request) {
     tenantRole: tenant.tenantRole,
     organization: tenant.organization,
     activeDoctorProfile: tenant.activeDoctorProfile,
-    hermesProfile: tenant.hermesProfile,
   });
   const language = body.language || body.triageContext?.language || "zh";
   const memberContextSummary = await buildAgentMemberContextSummary({
@@ -147,7 +145,6 @@ async function handleAiToyWebhook(request: Request) {
     doctorProfileId:
       resolved.activeAccountType === "DOCTOR" ? tenant.activeDoctorProfile?.id : undefined,
     organizationId: tenant.organization?.id || undefined,
-    hermesProfileId: tenant.hermesProfile?.id || undefined,
     tenantRole: tenant.tenantRole,
     channel: "ai_toy",
     entrypoint: "agent",
@@ -164,7 +161,6 @@ async function handleAiToyWebhook(request: Request) {
       consentGiven: Boolean(body.triageContext?.consentGiven),
       language,
     },
-    requestedBackend: body.conversationBackend,
     conversationId: `channel:ai_toy:${session.payload.session_id}`,
     memberContextSummary,
     tenantContext,

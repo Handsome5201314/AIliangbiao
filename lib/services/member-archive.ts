@@ -211,11 +211,6 @@ export async function moveInviteLinkedRecords(input: {
     data: { memberProfileId: input.targetMemberId },
   });
 
-  await tx.growthRecord.updateMany({
-    where: { profileId: input.sourceMemberId },
-    data: { profileId: input.targetMemberId },
-  });
-
   await tx.doctorScaleInvite.updateMany({
     where: { linkedMemberId: input.sourceMemberId },
     data: { linkedMemberId: input.targetMemberId },

@@ -11,10 +11,9 @@ test("platform AI chat stream helper should emit SSE metadata, delta, action, an
       channel: "ai_toy",
       tenantRole: "PATIENT_MEMBER",
       organizationId: "org-1",
-      hermesProfileId: "hermes-1",
     },
     result: {
-      backend: "hermes",
+      backend: "internal",
       fallback: false,
       message: {
         role: "assistant",

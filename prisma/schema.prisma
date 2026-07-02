@@ -50,7 +50,6 @@ enum CareAccessRole {
 
 enum CollaborationResourceType {
   PATIENT_MEMBER
-  NEONATE_ARCHIVE
   CARE_TEAM
 }
 
@@ -63,18 +62,6 @@ enum DoctorVerificationStatus {
 
 enum OrganizationStatus {
   ACTIVE
-  DISABLED
-}
-
-enum HermesProfileOwnerType {
-  ORGANIZATION
-  DOCTOR
-}
-
-enum HermesProfileStatus {
-  DRAFT
-  READY
-  DEGRADED
   DISABLED
 }
 
@@ -109,7 +96,6 @@ enum AuditTargetType {
   REMINDER_LOG
   AGENT_SESSION
   ORGANIZATION
-  HERMES_PROFILE
 }
 
 enum CareAssignmentStatus {
@@ -149,11 +135,6 @@ enum ClinicScreeningSubmissionStatus {
   SUBMITTED
   CLAIMED
   ARCHIVED
-}
-
-enum DoctorNeonateBilirubinContext {
-  AMBIENT
-  PHOTOTHERAPY
 }
 
 enum ScaleLicenseStatus {
@@ -321,7 +302,6 @@ model MemberProfile {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
-  growthRecords      GrowthRecord[]
   assessments        AssessmentHistory[]
   assessmentSessions AssessmentSession[]
   careAssignments    CareAssignment[]
@@ -498,8 +478,6 @@ model Organization {
   updatedAt   DateTime           @updatedAt
 
   doctors      DoctorProfile[]
-  hermesProfiles HermesProfile[]
-
   @@index([status, createdAt])
 }
 
@@ -545,15 +523,11 @@ model DoctorProfile {
   aiDecisionLogs     AiDecisionLog[]
   aiConversationSessions AiConversationSession[]
   aiConversationEvents   AiConversationEvent[]
-  neonateArchives    DoctorNeonateArchive[]
   careTeamMemberships CareTeamMembership[]
   grantedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessGrantedByDoctor")
   receivedMemberAccessGrants MemberCareAccessGrant[] @relation("MemberAccessTargetDoctor")
-  grantedNeonateAccessGrants NeonateArchiveAccessGrant[] @relation("NeonateAccessGrantedByDoctor")
-  receivedNeonateAccessGrants NeonateArchiveAccessGrant[] @relation("NeonateAccessTargetDoctor")
   collaborationAuditLogs DoctorCollaborationAuditLog[] @relation("CollaborationAuditActorDoctor")
   collaborationAuditTargets DoctorCollaborationAuditLog[] @relation("CollaborationAuditTargetDoctor")
-  hermesProfile       HermesProfile?
 
   @@index([verificationStatus])
   @@index([realName])
@@ -561,31 +535,8 @@ model DoctorProfile {
   @@index([organizationId])
 }
 
-model HermesProfile {
-  id              String                  @id @default(cuid())
-  ownerType       HermesProfileOwnerType
-  organizationId  String?                 @unique
-  organization    Organization?           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  doctorProfileId String?                 @unique
-  doctorProfile   DoctorProfile?          @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  displayName     String?
-  status          HermesProfileStatus     @default(READY)
-  policyJson      Json?
-  configJson      Json?
-  lastHealthAt    DateTime?
-  lastHealthStatus String?
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
-
-  knowledgeDocs   KnowledgeDoc[]
-
-  @@index([ownerType, status])
-}
-
 model KnowledgeDoc {
   id               String                @id @default(cuid())
-  hermesProfileId  String?
-  hermesProfile    HermesProfile?        @relation(fields: [hermesProfileId], references: [id], onDelete: SetNull)
   scopeType        KnowledgeScopeType    @default(PLATFORM)
   organizationId   String?
   doctorProfileId  String?
@@ -795,7 +746,6 @@ model CareTeam {
 
   memberships           CareTeamMembership[]
   memberAccessGrants    MemberCareAccessGrant[]
-  neonateAccessGrants   NeonateArchiveAccessGrant[]
   collaborationAuditLogs DoctorCollaborationAuditLog[]
 
   @@index([hospitalName, departmentName, isActive])
@@ -832,26 +782,6 @@ model MemberCareAccessGrant {
   updatedAt                DateTime       @updatedAt
 
   @@index([memberProfileId, revokedAt])
-  @@index([doctorProfileId, revokedAt])
-  @@index([sourceTeamId, revokedAt])
-}
-
-model NeonateArchiveAccessGrant {
-  id                       String               @id @default(cuid())
-  archiveId                String
-  archive                  DoctorNeonateArchive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
-  doctorProfileId          String
-  doctorProfile            DoctorProfile        @relation("NeonateAccessTargetDoctor", fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  sourceTeamId             String
-  sourceTeam               CareTeam             @relation(fields: [sourceTeamId], references: [id], onDelete: Cascade)
-  accessRole               CareAccessRole
-  grantedByDoctorProfileId String
-  grantedByDoctorProfile   DoctorProfile        @relation("NeonateAccessGrantedByDoctor", fields: [grantedByDoctorProfileId], references: [id], onDelete: Cascade)
-  revokedAt                DateTime?
-  createdAt                DateTime             @default(now())
-  updatedAt                DateTime             @updatedAt
-
-  @@index([archiveId, revokedAt])
   @@index([doctorProfileId, revokedAt])
   @@index([sourceTeamId, revokedAt])
 }
@@ -1414,7 +1344,6 @@ model AiConversationSession {
   doctorProfile       DoctorProfile?     @relation(fields: [doctorProfileId], references: [id], onDelete: SetNull)
   scaleId             String?
   questionId          Int?
-  hermesConversationId String?
   source              String             @default("parent_voice")
   status              String             @default("ACTIVE")
   provider            String?
@@ -1433,7 +1362,6 @@ model AiConversationSession {
   @@index([assessmentHistoryId, createdAt])
   @@index([doctorProfileId, createdAt])
   @@index([scaleId, questionId, createdAt])
-  @@index([hermesConversationId])
   @@index([status, createdAt])
   @@map("ai_conversation_session")
 }
@@ -1455,7 +1383,6 @@ model AiConversationEvent {
   eventType           String
   scaleId             String?
   questionId          Int?
-  hermesConversationId String?
   provider            String?
   model               String?
   confidence          Float?
@@ -1552,29 +1479,6 @@ model McpLog {
   createdAt     DateTime  @default(now())
 
   @@index([entrypoint, createdAt])
-}
-
-model GrowthRecord {
-  id                  String         @id @default(cuid())
-  profileId           String
-  profile             MemberProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  ageMonths           Int
-  gestationalWeek     Int?
-  weight              Float?
-  height              Float?
-  headCircumference   Float?
-  weightPercentile    Float?
-  heightPercentile    Float?
-  headPercentile      Float?
-  weightStatus        String?
-  heightStatus        String?
-  headStatus          String?
-  notes               String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-
-  @@index([profileId, ageMonths])
-  @@index([profileId, gestationalWeek])
 }
 
 model TriageSession {
@@ -1827,46 +1731,4 @@ model DoctorBotChatSession {
   @@unique([doctorBotId, visitorSessionId])
   @@index([status, lastActiveAt])
   @@index([memberProfileId, lastActiveAt])
-}
-
-model DoctorNeonateArchive {
-  id                  String                     @id @default(cuid())
-  doctorProfileId     String
-  doctorProfile       DoctorProfile              @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
-  babyName            String
-  sex                 String
-  birthGestationWeeks Int
-  birthGestationDays  Int
-  birthDate           DateTime
-  birthTimeMinutes    Int?
-  normalizedMatchKey  String
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @updatedAt
-
-  growthRecords       DoctorNeonateGrowthRecord[]
-  accessGrants        NeonateArchiveAccessGrant[]
-
-  @@index([doctorProfileId, updatedAt])
-  @@index([doctorProfileId, normalizedMatchKey])
-  @@index([doctorProfileId, babyName])
-}
-
-model DoctorNeonateGrowthRecord {
-  id                    String               @id @default(cuid())
-  archiveId             String
-  archive               DoctorNeonateArchive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
-  recordDate            DateTime
-  recordTimeMinutes     Int?
-  length                Float?
-  weight                Float?
-  headCircumference     Float?
-  bilirubinUmol         Float?
-  bilirubinContext      DoctorNeonateBilirubinContext?
-  currentGestationWeeks Int
-  currentGestationDays  Int
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-
-  @@unique([archiveId, recordDate, recordTimeMinutes])
-  @@index([archiveId, recordDate, recordTimeMinutes])
 }

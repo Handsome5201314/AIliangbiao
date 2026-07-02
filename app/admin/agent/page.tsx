@@ -437,7 +437,7 @@ export default function AdminAgentPage() {
         <div className="space-y-6">
           <SectionCard
             title="AI 配置"
-            description="这里是项目自己的 AI 控制面，为 Agent 单独选择文本与语音的 provider/model 偏好。AI 服务商密钥负责管理可用密钥池，Agent 配置中心只选择要优先使用的服务商和模型；运行时会从密钥池中挑选同 provider、同 serviceType 的可用系统密钥执行，不会直接写入 Hermes Runtime 自己的上游 provider 配置。"
+            description="这里是项目自己的 AI 控制面，为 Agent 单独选择文本与语音的 provider/model 偏好。AI 服务商密钥负责管理可用密钥池，Agent 配置中心只选择要优先使用的服务商和模型；运行时会从密钥池中挑选同 provider、同 serviceType 的可用系统密钥执行。"
             icon={<BrainCircuit className="h-5 w-5" />}
           >
             <div className="grid gap-5 md:grid-cols-2">
@@ -607,46 +607,29 @@ export default function AdminAgentPage() {
             <div className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-4 text-sm leading-7 text-cyan-900">
               当前采用"按 provider + model"方式运行，而不是绑定某一条具体 API Key。
               Agent 配置中心只保存模型偏好；真正执行时，系统会去 "AI 服务商密钥" 中选择同 provider、同 serviceType 的可用系统密钥。
-              如果当前没有匹配的可用密钥，且允许回退，则会使用系统默认可用模型。Hermes 容器自己直连的上游模型供应商配置不在这里切换。
+              如果当前没有匹配的可用密钥，且允许回退，则会使用系统默认可用模型。知识库、FastGPT 或其他外部 AI 服务通过服务商密钥与控制台链接单独管理。
             </div>
 
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-7 text-amber-900">
-              OpenWebUI 只用于工程调试，不用于正式审计或科研导出。正式复盘、脱敏导出和训练素材治理必须从项目数据库的 AI 会话日志中心读取。
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
+              外部 AI/知识库控制台只用于工程调试，不用于正式审计或科研导出。正式复盘、脱敏导出和训练素材治理必须从项目数据库的 AI 会话日志中心读取。
+              <div className="mt-3 grid gap-3">
                 <Input
-                  value={config.consoleLinks.hermesUrl}
-                  onChange={(event) => updateConfig('consoleLinks.hermesUrl', event.target.value)}
-                  placeholder="Hermes 调试控制台 URL（未配置则隐藏链接）"
-                  className="rounded-2xl border-amber-200 bg-white"
-                />
-                <Input
-                  value={config.consoleLinks.openWebuiUrl}
-                  onChange={(event) => updateConfig('consoleLinks.openWebuiUrl', event.target.value)}
-                  placeholder="OpenWebUI 调试 URL（未配置则隐藏链接）"
+                  value={config.consoleLinks.knowledgeConsoleUrl}
+                  onChange={(event) => updateConfig('consoleLinks.knowledgeConsoleUrl', event.target.value)}
+                  placeholder="外部 AI / 知识库调试控制台 URL（未配置则隐藏链接）"
                   className="rounded-2xl border-amber-200 bg-white"
                 />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {config.consoleLinks.hermesUrl ? (
+                {config.consoleLinks.knowledgeConsoleUrl ? (
                   <a
-                    href={config.consoleLinks.hermesUrl}
+                    href={config.consoleLinks.knowledgeConsoleUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    Hermes 调试入口
-                  </a>
-                ) : null}
-                {config.consoleLinks.openWebuiUrl ? (
-                  <a
-                    href={config.consoleLinks.openWebuiUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    OpenWebUI 调试入口
+                    外部 AI / 知识库调试入口
                   </a>
                 ) : null}
               </div>

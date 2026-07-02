@@ -1,9 +1,7 @@
 import { canonicalScaleTools, handleScaleToolCall } from '@/lib/mcp/skills/scale/handlers';
-import { growthTools, handleGrowthToolCall } from '@/lib/mcp/skills/growth/handlers';
 
 const canonicalAssessmentTools = [
   ...canonicalScaleTools,
-  ...growthTools,
 ] as const;
 
 type CanonicalAssessmentToolName = (typeof canonicalAssessmentTools)[number]['name'];
@@ -22,8 +20,6 @@ export async function handleToolCall(params: {
 
   if (canonicalScaleTools.some((tool) => tool.name === params.name)) {
     result = await handleScaleToolCall(params.name as CanonicalAssessmentToolName, params.arguments);
-  } else if (growthTools.some((tool) => tool.name === params.name)) {
-    result = await handleGrowthToolCall(params.name, params.arguments);
   } else {
     result = {
       success: false,

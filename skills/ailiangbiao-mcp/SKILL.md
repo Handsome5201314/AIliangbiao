@@ -1,6 +1,6 @@
 ---
 name: ailiangbiao-mcp
-description: Use when an external agent, MCP client, or skill platform needs to call the AIliangbiao MCP service at tongyimohe.cloud for child clinical scale catalog lookup, assessment sessions, web handoff links, natural-language answer mapping and confirmation, deterministic scoring, or growth-curve tools.
+description: Use when an external agent, MCP client, or skill platform needs to call the AIliangbiao MCP service at tongyimohe.cloud for child clinical scale catalog lookup, assessment sessions, web handoff links, natural-language answer mapping and confirmation, or deterministic scoring.
 ---
 
 # AIliangbiao MCP
@@ -29,7 +29,7 @@ Some skill platforms automatically send `MCP-Protocol-Version` or `Last-Event-ID
 
 - Prefer the canonical endpoint `/api/mcp`; use compatibility endpoints only when a client cannot call the canonical route.
 - Prefer `streamableHTTP` JSON-RPC POST calls; keep SSE compatibility as a fallback.
-- Treat MCP as the source of truth for scale schema, assessment sessions, submitted answers, deterministic scoring, growth tools, and doctor-review status.
+- Treat MCP as the source of truth for scale schema, assessment sessions, submitted answers, deterministic scoring, and doctor-review status.
 - Do not let an LLM invent final scores, risk levels, diagnoses, or formal reports.
 - Confirm low-confidence natural-language answer mappings before submitting structured answers.
 - Do not expose child identifiers, raw private conversations, or unreviewed formal reports to external platforms.

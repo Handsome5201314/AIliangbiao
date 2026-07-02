@@ -12,7 +12,6 @@ export const AGENT_WORKSPACE_CONFIG_KEY = 'agentWorkspaceConfig';
 export const DEFAULT_AGENT_WORKSPACE_CONFIG = {
   rollout: {
     unifiedShellEnabled: false,
-    hermesBackendEnabled: false,
     publicShareUsesUnifiedShell: false,
     experimentalVoiceEnabled: false,
     knowledgeDefaultMode: 'platform_proxy',
@@ -38,8 +37,7 @@ export const DEFAULT_AGENT_WORKSPACE_CONFIG = {
     format: 'mp3',
   },
   consoleLinks: {
-    hermesUrl: '',
-    openWebuiUrl: '',
+    knowledgeConsoleUrl: '',
   },
   quota: {
     guestAgentDailyLimit: 5,

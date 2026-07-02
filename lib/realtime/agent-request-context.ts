@@ -16,10 +16,6 @@ type ResolvedTenantContextInput = {
     id: string;
     realName?: string | null;
   } | null;
-  hermesProfile?: {
-    id: string;
-    displayName?: string | null;
-  } | null;
 };
 
 export async function buildAgentMemberContextSummary(input: {
@@ -49,7 +45,7 @@ export async function buildAgentMemberContextSummary(input: {
 export function buildAgentTenantContextFromSession(
   session: Pick<
     AgentSessionPayload,
-    "channel" | "tenant_role" | "organization_id" | "doctor_profile_id" | "hermes_profile_id"
+    "channel" | "tenant_role" | "organization_id" | "doctor_profile_id"
   >
 ) {
   return {
@@ -57,7 +53,6 @@ export function buildAgentTenantContextFromSession(
     tenantRole: session.tenant_role,
     organizationId: session.organization_id,
     doctorProfileId: session.doctor_profile_id,
-    hermesProfileId: session.hermes_profile_id,
   } satisfies AgentTenantContextSummary;
 }
 
@@ -69,7 +64,6 @@ export function buildAgentTenantContextFromResolved(
     tenantRole: input.tenantRole || undefined,
     organizationId: input.organization?.id || undefined,
     doctorProfileId: input.activeDoctorProfile?.id || undefined,
-    hermesProfileId: input.hermesProfile?.id || undefined,
     organizationName: input.organization?.name || undefined,
     doctorName: input.activeDoctorProfile?.realName || undefined,
   } satisfies AgentTenantContextSummary;

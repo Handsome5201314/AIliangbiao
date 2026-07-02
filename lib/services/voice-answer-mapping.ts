@@ -335,7 +335,7 @@ export function resolveLocalQuestionnaireVoiceIntent(input: {
   };
 }
 
-export function shouldEscalateToHermes(result: VoiceIntentResult): boolean {
+export function needsClarification(result: VoiceIntentResult): boolean {
   if (result.intent === "repeat" || result.intent === "previous" || result.intent === "explain") {
     return false;
   }
@@ -355,7 +355,7 @@ export function shouldEscalateToHermes(result: VoiceIntentResult): boolean {
   return result.confidence < MEDIUM_CONFIDENCE_THRESHOLD;
 }
 
-export function buildHermesMappingFallbackIntent(input: {
+export function buildClarificationIntent(input: {
   transcript: string;
   language: LanguageCode;
   reason: string;

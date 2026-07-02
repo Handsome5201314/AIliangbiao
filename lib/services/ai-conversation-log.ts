@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { prisma } from "@/lib/db/prisma";
 
-export const AI_CONVERSATION_CONFIG_VERSION = "parent-voice-hermes-ai-control-phase1";
+export const AI_CONVERSATION_CONFIG_VERSION = "parent-voice-ai-control-phase1";
 
 export type AiConversationEventType =
   | "audio_uploaded"
@@ -10,7 +10,7 @@ export type AiConversationEventType =
   | "user_utterance"
   | "assistant_prompt"
   | "answer_mapping_local"
-  | "answer_mapping_hermes"
+  | "answer_mapping_ai"
   | "answer_confirmation"
   | "tool_call"
   | "tts_output"
@@ -27,7 +27,6 @@ export type AiConversationContext = {
   doctorProfileId?: string | null;
   scaleId?: string | null;
   questionId?: number | null;
-  hermesConversationId?: string | null;
 };
 
 type RawRecord = Record<string, unknown>;
@@ -86,7 +85,6 @@ export async function ensureAiConversationSession(input: AiConversationContext &
     doctorProfileId: stringOrUndefined(input.doctorProfileId),
     scaleId: stringOrUndefined(input.scaleId),
     questionId: numberOrUndefined(input.questionId),
-    hermesConversationId: stringOrUndefined(input.hermesConversationId),
     source: input.source || "parent_voice",
     status: input.status || "ACTIVE",
     provider: stringOrUndefined(input.provider),
@@ -157,9 +155,6 @@ export async function recordAiConversationEvent(input: AiConversationContext & {
       eventType: input.eventType,
       scaleId: stringOrUndefined(input.scaleId) || stringOrUndefined(session.scaleId as string | null),
       questionId: numberOrUndefined(input.questionId) || numberOrUndefined(session.questionId as number | null),
-      hermesConversationId:
-        stringOrUndefined(input.hermesConversationId) ||
-        stringOrUndefined(session.hermesConversationId as string | null),
       provider: stringOrUndefined(input.provider),
       model: stringOrUndefined(input.model),
       confidence: numberOrUndefined(input.confidence),

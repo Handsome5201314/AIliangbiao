@@ -275,7 +275,7 @@ export default function ApiKeysPage() {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <PageHeader title="API 密钥管理" description="仅管理项目自己的 AI 服务商密钥，用于 text / asr / tts 调用，不包含 MCP 服务凭证，也不负责 Hermes Runtime 自己的上游模型配置。" />
+        <PageHeader title="API 密钥管理" description="管理项目自己的 AI 服务商密钥，用于 text / asr / tts 和题目解释调用；MCP 服务凭证在 MCP API 密钥页单独管理。" />
         <Button onClick={() => setShowAddModal(true)}>
           <Plus className="w-4 h-4" />
           <span>添加密钥</span>
@@ -292,7 +292,7 @@ export default function ApiKeysPage() {
           <li>支持自定义接口 URL（OpenAI 兼容格式）</li>
           <li>点击"测速"按钮测试连接状态和响应速度</li>
           <li>系统会自动使用在线的密钥进行项目侧 AI 服务调用</li>
-          <li>Hermes 容器自己的上游模型供应商配置不在这里管理</li>
+          <li>外部知识库或 AI 服务可通过 OpenAI 兼容、FastGPT 或自定义 HTTP 服务接入</li>
         </ul>
       </Card>
 

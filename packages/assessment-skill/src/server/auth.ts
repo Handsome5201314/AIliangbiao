@@ -33,7 +33,6 @@ export interface AgentSessionPayload {
   account_type?: 'PATIENT' | 'DOCTOR';
   doctor_profile_id?: string;
   organization_id?: string;
-  hermes_profile_id?: string;
   channel?: AgentChannel;
   tenant_role?: AgentTenantRole;
   entrypoint?: 'app' | 'agent';
@@ -87,7 +86,6 @@ export function issueAgentSessionToken(input: {
   accountType?: 'PATIENT' | 'DOCTOR';
   doctorProfileId?: string;
   organizationId?: string;
-  hermesProfileId?: string;
   channel?: AgentChannel;
   tenantRole?: AgentTenantRole;
   entrypoint?: 'app' | 'agent';
@@ -102,7 +100,6 @@ export function issueAgentSessionToken(input: {
     account_type: input.accountType,
     doctor_profile_id: input.doctorProfileId,
     organization_id: input.organizationId,
-    hermes_profile_id: input.hermesProfileId,
     channel: input.channel,
     tenant_role: input.tenantRole,
     entrypoint: input.entrypoint || 'app',

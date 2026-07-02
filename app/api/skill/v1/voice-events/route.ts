@@ -12,7 +12,6 @@ const eventSchema = z.object({
   doctorProfileId: z.string().optional(),
   scaleId: z.string().optional(),
   questionId: z.number().optional(),
-  hermesConversationId: z.string().optional(),
   eventType: z.enum([
     'assistant_prompt',
     'answer_confirmation',

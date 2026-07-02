@@ -39,7 +39,7 @@ test("admin layout should fetch server session and expose organizations navigati
   assert.match(source, /\/api\/admin\/session/);
   assert.match(source, /组织管理/);
   assert.match(source, /审计日志/);
-  assert.match(source, /Hermes Profile/);
+  assert.doesNotMatch(source, /Hermes Profile|hermes-profiles/i);
   assert.match(source, /渠道接入/);
   assert.match(source, /治理策略/);
   assert.match(source, /getAdminRoleLabel/);
@@ -52,7 +52,7 @@ test("admin dashboard should include role-aware quick links for organizations", 
   assert.match(source, /\/admin\/organizations/);
   assert.match(source, /visibleQuickLinks/);
   assert.match(source, /\/admin\/knowledge\/reviews/);
-  assert.match(source, /\/admin\/hermes-profiles/);
+  assert.doesNotMatch(source, /\/admin\/hermes-profiles/);
   assert.match(source, /\/admin\/channels/);
   assert.match(source, /\/admin\/policies/);
 });
@@ -75,13 +75,6 @@ test("knowledge review admin route should exist for KB reviewers", async () => {
   assert.equal(typeof route.PATCH, "function");
 });
 
-test("hermes profile admin route should exist for super admins", async () => {
-  const route = await import("../app/api/admin/hermes-profiles/route");
-  assert.equal(typeof route.GET, "function");
-  assert.equal(typeof route.POST, "function");
-  assert.equal(typeof route.PATCH, "function");
-});
-
 test("channels admin route should exist for governance and ops", async () => {
   const route = await import("../app/api/admin/channels/route");
   assert.equal(typeof route.GET, "function");
@@ -92,118 +85,6 @@ test("policies admin route should exist for super admin governance", async () =>
   const route = await import("../app/api/admin/policies/route");
   assert.equal(typeof route.GET, "function");
   assert.equal(typeof route.POST, "function");
-});
-
-test("hermes profile admin service should list profiles and expose owner candidates", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("lib/services/admin-hermes-profiles.ts", "utf8");
-
-  assert.match(source, /listAdminHermesProfiles/);
-  assert.match(source, /organizationCandidates/);
-  assert.match(source, /doctorCandidates/);
-  assert.match(source, /knowledgeDefaultMode/);
-});
-
-test("hermes profile service should normalize runtime config when listing profiles", async () => {
-  const { prisma } = await import("../lib/db/prisma");
-  const service = await import("../lib/services/admin-hermes-profiles");
-  const hermesProfileModel = (prisma as any).hermesProfile;
-  const organizationModel = (prisma as any).organization;
-  const doctorProfileModel = (prisma as any).doctorProfile;
-
-  const originalFindMany = hermesProfileModel.findMany;
-  const originalOrganizationFindMany = organizationModel?.findMany;
-  const originalDoctorFindMany = doctorProfileModel.findMany;
-
-  hermesProfileModel.findMany = async () => [
-    {
-      id: "hermes-1",
-      ownerType: "ORGANIZATION",
-      organizationId: "org-1",
-      doctorProfileId: null,
-      displayName: "机构默认 Profile",
-      status: "DEGRADED",
-      policyJson: { rateLimit: 8 },
-      configJson: {
-        knowledgeDefaultMode: "direct_fastgpt",
-        doctorBotFallbackEnabled: false,
-      },
-      lastHealthAt: new Date("2026-06-15T08:00:00.000Z"),
-      createdAt: new Date("2026-06-14T08:00:00.000Z"),
-      updatedAt: new Date("2026-06-15T08:00:00.000Z"),
-      organization: {
-        id: "org-1",
-        name: "儿童发育中心",
-        orgCode: "ORG-1",
-        status: "ACTIVE",
-      },
-      doctorProfile: null,
-      _count: {
-        knowledgeDocs: 3,
-      },
-    },
-  ];
-  if (organizationModel?.findMany) {
-    organizationModel.findMany = async () => [];
-  }
-  doctorProfileModel.findMany = async () => [];
-
-  try {
-    const result = await service.listAdminHermesProfiles();
-
-    assert.equal(result.profiles[0]?.knowledgeDefaultMode, "direct_fastgpt");
-    assert.equal(result.profiles[0]?.doctorBotFallbackEnabled, false);
-    assert.equal(result.profiles[0]?.knowledgeDocCount, 3);
-  } finally {
-    hermesProfileModel.findMany = originalFindMany;
-    if (organizationModel?.findMany) {
-      organizationModel.findMany = originalOrganizationFindMany;
-    }
-    doctorProfileModel.findMany = originalDoctorFindMany;
-  }
-});
-
-test("hermes profile service should reject doctor-level profiles for organization doctors", async () => {
-  const { prisma } = await import("../lib/db/prisma");
-  const service = await import("../lib/services/admin-hermes-profiles");
-  const doctorProfileModel = (prisma as any).doctorProfile;
-  const hermesProfileModel = (prisma as any).hermesProfile;
-
-  const originalDoctorFindUnique = doctorProfileModel.findUnique;
-  const originalHermesCreate = hermesProfileModel?.create;
-
-  doctorProfileModel.findUnique = async () => ({
-    id: "doctor-in-org",
-    organizationId: "org-1",
-    verificationStatus: "APPROVED",
-    realName: "李医生",
-    hospitalName: "儿童医院",
-    hermesProfile: null,
-  });
-  if (hermesProfileModel?.create) {
-    hermesProfileModel.create = async () => {
-      throw new Error("should not create profile for organization doctor");
-    };
-  }
-
-  try {
-    await assert.rejects(
-      () =>
-        service.createAdminHermesProfile({
-          ownerType: "DOCTOR",
-          doctorProfileId: "doctor-in-org",
-          displayName: "医生个人 Profile",
-          knowledgeDefaultMode: "platform_proxy",
-          doctorBotFallbackEnabled: true,
-        }),
-      /组织/
-    );
-  } finally {
-    doctorProfileModel.findUnique = originalDoctorFindUnique;
-    if (hermesProfileModel?.create) {
-      hermesProfileModel.create = originalHermesCreate;
-    }
-  }
 });
 
 test("knowledge review service should count pending items and record review audits", async () => {
@@ -233,24 +114,13 @@ test("knowledge review page should call the review API", async () => {
   assert.match(source, /审核通过/);
 });
 
-test("hermes profile page should call the hermes profile API", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("app/admin/hermes-profiles/page.tsx", "utf8");
-
-  assert.match(source, /\/api\/admin\/hermes-profiles/);
-  assert.match(source, /Hermes Profile/);
-  assert.match(source, /knowledgeDefaultMode/);
-  assert.match(source, /不承载上游模型供应商或 API Key/);
-  assert.match(source, /运行时扩展 JSON/);
-});
-
 test("organization admin page should call the organizations API", async () => {
   const file = await import("node:fs/promises");
   const source = await file.readFile("app/admin/organizations/page.tsx", "utf8");
 
   assert.match(source, /\/api\/admin\/organizations/);
   assert.match(source, /组织管理/);
-  assert.match(source, /Hermes Profile/);
+  assert.doesNotMatch(source, /Hermes Profile|hermesProfileCount/i);
 });
 
 test("channels admin page should call the channels API", async () => {

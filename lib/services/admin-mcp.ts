@@ -3,7 +3,6 @@ import { prisma } from '@/lib/db/prisma';
 const ENTRYPOINT_LABELS: Record<string, string> = {
   canonical: '/api/mcp',
   scale_compat: '/api/mcp/scale',
-  growth_compat: '/api/mcp/growth',
   memory_compat: '/api/mcp/memory',
   legacy: 'legacy',
 };

@@ -27,12 +27,6 @@ import AccountOnboardingModal from '@/components/AccountOnboardingModal';
 import PatientDoctorPanel from '@/components/PatientDoctorPanel';
 import PatientAgentEntryCard from '@/components/PatientAgentEntryCard';
 import MobileH5App from '@/components/mobile-h5/MobileH5App';
-import dynamic from 'next/dynamic';
-
-const NewbornGrowthTracker = dynamic(
-  () => import('@/components/NewbornGrowthTracker'),
-  { ssr: false }
-);
 import { useAssessment, useAuthSession, useProfile, useSkillSession } from '@/contexts';
 import {
   ROOT_HOME_VIEW_STORAGE_KEY,
@@ -238,7 +232,6 @@ function DesktopHome({ onSwitchToMobile }: { onSwitchToMobile?: () => void }) {
   const [language, setLanguage] = useState<LanguageCode>('zh');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ChildScaleCategoryKey>('all_child');
-  const [homeSection, setHomeSection] = useState<'clinical' | 'growth'>('clinical');
   const [scales, setScales] = useState<ScaleDefinition[]>([]);
   const [scalesLoading, setScalesLoading] = useState(true);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
@@ -531,36 +524,11 @@ function DesktopHome({ onSwitchToMobile }: { onSwitchToMobile?: () => void }) {
       )}
 
       <main className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-1 flex-col justify-center px-4 pb-16 md:px-6 md:pb-24">
-        <div className="mb-6 rounded-3xl border border-border bg-card p-4 shadow-sm md:p-5">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setHomeSection('clinical')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                homeSection === 'clinical' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              临床量表
-            </button>
-            <button
-              type="button"
-              onClick={() => setHomeSection('growth')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                homeSection === 'growth' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-            >
-              生长曲线
-            </button>
+        {isGuest ? (
+          <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-900 shadow-sm">
+            游客自测结果仅供参考，不具有医疗法律效应；如涉及临床判断，请由医生或专业评估人员进一步确认。
           </div>
-        </div>
-
-        {homeSection === 'clinical' ? (
-          <>
-            {isGuest ? (
-              <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-900 shadow-sm">
-                游客自测结果仅供参考，不具有医疗法律效应；如涉及临床判断，请由医生或专业评估人员进一步确认。
-              </div>
-            ) : null}
+        ) : null}
 
             <div className="mb-6 rounded-3xl border border-border bg-card p-4 shadow-sm md:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -645,27 +613,6 @@ function DesktopHome({ onSwitchToMobile }: { onSwitchToMobile?: () => void }) {
                 暂时没有符合条件的量表，请调整搜索或筛选条件。
               </div>
             ) : null}
-          </>
-        ) : (
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-border bg-card p-5 shadow-sm md:p-6">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Growth Tracking</div>
-                  <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground">新生儿生长曲线追踪</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">
-                    在同一视图中查看胎龄 24-42 周的体重、身长、头围常模百分位，并叠加宝宝自己的历史轨迹与最新记录。
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
-                  支持男 / 女切换、三围切换、动态录入与即时摘要
-                </div>
-              </div>
-            </div>
-
-            <NewbornGrowthTracker />
-          </div>
-        )}
       </main>
 
       <AccountOnboardingModal

@@ -123,7 +123,7 @@ export default function AdminAiLogsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">AI 会话日志中心</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            查看家长语音答题的 ASR、Hermes 辅助映射、确认、fallback、TTS 和最终答案写入轨迹。科研导出以项目数据库为准，不读取 OpenWebUI。
+            查看家长语音答题的 ASR、确认、fallback、TTS 和最终答案写入轨迹。科研导出以项目数据库为准。
           </p>
         </div>
         <Button onClick={() => void loadList()} disabled={loading}>

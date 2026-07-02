@@ -5,7 +5,7 @@
 - Do not store real MCP keys, SSH passwords, DeepSeek/OpenAI keys, database URLs, session secrets, or production env values in this skill.
 - Use the external platform secret manager or environment variables for `AILIANGBIAO_MCP_API_KEY`.
 - Redact keys in logs. Never print bearer tokens.
-- Treat `HERMES_API_SERVER_KEY`, model provider keys, and MCP keys as different secrets.
+- Treat model provider keys and MCP keys as different secrets.
 
 ## Child and Clinical Data
 
@@ -25,5 +25,5 @@
 
 - Use the read-only smoke test before enabling write workflows.
 - Start with `tools/list`, `list_supported_scales`, and `get_scale_schema`.
-- Enable write tools such as `create_assessment_session`, `submit_answer`, and `add_growth_record` only after the caller has a clear consent and data-minimization policy.
+- Enable write tools such as `create_assessment_session` and `submit_answer` only after the caller has a clear consent and data-minimization policy.
 - Do not retry write calls blindly. Check whether a session or record already exists before repeating a failed request.

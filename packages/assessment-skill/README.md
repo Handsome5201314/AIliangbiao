@@ -67,7 +67,7 @@
 
 ### 2. 系统态 MCP
 
-`/api/mcp` 以及兼容入口 `/api/mcp/scale`、`/api/mcp/memory`、`/api/mcp/growth` 使用 `MCP API Key`。
+`/api/mcp` 以及兼容入口 `/api/mcp/scale`、`/api/mcp/memory` 使用 `MCP API Key`。
 
 两者职责不同：
 
@@ -148,7 +148,6 @@ GET /api/skill/v1/scales/:scaleId/sessions/:sessionId/result
 
 - `GET/POST /api/mcp/scale`
 - `GET/POST /api/mcp/memory`
-- `GET/POST /api/mcp/growth`
 
 ---
 

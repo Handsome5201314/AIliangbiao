@@ -71,10 +71,9 @@ test("H5 guest login is backed by a real server-issued app session", async () =>
   assert.match(routeSource, /accountType:\s*['"]PATIENT['"]/);
 });
 
-test("migrated H5 runner maps current-question natural language answers through real Skill APIs", async () => {
+test("migrated H5 runner keeps answering pure and uses AI only for question explanation", async () => {
   const runnerSource = await readFile("components/mobile-h5/screens/shared/AssessmentRunner.tsx", "utf8");
   const serviceSource = await readFile("components/mobile-h5/services/assessmentService.ts", "utf8");
-  const typesSource = await readFile("components/mobile-h5/types/index.ts", "utf8");
   const appSource = await readFile("components/mobile-h5/MobileH5App.tsx", "utf8");
 
   assert.match(serviceSource, /export async function mapNaturalLanguageAnswer/);
@@ -84,16 +83,11 @@ test("migrated H5 runner maps current-question natural language answers through 
   assert.match(serviceSource, /\/api\/skill\/v1\/scales\/\$\{encodeURIComponent\(params\.scaleId\)\}\/mapped-answers\/confirm/);
   assert.match(serviceSource, /getAuthHeaders\(\)/);
 
-  assert.match(runnerSource, /data-component="ai-answer-mapping-panel"/);
-  assert.match(runnerSource, /mapNaturalLanguageAnswer\(/);
-  assert.match(runnerSource, /confirmMappedAnswer\(/);
-  assert.match(runnerSource, /confirmedLowConfidence:\s*true/);
-  assert.match(runnerSource, /source:\s*['"]user_confirmed_mapping['"]/);
-  assert.match(runnerSource, /source:\s*['"]ai_mapped['"]/);
-
-  assert.match(typesSource, /confidence\?:\s*number/);
-  assert.match(typesSource, /source\?:\s*'manual'\s*\|\s*'ai_mapped'\s*\|\s*'user_confirmed_mapping'/);
-  assert.match(typesSource, /confirmedLowConfidence\?:\s*boolean/);
+  assert.doesNotMatch(runnerSource, /data-component="ai-answer-mapping-panel"/);
+  assert.doesNotMatch(runnerSource, /mapNaturalLanguageAnswer\(/);
+  assert.doesNotMatch(runnerSource, /confirmMappedAnswer\(/);
+  assert.match(runnerSource, /onOpenAi\(currentQuestion,\s*currentIndex \+ 1\)/);
+  assert.match(runnerSource, /提交中/);
 
   assert.match(appSource, /handleOpenAi\(question\?: Question,\s*questionNumber\?: number\)/);
   assert.match(runnerSource, /onOpenAi\(currentQuestion,\s*currentIndex \+ 1\)/);

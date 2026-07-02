@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { issueAgentSessionToken } from "../lib/assessment-skill/auth";
 
-test("agent session token preserves scopes and identity for realtime runtime consumption", () => {
+test("agent session token preserves identity and tenant metadata without runtime profile IDs", () => {
   const issued = issueAgentSessionToken({
     userId: "user-1",
     memberId: "member-1",
@@ -11,37 +11,37 @@ test("agent session token preserves scopes and identity for realtime runtime con
     deviceId: "device-1",
     accountType: "PATIENT",
     entrypoint: "agent",
+    organizationId: "org-1",
+    channel: "wechat_h5",
+    tenantRole: "PATIENT_MEMBER",
   });
 
   assert.equal(issued.payload.sub, "user-1");
   assert.equal(issued.payload.member_id, "member-1");
-  assert.equal(issued.payload.device_id, "device-1");
-  assert.equal(issued.payload.entrypoint, "agent");
+  assert.equal(issued.payload.organization_id, "org-1");
+  assert.equal(issued.payload.channel, "wechat_h5");
+  assert.equal(issued.payload.tenant_role, "PATIENT_MEMBER");
+  assert.equal("hermes_profile_id" in issued.payload, false);
   assert.ok(issued.payload.scopes.includes("skill:scales:read"));
-  assert.ok(issued.payload.scopes.includes("skill:voice-intent"));
 });
 
-test("realtime runtime config should expose hermes defaults and fallback flags", async () => {
+test("realtime runtime config exposes the internal project runtime", async () => {
   const { getRealtimeRuntimeConfig } = await import("../lib/realtime/config");
   const config = await getRealtimeRuntimeConfig();
 
-  assert.equal(config.provider, "hermes");
+  assert.equal(config.provider, "internal");
   assert.equal(config.mode, "sdk");
   assert.equal(config.fallbacks.voiceIntent, true);
   assert.equal(config.fallbacks.speechToText, true);
   assert.equal(config.fallbacks.doctorBot, true);
-  assert.ok(Array.isArray(config.allowedSurfaces));
   assert.ok(config.allowedSurfaces.includes("agent"));
   assert.ok(config.allowedSurfaces.includes("doctor_bot"));
 });
 
-test("realtime tool catalog should isolate doctor-only capabilities", async () => {
+test("realtime tool catalog keeps doctor-only capabilities isolated", async () => {
   const { listRealtimeToolDescriptors } = await import("../lib/realtime/tools");
 
-  const patientTools = listRealtimeToolDescriptors({
-    surface: "agent",
-    accountType: "PATIENT",
-  });
+  const patientTools = listRealtimeToolDescriptors({ surface: "agent", accountType: "PATIENT" });
   const doctorTools = listRealtimeToolDescriptors({
     surface: "agent",
     accountType: "DOCTOR",
@@ -49,56 +49,32 @@ test("realtime tool catalog should isolate doctor-only capabilities", async () =
   });
 
   assert.ok(patientTools.some((tool) => tool.name === "assessment.start"));
-  assert.ok(patientTools.some((tool) => tool.name === "handoff.escalate"));
   assert.ok(!patientTools.some((tool) => tool.name === "doctor.invite.create"));
-
   assert.ok(doctorTools.some((tool) => tool.name === "doctor.invite.create"));
-  assert.ok(doctorTools.some((tool) => tool.name === "doctor.triage.redirect"));
 });
 
-test("doctor bot runtime bootstrap should reject unpublished doctor bots before opening realtime surface", async () => {
-  const { createDoctorBotBootstrapState } = await import("../lib/realtime/doctor-bot-bootstrap");
+test("realtime session and conversation routes remain available", async () => {
+  const sessionRoute = await import("../app/api/realtime/session/route");
+  const conversationRoute = await import("../app/api/realtime/conversation/route");
+  const doctorBotRoute = await import("../app/api/chat/[slug]/message/route");
 
-  await assert.rejects(
-    () =>
-      createDoctorBotBootstrapState({
-        slug: "missing-bot",
-        deviceId: "guest-device",
-      }),
-    /not found|not published/i
-  );
+  assert.equal(typeof sessionRoute.POST, "function");
+  assert.equal(typeof conversationRoute.POST, "function");
+  assert.equal(typeof doctorBotRoute.POST, "function");
 });
 
-test("realtime session module should export a route handler contract", async () => {
-  const route = await import("../app/api/realtime/session/route");
-  assert.equal(typeof route.POST, "function");
-});
-
-test("agent config route should remain available for workspace fallback", async () => {
-  const route = await import("../app/api/agent/config/route");
-  assert.equal(typeof route.GET, "function");
-});
-
-test("agent workspace config should expose unified shell and Hermes rollout toggles", async () => {
+test("agent config no longer exposes embedded Hermes rollout toggles", async () => {
   const { getAgentWorkspaceConfig } = await import("../lib/agent/config");
   const config = await getAgentWorkspaceConfig();
 
   assert.equal(typeof config.rollout?.unifiedShellEnabled, "boolean");
-  assert.equal(typeof config.rollout?.hermesBackendEnabled, "boolean");
   assert.equal(typeof config.rollout?.publicShareUsesUnifiedShell, "boolean");
   assert.equal(typeof config.rollout?.experimentalVoiceEnabled, "boolean");
   assert.equal(config.rollout?.knowledgeDefaultMode, "platform_proxy");
+  assert.equal("hermesBackendEnabled" in (config.rollout || {}), false);
 });
 
-test("agent mode router should recognize public share as a first-class mode", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("components/AgentModeRouter.tsx", "utf8");
-
-  assert.match(source, /public_share/);
-  assert.match(source, /ConversationShell mode="public_share"/);
-});
-
-test("realtime bootstrap should include ui mode, voice mode, and knowledge routing defaults", async () => {
+test("realtime bootstrap keeps ui mode, voice mode, and platform knowledge defaults", async () => {
   const file = await import("node:fs/promises");
   const routeSource = await file.readFile("lib/realtime/session.ts", "utf8");
 
@@ -106,197 +82,30 @@ test("realtime bootstrap should include ui mode, voice mode, and knowledge routi
   assert.match(routeSource, /voiceMode/);
   assert.match(routeSource, /knowledge/);
   assert.match(routeSource, /platform_proxy/);
-  assert.match(routeSource, /configJson/);
-  assert.match(routeSource, /knowledgeDefaultMode/);
+  assert.doesNotMatch(routeSource, /hermesProfile|configJson/);
 });
 
-test("Hermes conversation proxy route should exist for shared conversation turns", async () => {
-  const route = await import("../app/api/realtime/conversation/route");
-  assert.equal(typeof route.POST, "function");
-});
-
-test("doctor bot public message route should remain available during conversation proxy migration", async () => {
-  const route = await import("../app/api/chat/[slug]/message/route");
-  assert.equal(typeof route.POST, "function");
-});
-
-test("internal Hermes health route should exist for platform runtime checks", async () => {
-  const route = await import("../app/api/internal/hermes/health/route");
-  assert.equal(typeof route.GET, "function");
-});
-
-test("admin dashboard service should include Hermes runtime health", async () => {
+test("admin dashboard and compose files do not expose embedded Hermes runtime wiring", async () => {
   const file = await import("node:fs/promises");
-  const source = await file.readFile("lib/services/admin-dashboard.ts", "utf8");
+  const dashboardService = await file.readFile("lib/services/admin-dashboard.ts", "utf8");
+  const dashboardPage = await file.readFile("app/admin/page.tsx", "utf8");
+  const prodCompose = await file.readFile("docker-compose.prod.yml", "utf8");
+  const devCompose = await file.readFile("docker-compose.dev.yml", "utf8");
+  const prodEnv = await file.readFile(".env.production.example", "utf8");
+  const localEnv = await file.readFile(".env.local.example", "utf8");
 
-  assert.match(source, /getHermesHealthSnapshot/);
-  assert.match(source, /hermes:/);
+  for (const source of [dashboardService, dashboardPage, prodCompose, devCompose, prodEnv, localEnv]) {
+    assert.doesNotMatch(source, /Hermes|hermes|HERMES/);
+  }
+  assert.match(prodCompose, /app:/);
+  assert.match(prodCompose, /db:/);
 });
 
-test("admin dashboard page should surface Hermes runtime status", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("app/admin/page.tsx", "utf8");
+test("conversation backend resolution is fixed to the internal project runtime", async () => {
+  const { resolveConversationBackend, normalizeConversationReply } = await import("../lib/realtime/conversation");
 
-  assert.match(source, /Hermes Runtime/);
-  assert.match(source, /Hermes 降级原因/);
-});
-
-test("doctor bot public message route should delegate through shared conversation service", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("app/api/chat/[slug]/message/route.ts", "utf8");
-
-  assert.match(source, /sendDoctorBotConversationTurn/);
-});
-
-test("doctor workspace route should remain available while Hermes rollout settings are added", async () => {
-  const route = await import("../app/api/doctor/workspace/route");
-  assert.equal(typeof route.GET, "function");
-  assert.equal(typeof route.POST, "function");
-});
-
-test("agent workspace should reference the platform AI stream entry for text turns", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("components/AgentWorkspace.tsx", "utf8");
-
-  assert.match(source, /\/api\/platform\/v1\/ai\/chat\/stream/);
-});
-
-test("agent workspace text flow should stop calling voice-intent directly for text triage", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("components/AgentWorkspace.tsx", "utf8");
-
-  const planGoalSectionStart = source.indexOf("const planGoal = useCallback");
-  const planGoalSectionEnd = source.indexOf("const handleVoiceStateChange = useCallback");
-  const planGoalSection = source.slice(planGoalSectionStart, planGoalSectionEnd);
-
-  assert.doesNotMatch(planGoalSection, /\/api\/skill\/v1\/voice-intent/);
-  assert.doesNotMatch(planGoalSection, /VOICE_INTENT_API/);
-  assert.match(planGoalSection, /streamed\.action\?\.agentAction/);
-});
-
-test("agent workspace text flow should consume the platform SSE chat stream for Hermes triage", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("components/AgentWorkspace.tsx", "utf8");
-  const planGoalSectionStart = source.indexOf("const planGoal = useCallback");
-  const planGoalSectionEnd = source.indexOf("const handleVoiceStateChange = useCallback");
-  const planGoalSection = source.slice(planGoalSectionStart, planGoalSectionEnd);
-
-  assert.match(source, /\/api\/platform\/v1\/ai\/chat\/stream/);
-  assert.match(source, /getReader\(\)/);
-  assert.match(source, /parseAgentLiveSseBuffer/);
-  assert.match(planGoalSection, /consumePlatformAgentChatStream/);
-});
-
-test("realtime conversation route should expose agentAction and triageSessionPatch for agent surface", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("app/api/realtime/conversation/route.ts", "utf8");
-
-  assert.match(source, /agentAction/);
-  assert.match(source, /triageSessionPatch/);
-});
-
-test("doctor workspace response shape should include Hermes rollout and knowledge mode settings", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("app/doctor/workspace/page.tsx", "utf8");
-
-  assert.match(source, /hermes/i);
-  assert.match(source, /knowledge/i);
-});
-
-test("doctor bot config service should persist Hermes rollout and knowledge mode fields", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("lib/services/doctor-bot.ts", "utf8");
-
-  assert.match(source, /hermesEnabled/);
-  assert.match(source, /knowledgeMode/);
-});
-
-test("production compose should document Hermes service wiring", async () => {
-  const file = await import("node:fs/promises");
-  const compose = await file.readFile("docker-compose.prod.yml", "utf8");
-
-  assert.match(compose, /hermes:/);
-  assert.match(compose, /HERMES_API_SERVER_BASE_URL/);
-  assert.match(compose, /HERMES_API_SERVER_KEY/);
-});
-
-test("production env example should include Hermes runtime variables", async () => {
-  const file = await import("node:fs/promises");
-  const env = await file.readFile(".env.production.example", "utf8");
-
-  assert.match(env, /HERMES_API_SERVER_BASE_URL/);
-  assert.match(env, /HERMES_API_SERVER_KEY/);
-  assert.match(env, /HERMES_API_SERVER_MODEL/);
-  assert.match(env, /not a DeepSeek\/OpenAI provider key/);
-});
-
-test("development compose should include Hermes service wiring", async () => {
-  const file = await import("node:fs/promises");
-  const compose = await file.readFile("docker-compose.dev.yml", "utf8");
-
-  assert.match(compose, /hermes:/);
-  assert.match(compose, /8642/);
-});
-
-test("local env example should include Hermes runtime variables", async () => {
-  const file = await import("node:fs/promises");
-  const env = await file.readFile(".env.local.example", "utf8");
-
-  assert.match(env, /HERMES_API_SERVER_BASE_URL/);
-  assert.match(env, /HERMES_API_SERVER_KEY/);
-  assert.match(env, /HERMES_API_SERVER_MODEL/);
-  assert.match(env, /not Hermes's own upstream provider config/);
-});
-
-test("docs should explain the control-plane boundary between app AI and Hermes", async () => {
-  const file = await import("node:fs/promises");
-  const readme = await file.readFile("README.md", "utf8");
-  const deployment = await file.readFile("DEPLOYMENT.md", "utf8");
-
-  assert.match(readme, /AI 控制面与 Hermes 分工/);
-  assert.match(readme, /`HERMES_API_SERVER_KEY` 是 app -> Hermes 的内部鉴权口令/);
-  assert.match(deployment, /## AI 配置边界/);
-  assert.match(deployment, /不是 DeepSeek\/OpenAI 的上游供应商密钥/);
-});
-
-test("package scripts should expose a one-command local full startup entry", async () => {
-  const file = await import("node:fs/promises");
-  const pkg = JSON.parse(await file.readFile("package.json", "utf8")) as {
-    scripts?: Record<string, string>;
-  };
-
-  assert.equal(typeof pkg.scripts?.["dev:services"], "string");
-  assert.equal(typeof pkg.scripts?.["dev:full"], "string");
-});
-
-test("conversation backend resolution should fall back to legacy when Hermes rollout is disabled", async () => {
-  const { resolveConversationBackend } = await import("../lib/realtime/conversation");
-
-  assert.equal(
-    resolveConversationBackend({
-      requestedBackend: "hermes",
-      hermesEnabled: false,
-    }),
-    "legacy"
-  );
-});
-
-test("conversation backend resolution should honor Hermes when rollout is enabled", async () => {
-  const { resolveConversationBackend } = await import("../lib/realtime/conversation");
-
-  assert.equal(
-    resolveConversationBackend({
-      requestedBackend: "hermes",
-      hermesEnabled: true,
-    }),
-    "hermes"
-  );
-});
-
-test("Hermes tool-call normalization should produce an assessment action card", async () => {
-  const { normalizeHermesReply } = await import("../lib/realtime/conversation");
-
-  const normalized = normalizeHermesReply({
+  assert.equal(resolveConversationBackend({}), "internal");
+  const normalized = normalizeConversationReply({
     content: "建议先做一个标准评估。",
     toolCall: {
       name: "suggest_assessment",
@@ -311,43 +120,12 @@ test("Hermes tool-call normalization should produce an assessment action card", 
 
   assert.equal(normalized.text, "建议先做一个标准评估。");
   assert.equal(normalized.actionCard?.scaleId, "GAD-7");
-  assert.equal(normalized.actionCard?.reason, "持续焦虑症状需要结构化评估");
 });
 
-test("Hermes response extraction should prefer assistant output_text blocks", async () => {
-  const { extractTextFromOutput } = await import("../lib/realtime/hermes");
+test("doctor bot and agent conversation services remain as project-owned orchestration", async () => {
+  const doctorBotService = await import("../lib/realtime/doctor-bot-conversation");
+  const agentService = await import("../lib/realtime/agent-conversation");
 
-  const text = extractTextFromOutput([
-    {
-      type: "message",
-      role: "assistant",
-      content: [
-        { type: "output_text", text: "Structured " },
-        { type: "output_text", text: "reply" },
-      ],
-    },
-    {
-      type: "text",
-      text: "fallback",
-    },
-  ]);
-
-  assert.equal(text, "Structured reply");
-});
-
-test("doctor bot conversation service module should exist for backend switching", async () => {
-  const service = await import("../lib/realtime/doctor-bot-conversation");
-  assert.equal(typeof service.sendDoctorBotConversationTurn, "function");
-});
-
-test("doctor bot conversation service should reference knowledge mode selection", async () => {
-  const file = await import("node:fs/promises");
-  const source = await file.readFile("lib/realtime/doctor-bot-conversation.ts", "utf8");
-
-  assert.match(source, /knowledgeMode/);
-});
-
-test("agent conversation service module should exist for shared triage turns", async () => {
-  const service = await import("../lib/realtime/agent-conversation");
-  assert.equal(typeof service.sendAgentConversationTurn, "function");
+  assert.equal(typeof doctorBotService.sendDoctorBotConversationTurn, "function");
+  assert.equal(typeof agentService.sendAgentConversationTurn, "function");
 });

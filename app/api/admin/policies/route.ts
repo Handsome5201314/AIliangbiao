@@ -23,7 +23,7 @@ const policiesSchema = z.object({
       fallbackToStandardExplanation: z.boolean(),
     }),
     runtime: z.object({
-      hermesDegradeThresholdPercent: z.number().int().positive(),
+      runtimeErrorThresholdPercent: z.number().int().positive(),
       enableDoctorBotFallback: z.boolean(),
       enforceTenantIsolation: z.boolean(),
     }),

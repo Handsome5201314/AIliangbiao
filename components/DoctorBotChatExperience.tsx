@@ -80,7 +80,7 @@ type ChatReply = {
 
 type DoctorBotRealtimeBootstrap = {
   runtime: {
-    provider: 'hermes';
+    provider: 'internal';
     mode: 'sdk';
     fallbacks: {
       doctorBot: boolean;
@@ -1053,7 +1053,7 @@ export default function DoctorBotChatExperience({
 
         {realtimeBootstrap?.doctorBot ? (
           <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-600">
-            Hermes 实时医生分身会话已准备就绪；当前公开聊天页仍保留 {realtimeBootstrap.doctorBot.fallback.provider || '旧链路'} 作为受控兜底。
+            医生分身会话已准备就绪；当前公开聊天页使用 {realtimeBootstrap.doctorBot.fallback.provider || '平台'} 知识服务。
           </div>
         ) : null}
 

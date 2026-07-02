@@ -9,12 +9,7 @@ import {
   type TriageAction,
   type TriageContext,
 } from "@/lib/services/triageFlow";
-import { resolveConversationBackend, type ConversationBackend } from "@/lib/realtime/conversation";
-import {
-  getHermesApiConfig,
-  requestHermesAgentTriageReply,
-  requestHermesAgentTriageReplyStream,
-} from "@/lib/realtime/hermes";
+import type { ConversationBackend } from "@/lib/realtime/conversation";
 
 type AgentConversationStatus = "ONGOING" | "CONSENT" | "PAUSED";
 
@@ -62,7 +57,6 @@ export type AgentTenantContextSummary = {
   tenantRole?: string;
   organizationId?: string;
   doctorProfileId?: string;
-  hermesProfileId?: string;
   organizationName?: string;
   doctorName?: string;
 };
@@ -195,7 +189,7 @@ function resolveNextStatus(action: TriageAction): AgentConversationStatus {
   return "ONGOING";
 }
 
-export function buildAgentHermesPrompt(input: {
+export function buildAgentPrompt(input: {
   content: string;
   triageContext: TriageContext;
   memberContextSummary?: AgentMemberContextSummary | null;
@@ -255,9 +249,6 @@ export function buildAgentHermesPrompt(input: {
               input.tenantContext.doctorName || input.tenantContext.doctorProfileId
             }`
           : null,
-        input.tenantContext.hermesProfileId
-          ? `- Hermes Profile：${input.tenantContext.hermesProfileId}`
-          : null,
       ]
         .filter(Boolean)
         .join("\n")
@@ -293,7 +284,7 @@ export function buildAgentConversationResultFromTriageAI(input: {
   ];
 
   return {
-    backend: input.backend || "legacy",
+    backend: input.backend || "internal",
     fallback: Boolean(input.fallback),
     message: {
       role: "assistant",
@@ -329,7 +320,6 @@ export async function sendAgentConversationTurn(input: {
   language: LanguageCode;
   triageContext: TriageContext;
   requestedBackend?: ConversationBackend;
-  hermesEnabled?: boolean;
   conversationId?: string;
   memberContextSummary?: AgentMemberContextSummary | null;
   tenantContext?: AgentTenantContextSummary | null;
@@ -340,70 +330,12 @@ export async function sendAgentConversationTurn(input: {
     language: input.language,
     triageContext: input.triageContext,
   });
-  const backend = resolveConversationBackend({
-    requestedBackend: input.requestedBackend || "hermes",
-    hermesEnabled:
-      typeof input.hermesEnabled === "boolean"
-        ? input.hermesEnabled
-        : getHermesApiConfig().enabled,
+  buildAgentPrompt({
+    content: input.content,
+    triageContext: currentContext,
+    memberContextSummary: input.memberContextSummary,
+    tenantContext: input.tenantContext,
   });
-
-  if (backend === "hermes") {
-    try {
-      const prompt = buildAgentHermesPrompt({
-        content: input.content,
-        triageContext: currentContext,
-        memberContextSummary: input.memberContextSummary,
-        tenantContext: input.tenantContext,
-      });
-      const hermesReply = input.onDelta
-        ? await requestHermesAgentTriageReplyStream({
-            conversationId: input.conversationId || `agent:${Date.now()}`,
-            prompt,
-            language: input.language,
-            tenantContext: input.tenantContext || undefined,
-            onDelta: input.onDelta,
-          })
-        : await requestHermesAgentTriageReply({
-            conversationId: input.conversationId || `agent:${Date.now()}`,
-            prompt,
-            language: input.language,
-            tenantContext: input.tenantContext || undefined,
-          });
-      const aiResponse = patchTriageAIResponse({
-        aiResponse: hermesReply.aiResponse,
-        currentContext,
-        content: input.content,
-        language: input.language,
-      });
-
-      return buildAgentConversationResultFromTriageAI({
-        aiResponse,
-        triageContext: currentContext,
-        language: input.language,
-        backend,
-        fallback: false,
-      });
-    } catch {
-      const aiResponse = buildLegacyTriageAIResponse({
-        content: input.content,
-        language: input.language,
-        currentContext,
-      });
-
-      const fallbackResult = buildAgentConversationResultFromTriageAI({
-        aiResponse,
-        triageContext: currentContext,
-        language: input.language,
-        backend,
-        fallback: true,
-      });
-      if (fallbackResult.message.content) {
-        await input.onDelta?.(fallbackResult.message.content);
-      }
-      return fallbackResult;
-    }
-  }
 
   const aiResponse = buildLegacyTriageAIResponse({
     content: input.content,
@@ -415,7 +347,7 @@ export async function sendAgentConversationTurn(input: {
     aiResponse,
     triageContext: currentContext,
     language: input.language,
-    backend,
+    backend: "internal",
     fallback: false,
   });
   if (legacyResult.message.content) {

@@ -20,24 +20,6 @@ services:
       retries: 5
       start_period: 10s
 
-  hermes:
-    image: nousresearch/hermes-agent:latest
-    container_name: ai-scale-hermes-dev
-    restart: unless-stopped
-    command: gateway run
-    environment:
-      API_SERVER_ENABLED: 'true'
-      API_SERVER_HOST: 0.0.0.0
-      API_SERVER_PORT: 8642
-      API_SERVER_KEY: ${HERMES_API_SERVER_KEY}
-      API_SERVER_MODEL_NAME: ${HERMES_API_SERVER_MODEL:-hermes-agent}
-    ports:
-      - '127.0.0.1:8642:8642'
-    volumes:
-      - hermes_dev_data:/opt/data
-
 volumes:
   postgres_dev_data:
     name: ai-scale-postgres-data-dev
-  hermes_dev_data:
-    name: ai-scale-hermes-data-dev

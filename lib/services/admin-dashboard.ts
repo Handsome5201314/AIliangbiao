@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/db/prisma';
-import { getHermesHealthSnapshot } from '@/lib/realtime/hermes-health';
 
 import { PROVIDER_CONFIGS } from './apiKeyProviderConfig';
 import { countPendingKnowledgeReviewItems } from './admin-knowledge-reviews';
@@ -8,7 +7,6 @@ const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const MCP_ENTRYPOINTS = [
   { key: 'canonical', label: '/api/mcp' },
   { key: 'scale_compat', label: '/api/mcp/scale' },
-  { key: 'growth_compat', label: '/api/mcp/growth' },
   { key: 'memory_compat', label: '/api/mcp/memory' },
 ] as const;
 
@@ -48,7 +46,6 @@ export async function getAdminDashboard() {
     pendingKnowledgeReviews,
     activeMcpKeyCount,
     aiProviderKeys,
-    hermesHealth,
     recentUsers,
     recentAssessments,
     recentMcpLogs,
@@ -84,7 +81,6 @@ export async function getAdminDashboard() {
       },
       select: { provider: true },
     }),
-    getHermesHealthSnapshot(),
     prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       take: 6,
@@ -221,13 +217,6 @@ export async function getAdminDashboard() {
     recentActivities,
     mcpStatus: {
       databaseHealthy: true,
-      hermes: {
-        status: hermesHealth.status,
-        configured: hermesHealth.configured,
-        upstreamStatus: hermesHealth.upstream.status,
-        checkedAt: hermesHealth.checkedAt,
-        reason: hermesHealth.reason || null,
-      },
       canonicalAuthEnabled: true,
       canonical,
       compatibility,

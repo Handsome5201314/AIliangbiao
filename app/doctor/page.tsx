@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   Activity,
   ArrowRight,
-  Baby,
   Bot,
   ClipboardCheck,
   ClipboardList,
@@ -42,10 +41,9 @@ export default function DoctorDashboardPage() {
 
   const quickActions = [
     { title: '配置 AI 分身', description: '接入你在 FastGPT 配好的知识库、提示词和工作流，生成专属患者聊天页和二维码。', href: '/doctor/workspace', icon: <Sparkles className="h-5 w-5" />, tone: 'bg-violet-50 text-violet-700' },
-    { title: '新生儿病房', description: '面向病房随访多个宝宝，独立管理档案、三围记录表和三联生长图。', href: '/doctor/neonates', icon: <Baby className="h-5 w-5" />, tone: 'bg-rose-50 text-rose-600' },
     { title: '处理待复核', description: '查看已完成量表的原始答案、总分和结论，记录医生复核决策。', href: '/doctor/reviews', icon: <ClipboardCheck className="h-5 w-5" />, tone: 'bg-cyan-50 text-cyan-700' },
     { title: '患者管理', description: '查看主责与协作患者档案、量表时间线、备注和共享状态。', href: '/doctor/patients', icon: <ClipboardList className="h-5 w-5" />, tone: 'bg-primary/10 text-primary' },
-    { title: '团队协作', description: '维护团队成员，并在患者档案和新生儿病房之间建立共享协作关系。', href: '/doctor/team', icon: <Users className="h-5 w-5" />, tone: 'bg-accent/10 text-accent' },
+    { title: '团队协作', description: '维护团队成员，并围绕患者档案建立共享协作关系。', href: '/doctor/team', icon: <Users className="h-5 w-5" />, tone: 'bg-accent/10 text-accent' },
     { title: '医生邀请', description: '继续使用现有直链量表邀请链路，快速生成二维码与分享链接。', href: '/doctor/invites', icon: <Link2 className="h-5 w-5" />, tone: 'bg-amber-50 text-amber-600' },
     { title: '维护个人资料', description: '更新医生个人资料、执业信息和审核相关信息。', href: '/doctor/profile', icon: <UserRound className="h-5 w-5" />, tone: 'bg-emerald-50 text-emerald-600' },
   ];
@@ -62,7 +60,7 @@ export default function DoctorDashboardPage() {
           <div>
             <h2 className="text-lg font-semibold text-foreground">医生工作流已扩展到团队协作</h2>
             <p className="mt-2 text-sm leading-7 text-muted-foreground">
-              现在除了患者管理、邀请量表和新生儿病房外，你还可以在团队内共享患者档案和病房宝宝档案。
+              你可以在患者管理、邀请量表、待复核和团队协作之间完成门诊筛查闭环。
             </p>
           </div>
         </div>

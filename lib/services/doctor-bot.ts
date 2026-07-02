@@ -39,8 +39,6 @@ type DoctorBotConfigInput = {
   fastgptApiKey?: string;
   enabledScaleIds: string[];
   status: DoctorBotStatus;
-  hermesEnabled?: boolean;
-  knowledgeMode?: 'platform_proxy' | 'direct_fastgpt';
 };
 
 type FastgptCompletionResponse = {
@@ -862,8 +860,6 @@ export async function getDoctorBotConfigForDoctor(input: {
           fastgptApiKeyConfigured: Boolean(existing.fastgptApiKeyEncrypted),
           enabledScaleIds: normalizedEnabledScaleIds,
           status: existing.status as DoctorBotStatus,
-          hermesEnabled: existing.hermesEnabled ?? false,
-          knowledgeMode: (existing.knowledgeMode as 'platform_proxy' | 'direct_fastgpt' | null) || 'platform_proxy',
           lastValidatedAt: existing.lastValidatedAt,
           validationStatus: existing.validationStatus || null,
           lastValidationError: existing.lastValidationError || null,
@@ -879,8 +875,6 @@ export async function getDoctorBotConfigForDoctor(input: {
           fastgptApiKeyConfigured: false,
           enabledScaleIds: [],
           status: 'draft' as DoctorBotStatus,
-          hermesEnabled: false,
-          knowledgeMode: 'platform_proxy' as const,
           lastValidatedAt: null,
           validationStatus: null,
           lastValidationError: null,
@@ -1012,8 +1006,6 @@ export async function saveDoctorBotConfig(input: {
           fastgptApiKeyEncrypted: encryptedApiKey,
           enabledScaleIds,
           status: input.config.status,
-          hermesEnabled: Boolean(input.config.hermesEnabled),
-          knowledgeMode: input.config.knowledgeMode || 'platform_proxy',
           validationStatus,
           lastValidatedAt,
           lastValidationError,
@@ -1030,8 +1022,6 @@ export async function saveDoctorBotConfig(input: {
           fastgptApiKeyEncrypted: encryptedApiKey,
           enabledScaleIds,
           status: input.config.status,
-          hermesEnabled: Boolean(input.config.hermesEnabled),
-          knowledgeMode: input.config.knowledgeMode || 'platform_proxy',
           validationStatus,
           lastValidatedAt,
           lastValidationError,
@@ -1048,8 +1038,6 @@ export async function saveDoctorBotConfig(input: {
     fastgptApiKeyConfigured: true,
     enabledScaleIds: Array.isArray(saved.enabledScaleIds) ? saved.enabledScaleIds : [],
     status: saved.status as DoctorBotStatus,
-    hermesEnabled: saved.hermesEnabled ?? false,
-    knowledgeMode: (saved.knowledgeMode as 'platform_proxy' | 'direct_fastgpt' | null) || 'platform_proxy',
     lastValidatedAt: saved.lastValidatedAt,
     validationStatus: saved.validationStatus || null,
     lastValidationError: saved.lastValidationError || null,

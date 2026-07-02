@@ -15,7 +15,6 @@ import {
 } from "@/lib/assessment-skill/auth";
 
 const requestSchema = z.object({
-  conversationBackend: z.enum(["legacy", "hermes"]).default("hermes"),
   language: z.enum(["zh", "en"]).optional(),
   triageContext: z
     .object({
@@ -104,7 +103,6 @@ export async function POST(request: NextRequest) {
               content,
               language,
               triageContext,
-              requestedBackend: body.conversationBackend,
               conversationId,
               memberContextSummary,
               tenantContext,

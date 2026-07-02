@@ -19,7 +19,7 @@ export type AdminPolicies = {
     fallbackToStandardExplanation: boolean;
   };
   runtime: {
-    hermesDegradeThresholdPercent: number;
+    runtimeErrorThresholdPercent: number;
     enableDoctorBotFallback: boolean;
     enforceTenantIsolation: boolean;
   };
@@ -47,7 +47,7 @@ export const DEFAULT_ADMIN_POLICIES: AdminPolicies = {
     fallbackToStandardExplanation: true,
   },
   runtime: {
-    hermesDegradeThresholdPercent: 5,
+    runtimeErrorThresholdPercent: 5,
     enableDoctorBotFallback: true,
     enforceTenantIsolation: true,
   },
@@ -125,9 +125,9 @@ function normalizePolicies(value: unknown): AdminPolicies {
       ),
     },
     runtime: {
-      hermesDegradeThresholdPercent: toPositiveInt(
-        runtime.hermesDegradeThresholdPercent,
-        DEFAULT_ADMIN_POLICIES.runtime.hermesDegradeThresholdPercent
+      runtimeErrorThresholdPercent: toPositiveInt(
+        runtime.runtimeErrorThresholdPercent,
+        DEFAULT_ADMIN_POLICIES.runtime.runtimeErrorThresholdPercent
       ),
       enableDoctorBotFallback: toBoolean(
         runtime.enableDoctorBotFallback,
@@ -184,7 +184,7 @@ export async function saveAdminPolicies(input: AdminPolicies) {
     create: {
       configKey: ADMIN_POLICIES_CONFIG_KEY,
       configValue: JSON.stringify(normalized),
-      description: '平台治理策略：敏感访问、知识审核、Hermes 降级与统一限流',
+      description: '平台治理策略：敏感访问、知识审核、运行时错误与统一限流',
     },
   });
 

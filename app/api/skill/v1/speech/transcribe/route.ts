@@ -25,7 +25,6 @@ export async function POST(request: NextRequest) {
       'doctorProfileId',
       'scaleId',
       'questionId',
-      'hermesConversationId',
     ]) {
       const value = formData.get(key);
       if (typeof value === 'string' && value.trim()) {

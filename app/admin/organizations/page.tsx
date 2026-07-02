@@ -21,7 +21,6 @@ type OrganizationItem = {
   createdAt: string;
   updatedAt: string;
   doctorCount: number;
-  hermesProfileCount: number;
 };
 
 type OrganizationFormState = {
@@ -188,7 +187,7 @@ export default function AdminOrganizationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="组织管理"
-        description="维护机构租户、联系人和启停状态，为 Hermes profile、知识审核与医生归属提供主租户入口。"
+        description="维护机构租户、联系人和启停状态，为知识审核与医生归属提供主租户入口。"
       />
 
       <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
@@ -199,7 +198,7 @@ export default function AdminOrganizationsPage() {
                 {form.id ? '编辑组织' : '新建组织'}
               </h3>
               <p className="mt-1 text-sm text-slate-500">
-                先落组织主租户，后续 Hermes profile、知识审核和医生归属都以此为准。
+                先落组织主租户，后续知识审核和医生归属都以此为准。
               </p>
             </div>
             {form.id ? (
@@ -347,7 +346,6 @@ export default function AdminOrganizationsPage() {
                         <p>联系人：{organization.contactName || '未填写'}</p>
                         <p>联系电话：{organization.contactPhone || '未填写'}</p>
                         <p>归属医生：{organization.doctorCount} 人</p>
-                        <p>Hermes Profile：{organization.hermesProfileCount} 个</p>
                         <p>创建时间：{formatDateTime(organization.createdAt)}</p>
                         <p>最后更新：{formatDateTime(organization.updatedAt)}</p>
                       </div>

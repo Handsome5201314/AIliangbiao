@@ -145,7 +145,7 @@ export default function SettingsPage() {
               <Link href="/admin/agent" className="mx-1 font-semibold text-cyan-700 underline-offset-4 hover:underline">
                 /admin/agent
               </Link>
-              。那里配置的是 Agent 的 provider/model 偏好，底层仍然复用“AI 服务商密钥”中的可用系统密钥池；不会直接改 Hermes 容器自己的上游模型配置。本页保留原始 JSON 编辑入口，主要用于排查和紧急兜底。
+              。那里配置的是 Agent 的 provider/model 偏好，底层仍然复用“AI 服务商密钥”中的可用系统密钥池。本页保留原始 JSON 编辑入口，主要用于排查和紧急兜底。
             </p>
           </div>
         </div>
@@ -200,7 +200,7 @@ export default function SettingsPage() {
           <h3 className="text-lg font-semibold text-slate-900">Agent 原始 JSON 兜底入口</h3>
         </div>
         <p className="mb-4 text-sm leading-7 text-slate-500">
-          这份 JSON 与 <code>/admin/agent</code> 读写的是同一个 <code>agentWorkspaceConfig</code>。其中模型部分保存的是 Agent 的 provider/model 偏好，不是某条具体 API Key 的绑定关系，也不会直接改 Hermes 容器自己的上游模型配置。正常运营建议用结构化页面，这里保留给高级调试和紧急回滚。
+          这份 JSON 与 <code>/admin/agent</code> 读写的是同一个 <code>agentWorkspaceConfig</code>。其中模型部分保存的是 Agent 的 provider/model 偏好，不是某条具体 API Key 的绑定关系。正常运营建议用结构化页面，这里保留给高级调试和紧急回滚。
         </p>
         <textarea
           value={settings.agentWorkspaceConfig}

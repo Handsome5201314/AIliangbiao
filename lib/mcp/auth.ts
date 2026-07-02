@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { hashBusinessSecret } from '@/lib/utils/businessSecrets';
 
-export type McpEntrypoint = 'canonical' | 'scale_compat' | 'growth_compat' | 'memory_compat';
+export type McpEntrypoint = 'canonical' | 'scale_compat' | 'memory_compat';
 export type McpToolAuditStatus = 'SUCCESS' | 'ERROR';
 
 export interface McpApiKeyRecord {

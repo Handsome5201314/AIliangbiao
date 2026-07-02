@@ -315,7 +315,7 @@ main() {
   log "Running prisma migrate deploy."
   compose "$release_dir" run --rm --no-deps app npx prisma migrate deploy
 
-  log "Recreating app container without starting compose-managed Hermes."
+  log "Recreating app container."
   compose "$release_dir" up -d --no-deps app
   APP_RECREATED=true
 

@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Baby,
   ClipboardCheck,
   ClipboardList,
   FlaskConical,
@@ -25,7 +24,6 @@ const navItems = [
   { name: '医生邀请', href: '/doctor/invites', icon: <Link2 className="h-5 w-5" /> },
   { name: '门诊筛查', href: '/doctor/clinic-screenings', icon: <ClipboardList className="h-5 w-5" /> },
   { name: '待复核', href: '/doctor/reviews', icon: <ClipboardCheck className="h-5 w-5" /> },
-  { name: '新生儿病房', href: '/doctor/neonates', icon: <Baby className="h-5 w-5" /> },
   { name: '患者管理', href: '/doctor/patients', icon: <ClipboardList className="h-5 w-5" /> },
   { name: '团队协作', href: '/doctor/team', icon: <Users className="h-5 w-5" /> },
   { name: '科研导出', href: '/doctor/research', icon: <FlaskConical className="h-5 w-5" /> },

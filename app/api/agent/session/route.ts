@@ -93,7 +93,6 @@ export async function POST(request: NextRequest) {
       accountType: activeAccountType || 'PATIENT',
       doctorProfileId: activeAccountType === 'DOCTOR' ? context.activeDoctorProfile?.id : undefined,
       organizationId: context.organization?.id || undefined,
-      hermesProfileId: context.hermesProfile?.id || undefined,
       tenantRole: context.tenantRole,
       channel: agentChannel,
       entrypoint: body.entrypoint || 'app',
@@ -119,7 +118,6 @@ export async function POST(request: NextRequest) {
           channel: agentChannel,
           tenantRole: context.tenantRole,
           organization: context.organization,
-          hermesProfile: context.hermesProfile,
           activeDoctorProfile: context.activeDoctorProfile
             ? {
                 id: context.activeDoctorProfile.id,

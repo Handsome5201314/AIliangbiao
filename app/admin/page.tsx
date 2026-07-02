@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Activity,
-  Bot,
   Building2,
   Calendar,
   Clock,
@@ -62,13 +61,6 @@ interface DashboardData {
   recentActivities: DashboardActivity[];
   mcpStatus: {
     databaseHealthy: boolean;
-    hermes: {
-      status: 'ok' | 'degraded';
-      configured: boolean;
-      upstreamStatus: number;
-      checkedAt: string;
-      reason: string | null;
-    };
     canonicalAuthEnabled: boolean;
     canonical: {
       key: string;
@@ -125,13 +117,6 @@ const emptyDashboard: DashboardData = {
   recentActivities: [],
   mcpStatus: {
     databaseHealthy: false,
-    hermes: {
-      status: 'degraded',
-      configured: false,
-      upstreamStatus: 0,
-      checkedAt: '',
-      reason: null,
-    },
     canonicalAuthEnabled: false,
     canonical: {
       key: 'canonical',
@@ -253,14 +238,6 @@ export default function AdminDashboard() {
       roles: [ADMIN_ROLE.SUPER_ADMIN],
     },
     {
-      href: '/admin/hermes-profiles',
-      title: 'Hermes Profile',
-      description: '管理组织/独立医生的 Hermes 运行策略、知识模式与回退规则',
-      style: 'from-slate-900 to-cyan-700',
-      icon: <Bot className="mb-3 h-8 w-8" />,
-      roles: [ADMIN_ROLE.SUPER_ADMIN],
-    },
-    {
       href: '/admin/users',
       title: '成员管理',
       description: '查看用户、成员档案与评估关系',
@@ -295,7 +272,7 @@ export default function AdminDashboard() {
     {
       href: '/admin/policies',
       title: '治理策略',
-      description: '固化敏感访问、知识审核、Hermes 降级与统一限流规则',
+      description: '固化敏感访问、知识审核、量表治理与统一限流规则',
       style: 'from-slate-800 to-violet-700',
       icon: <SlidersHorizontal className="mb-3 h-8 w-8" />,
       roles: [ADMIN_ROLE.SUPER_ADMIN],
@@ -426,32 +403,11 @@ export default function AdminDashboard() {
                 </Badge>
               </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <div>
-                  <span className="text-sm font-medium text-slate-700">Hermes Runtime</span>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {dashboard.mcpStatus.hermes.configured
-                      ? `内部运行时状态 ${dashboard.mcpStatus.hermes.upstreamStatus || '未知'}`
-                      : '缺少 app -> Hermes 连接配置'}
-                  </p>
-                </div>
-                <Badge variant={dashboard.mcpStatus.hermes.status === 'ok' ? 'success' : 'warning'}>
-                  {dashboard.mcpStatus.hermes.status === 'ok' ? '健康' : '降级'}
-                </Badge>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                这里只检查 app 到内部 Hermes Runtime 的连通与鉴权，不代表 DeepSeek/OpenAI 等项目侧密钥池状态。
-              </div>
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
                 <span className="text-sm font-medium text-slate-700">canonical MCP 鉴权</span>
                 <Badge variant={dashboard.mcpStatus.canonicalAuthEnabled ? 'success' : 'warning'}>
                   {dashboard.mcpStatus.canonicalAuthEnabled ? '已启用' : '未启用'}
                 </Badge>
               </div>
-              {dashboard.mcpStatus.hermes.reason ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                  Hermes 降级原因：{dashboard.mcpStatus.hermes.reason}
-                </div>
-              ) : null}
               <div className="rounded-2xl border border-slate-200 px-4 py-4">
                 <p className="text-sm font-semibold text-slate-900">{dashboard.mcpStatus.canonical.label}</p>
                 <p className="mt-1 text-sm text-slate-500">24h 调用 {dashboard.mcpStatus.canonical.callsLast24h}</p>

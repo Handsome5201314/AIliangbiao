@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
       doctorProfileId: readOptionalString(formData, 'doctorProfileId'),
       scaleId: readOptionalString(formData, 'scaleId'),
       questionId: readOptionalNumber(formData, 'questionId'),
-      hermesConversationId: readOptionalString(formData, 'hermesConversationId'),
     };
 
     // 参数验证

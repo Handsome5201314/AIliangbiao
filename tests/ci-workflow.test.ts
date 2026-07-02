@@ -62,9 +62,8 @@ test("deployment docs should describe Gitee upgrades and separated AI key owners
 
   assert.match(deployment, /gitee\.com\/lishuaishuai1314520\/AIliangbiao\.git/);
   assert.match(deployment, /scripts\/tencent-gitee-upgrade\.sh --diff-only/);
-  assert.match(deployment, /HERMES_API_SERVER_KEY/);
   assert.match(deployment, /\/admin\/apikeys/);
-  assert.match(deployment, /Hermes .*上游/);
+  assert.doesNotMatch(deployment, /HERMES_API_SERVER|Hermes .*上游/);
   assert.match(readme, /腾讯云/);
   assert.match(readme, /Gitee/);
 });

@@ -1,16 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-test("prisma schema should preserve the deep-research Hermes lifecycle and knowledge metadata fields", async () => {
+test("prisma schema should preserve knowledge metadata while removing embedded runtime profiles", async () => {
   const file = await import("node:fs/promises");
   const schema = await file.readFile("prisma/schema.prisma", "utf8");
   const migration = await file.readFile(
-    "prisma/migrations/20260627_baseline/migration.sql",
+    "prisma/migrations/20260702_remove_hermes_neonate_growth/migration.sql",
     "utf8"
   );
 
-  assert.match(schema, /enum HermesProfileStatus[\s\S]*DRAFT[\s\S]*READY[\s\S]*DEGRADED[\s\S]*DISABLED/);
-  assert.match(schema, /status\s+HermesProfileStatus\s+@default\(READY\)/);
+  assert.doesNotMatch(schema, /HermesProfile|hermesProfileId|HermesProfileStatus/);
   assert.match(schema, /slug\s+String\?/);
   assert.match(schema, /sourceType\s+String/);
   assert.match(schema, /renderedHtml\s+String\?/);
@@ -20,8 +19,8 @@ test("prisma schema should preserve the deep-research Hermes lifecycle and knowl
   assert.match(schema, /questionId\s+String\?/);
   assert.match(schema, /tokenCount\s+Int\?/);
   assert.match(schema, /embedding\s+Unsupported\("vector"\)\?/);
-  assert.match(migration, /CREATE EXTENSION IF NOT EXISTS vector/i);
-  assert.match(migration, /CREATE TABLE "KnowledgeChunk"[\s\S]*"embedding" vector/i);
+  assert.match(migration, /DROP TABLE IF EXISTS "HermesProfile"/);
+  assert.match(migration, /DROP COLUMN IF EXISTS "hermesProfileId"/);
 });
 
 test("platform explanation service should separate organization and doctor exact supplements", async () => {

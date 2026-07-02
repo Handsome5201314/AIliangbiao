@@ -97,7 +97,7 @@ type LiveSessionPayload = {
 
 type RealtimeBootstrapResponse = {
   runtime: {
-    provider: 'hermes';
+    provider: 'internal';
     mode: 'sdk';
     fallbacks: {
       voiceIntent: boolean;
@@ -165,7 +165,6 @@ async function consumePlatformAgentChatStream(input: {
       Authorization: `Bearer ${input.agentToken}`,
     },
     body: JSON.stringify({
-      conversationBackend: 'hermes',
       language: input.language,
       triageContext: input.triageContext,
       input: {
@@ -617,7 +616,7 @@ export default function AgentWorkspace({
       }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Failed to prepare Hermes realtime session');
+    if (!response.ok) throw new Error(data.error || 'Failed to prepare realtime session');
     setRealtimeBootstrap(data as RealtimeBootstrapResponse);
     return data as RealtimeBootstrapResponse;
   }, [activeMemberId, authHeaders, isAuthenticated, memberSnapshot]);
@@ -1542,7 +1541,7 @@ export default function AgentWorkspace({
 
             {realtimeBootstrap ? (
               <div className="mx-8 mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm text-[#245f50]">
-                Hermes 实时层已就绪，可用工具数：{realtimeBootstrap.tools.length}。
+                实时工作台已就绪，可用工具数：{realtimeBootstrap.tools.length}。
               </div>
             ) : null}
 
@@ -1843,7 +1842,7 @@ export default function AgentWorkspace({
 
         {realtimeBootstrap ? (
           <div className="mb-5 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-foreground shadow-sm">
-            Hermes 实时层已就绪，当前仍保留 `voice-intent` 与现有语音链路作为兜底。已开放工具数：{realtimeBootstrap.tools.length}。
+            实时工作台已就绪，已开放工具数：{realtimeBootstrap.tools.length}。
           </div>
         ) : null}
 

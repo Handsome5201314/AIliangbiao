@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { resolveAgentApiKeyByService } from "@/lib/agent/model-resolver";
 import { getAgentWorkspaceConfig } from "@/lib/agent/config";
-import { requestHermesQuestionnaireAnswerMapping } from "@/lib/realtime/hermes";
 import { getSystemApiKeyByService } from "@/lib/services/apiKeyService";
 import {
   buildScaleRecommendationCopy,
@@ -17,9 +16,9 @@ import {
 } from "@/lib/services/triageFlow";
 import { parseVoiceIntentResponse, voiceIntentResultSchema } from "@/lib/services/voiceProtocol";
 import {
-  buildHermesMappingFallbackIntent,
+  buildClarificationIntent,
+  needsClarification,
   resolveLocalQuestionnaireVoiceIntent,
-  shouldEscalateToHermes,
 } from "@/lib/services/voice-answer-mapping";
 import {
   createPromptHash,
@@ -42,7 +41,6 @@ const questionnaireRequestSchema = z.object({
   assessmentSessionId: z.string().optional(),
   assessmentHistoryId: z.string().optional(),
   doctorProfileId: z.string().optional(),
-  hermesConversationId: z.string().optional(),
 });
 
 const triageContextSchema = z.object({
@@ -487,7 +485,6 @@ async function resolveQuestionnaireIntent(input: z.infer<typeof questionnaireReq
     doctorProfileId: input.doctorProfileId,
     scaleId: input.scaleId,
     questionId: input.questionId,
-    hermesConversationId: input.hermesConversationId || input.conversationSessionId,
   };
   const promptHash = createPromptHash(`questionnaire-answer-mapping:${input.scaleId}:${input.questionId}`);
 
@@ -506,7 +503,6 @@ async function resolveQuestionnaireIntent(input: z.infer<typeof questionnaireReq
   const nextAuditContext: AiConversationContext = {
     ...auditContext,
     conversationSessionId,
-    hermesConversationId: auditContext.hermesConversationId || conversationSessionId,
   };
 
   const localResult = resolveLocalQuestionnaireVoiceIntent({
@@ -526,109 +522,31 @@ async function resolveQuestionnaireIntent(input: z.infer<typeof questionnaireReq
     },
   });
 
-  if (!shouldEscalateToHermes(localResult)) {
+  if (!needsClarification(localResult)) {
     return { result: localResult, source: "rule" as const, conversationSessionId };
   }
 
-  try {
-    const hermes = await requestHermesQuestionnaireAnswerMapping({
-      conversationId: nextAuditContext.hermesConversationId || conversationSessionId,
-      scaleId: input.scaleId,
-      question,
-      transcript: input.transcript,
-      language: input.language,
-    });
-    const hermesResult = validateQuestionnaireIntent(question, hermes.result, input.transcript, input.language);
+  const clarificationResult = buildClarificationIntent({
+    transcript: input.transcript,
+    language: input.language,
+    reason: "Local answer mapping needs confirmation",
+  });
 
-    await recordAiConversationEvent({
-      ...nextAuditContext,
-      eventType: "answer_mapping_hermes",
-      transcriptText: input.transcript,
-      assistantText: hermesResult.meta?.followUpQuestion,
-      provider: hermes.provider,
-      model: hermes.model,
-      confidence: hermesResult.confidence,
-      promptHash,
-      metadata: {
-        source: "hermes_runtime",
-        rawText: hermes.rawText,
-        result: hermesResult,
-      },
-    });
-
-    return { result: hermesResult, source: "hermes" as const, conversationSessionId };
-  } catch (error) {
-    const fallbackResult = buildHermesMappingFallbackIntent({
-      transcript: input.transcript,
-      language: input.language,
-      reason: error instanceof Error ? error.message : "Hermes answer mapping failed",
-    });
-
-    await recordAiConversationEvent({
-      ...nextAuditContext,
-      eventType: "error",
-      transcriptText: input.transcript,
-      errorMessage: error instanceof Error ? error.message : "Hermes answer mapping failed",
-      fallbackReason: "hermes_mapping_failed",
-      promptHash,
-      metadata: {
-        source: "hermes_runtime",
-      },
-    });
-    await recordAiConversationEvent({
-      ...nextAuditContext,
-      eventType: "fallback",
-      transcriptText: input.transcript,
-      assistantText: fallbackResult.meta?.followUpQuestion,
-      confidence: fallbackResult.confidence,
-      fallbackReason: "hermes_mapping_failed",
-      promptHash,
-      metadata: {
-        source: "local_confirmation_prompt",
-        result: fallbackResult,
-      },
-    });
-
-    return { result: fallbackResult, source: "rule" as const, conversationSessionId };
-  }
-}
-
-function validateQuestionnaireIntent(
-  question: ScaleQuestion,
-  result: VoiceIntentResult,
-  transcript: string,
-  language: LanguageCode
-): VoiceIntentResult {
-  if (result.intent !== "answer" || !result.answer) {
-    return result;
-  }
-
-  const matchedOption = question.options.find((option) => option.score === result.answer?.score);
-  if (!matchedOption) {
-    return buildHermesMappingFallbackIntent({
-      transcript,
-      language,
-      reason: "Hermes returned an option score outside the current question",
-    });
-  }
-
-  return {
-    ...result,
-    answer: {
-      questionId: question.id,
-      score: matchedOption.score,
-      label: matchedOption.label,
+  await recordAiConversationEvent({
+    ...nextAuditContext,
+    eventType: "fallback",
+    transcriptText: input.transcript,
+    assistantText: clarificationResult.meta?.followUpQuestion,
+    confidence: clarificationResult.confidence,
+    fallbackReason: "local_mapping_needs_confirmation",
+    promptHash,
+    metadata: {
+      source: "local_confirmation_prompt",
+      result: clarificationResult,
     },
-    meta: {
-      ...result.meta,
-      rawTranscript: result.meta?.rawTranscript || transcript,
-      needsConfirmation:
-        question.riskLevel === "sensitive" ||
-        question.riskLevel === "high" ||
-        result.meta?.needsConfirmation ||
-        result.confidence < 0.8,
-    },
-  };
+  });
+
+  return { result: clarificationResult, source: "rule" as const, conversationSessionId };
 }
 
 async function resolveTriageIntent(input: z.infer<typeof triageRequestSchema>) {

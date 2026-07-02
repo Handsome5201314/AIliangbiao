@@ -106,7 +106,7 @@ export default function AdminChannelsPage() {
           </div>
           <div className="space-y-2 text-sm leading-7 text-slate-600">
             <div className="font-semibold text-slate-900">统一平台入口是第一阶段默认策略</div>
-            <p>所有外部入口先进入平台后端，再做组织、医生、用户和成员上下文解析，最后转给 Hermes Runtime。</p>
+            <p>所有外部入口先进入平台后端，再做组织、医生、用户和成员上下文解析，最后进入量表、MCP 或 AI Provider 调用链路。</p>
             <p>Webhook 类型渠道会显示固定回调路径，Web/H5 与医生工作台则复用 `/api/agent/session` 这一条会话签发链路。</p>
           </div>
         </div>

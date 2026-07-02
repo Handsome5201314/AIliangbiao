@@ -22,7 +22,7 @@ export type ScaleResultDeliveryMode = "immediate" | "physician_review";
 
 export type ScaleAudience = "child" | "adult" | "personality" | "career";
 
-export type ScaleProductGroup = "clinical_child" | "growth";
+export type ScaleProductGroup = "clinical_child";
 
 export type ScaleStatus = "active" | "disabled" | "legacy";
 

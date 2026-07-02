@@ -60,8 +60,6 @@ type DoctorWorkspaceResponse = {
     fastgptApiKeyConfigured: boolean;
     enabledScaleIds: string[];
     status: 'draft' | 'published' | 'disabled';
-    hermesEnabled?: boolean;
-    knowledgeMode?: 'platform_proxy' | 'direct_fastgpt';
     lastValidatedAt: string | null;
     validationStatus: string | null;
     lastValidationError: string | null;
@@ -488,39 +486,6 @@ export default function DoctorWorkspacePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-4">
-                <div className="text-sm font-semibold text-cyan-900">Hermes 主脑灰度</div>
-                <p className="mt-1 text-sm leading-6 text-cyan-800">
-                  对话交互可逐步切到 Hermes；FastGPT 继续作为知识库底座。默认推荐走平台代理，保留高级直连模式作为兜底。
-                </p>
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="text-sm text-slate-700">
-                    <span className="mb-2 block font-medium">Hermes 主脑</span>
-                    <select
-                      value={form.hermesEnabled ? 'enabled' : 'disabled'}
-                      onChange={(event) => updateField('hermesEnabled', event.target.value === 'enabled')}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-cyan-400"
-                    >
-                      <option value="disabled">关闭</option>
-                      <option value="enabled">开启</option>
-                    </select>
-                  </label>
-
-                  <label className="text-sm text-slate-700">
-                    <span className="mb-2 block font-medium">知识调用模式</span>
-                    <select
-                      value={form.knowledgeMode || 'platform_proxy'}
-                      onChange={(event) =>
-                        updateField('knowledgeMode', event.target.value as WorkspaceConfigForm['knowledgeMode'])
-                      }
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-cyan-400"
-                    >
-                      <option value="platform_proxy">平台代理 FastGPT</option>
-                      <option value="direct_fastgpt">高级直连 FastGPT</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
             </div>
           </section>
 

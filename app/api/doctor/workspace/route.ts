@@ -13,8 +13,6 @@ const requestSchema = z.object({
   fastgptApiKey: z.string().optional(),
   enabledScaleIds: z.array(z.string()).default([]),
   status: z.enum(['draft', 'published', 'disabled']).default('draft'),
-  hermesEnabled: z.boolean().optional(),
-  knowledgeMode: z.enum(['platform_proxy', 'direct_fastgpt']).optional(),
 });
 
 export async function GET(request: NextRequest) {

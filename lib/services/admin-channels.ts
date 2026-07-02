@@ -69,7 +69,7 @@ const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
   {
     key: 'doctor_workspace',
     label: '医生工作台',
-    description: 'PC 医生工作台入口，带医生组织与 Hermes profile 解析。',
+    description: 'PC 医生工作台入口，带医生组织与成员上下文解析。',
     surface: 'DESKTOP',
     authMode: '管理员 / 医生登录态',
     sessionPath: '/api/agent/session',

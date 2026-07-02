@@ -87,14 +87,6 @@ Confidence policy:
 - `confidence < 0.60`: require explicit option selection.
 - If the user says they are unsure, ask follow-up questions or use Web Handoff instead of guessing.
 
-### Growth Tools
-
-| Tool | Purpose | Notes |
-| --- | --- | --- |
-| `add_growth_record` | Add height/weight/head-circumference style growth data. | Writes growth records; require consent and minimal data. |
-| `get_growth_history` | Fetch growth history for the requested context. | Read-only. Avoid exposing identifiers. |
-| `evaluate_growth` | Evaluate current growth status. | Not a clinical diagnosis. |
-
 ## Compatibility Tools
 
 Older clients may see or call:

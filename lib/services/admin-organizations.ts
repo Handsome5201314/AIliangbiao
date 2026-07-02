@@ -42,7 +42,6 @@ function toOrganizationView(record: any) {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     doctorCount: record._count?.doctors || 0,
-    hermesProfileCount: record._count?.hermesProfiles || 0,
   };
 }
 
@@ -80,7 +79,6 @@ export async function listAdminOrganizations(input: ListAdminOrganizationsInput 
       _count: {
         select: {
           doctors: true,
-          hermesProfiles: true,
         },
       },
     },
@@ -115,7 +113,6 @@ export async function createAdminOrganization(
       _count: {
         select: {
           doctors: true,
-          hermesProfiles: true,
         },
       },
     },
@@ -163,7 +160,6 @@ export async function updateAdminOrganization(
       _count: {
         select: {
           doctors: true,
-          hermesProfiles: true,
         },
       },
     },

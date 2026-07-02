@@ -16,13 +16,12 @@ test("agent session token carries tenant metadata for platform knowledge routing
     accountType: "PATIENT",
     entrypoint: "agent",
     organizationId: "org-1",
-    hermesProfileId: "hermes-1",
     channel: "wechat_h5",
     tenantRole: "PATIENT_MEMBER",
   });
 
   assert.equal(issued.payload.organization_id, "org-1");
-  assert.equal(issued.payload.hermes_profile_id, "hermes-1");
+  assert.equal("hermes_profile_id" in issued.payload, false);
   assert.equal(issued.payload.channel, "wechat_h5");
   assert.equal(issued.payload.tenant_role, "PATIENT_MEMBER");
 });

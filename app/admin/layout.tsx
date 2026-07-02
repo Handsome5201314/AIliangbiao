@@ -54,12 +54,6 @@ const navItems: AdminNavItem[] = [
     roles: [ADMIN_ROLE.SUPER_ADMIN],
   },
   {
-    name: 'Hermes Profile',
-    icon: <Bot className="h-5 w-5" />,
-    href: '/admin/hermes-profiles',
-    roles: [ADMIN_ROLE.SUPER_ADMIN],
-  },
-  {
     name: '渠道接入',
     icon: <RadioTower className="h-5 w-5" />,
     href: '/admin/channels',

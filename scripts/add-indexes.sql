@@ -77,12 +77,6 @@ ON "SpeechUsage"("provider", "createdAt" DESC);
 CREATE INDEX IF NOT EXISTS idx_profile_user 
 ON "ChildProfile"("userId");
 
--- ==================== 7. 生长记录表索引 ====================
-
--- 画像ID + 月龄（用于生长曲线查询）
-CREATE INDEX IF NOT EXISTS idx_growth_profile_age 
-ON "GrowthRecord"("profileId", "ageMonths");
-
 -- ==================== 验证索引创建 ====================
 
 -- 查看所有索引

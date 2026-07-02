@@ -22,24 +22,6 @@ services:
     networks:
       - internal
 
-  hermes:
-    image: nousresearch/hermes-agent:latest
-    container_name: ai-scale-hermes
-    restart: unless-stopped
-    command: gateway run
-    environment:
-      API_SERVER_ENABLED: 'true'
-      API_SERVER_HOST: 0.0.0.0
-      API_SERVER_PORT: 8642
-      API_SERVER_KEY: ${HERMES_API_SERVER_KEY}
-      API_SERVER_MODEL_NAME: ${HERMES_API_SERVER_MODEL:-hermes-agent}
-    volumes:
-      - hermes_data:/opt/data
-    expose:
-      - '8642'
-    networks:
-      - internal
-
   app:
     build:
       context: .
@@ -51,15 +33,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      hermes:
-        condition: service_started
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
       PORT: 3000
-      HERMES_API_SERVER_BASE_URL: ${HERMES_API_SERVER_BASE_URL:-http://hermes:8642/v1}
-      HERMES_API_SERVER_KEY: ${HERMES_API_SERVER_KEY}
-      HERMES_API_SERVER_MODEL: ${HERMES_API_SERVER_MODEL:-hermes-agent}
     ports:
       - '127.0.0.1:3000:3000'
     healthcheck:
@@ -80,8 +57,6 @@ services:
 volumes:
   postgres_data:
     name: ai-scale-postgres-data
-  hermes_data:
-    name: ai-scale-hermes-data
 
 networks:
   internal:

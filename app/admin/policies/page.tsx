@@ -25,7 +25,7 @@ type PoliciesState = {
     fallbackToStandardExplanation: boolean;
   };
   runtime: {
-    hermesDegradeThresholdPercent: number;
+    runtimeErrorThresholdPercent: number;
     enableDoctorBotFallback: boolean;
     enforceTenantIsolation: boolean;
   };
@@ -53,7 +53,7 @@ const DEFAULT_POLICIES: PoliciesState = {
     fallbackToStandardExplanation: true,
   },
   runtime: {
-    hermesDegradeThresholdPercent: 5,
+    runtimeErrorThresholdPercent: 5,
     enableDoctorBotFallback: true,
     enforceTenantIsolation: true,
   },
@@ -129,7 +129,7 @@ export default function AdminPoliciesPage() {
     <div className="space-y-6">
       <PageHeader
         title="治理策略"
-        description="把敏感访问、知识审核、Hermes 降级、量表治理与统一限流固化成平台级 Source of Truth。"
+        description="把敏感访问、知识审核、量表治理、运行时错误与统一限流固化成平台级 Source of Truth。"
       />
 
       <Card className="border-cyan-200 bg-cyan-50 p-6">
@@ -262,7 +262,7 @@ export default function AdminPoliciesPage() {
                 </select>
               </label>
               <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <div className="font-medium text-slate-900">Hermes 异常时回退标准解释</div>
+                <div className="font-medium text-slate-900">AI 解释异常时回退标准解释</div>
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -290,7 +290,7 @@ export default function AdminPoliciesPage() {
                 </div>
               </label>
               <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <div className="font-medium text-slate-900">Hermes doctor bot fallback</div>
+                <div className="font-medium text-slate-900">医生 Bot fallback</div>
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -316,13 +316,13 @@ export default function AdminPoliciesPage() {
                 </div>
               </label>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Hermes 降级阈值（%）</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">运行时错误阈值（%）</label>
                 <Input
                   type="number"
-                  value={policies.runtime.hermesDegradeThresholdPercent}
+                  value={policies.runtime.runtimeErrorThresholdPercent}
                   onChange={(event) =>
                     updateSection('runtime', {
-                      hermesDegradeThresholdPercent: Number(event.target.value || 0),
+                      runtimeErrorThresholdPercent: Number(event.target.value || 0),
                     })
                   }
                 />

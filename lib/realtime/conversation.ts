@@ -1,4 +1,4 @@
-export type ConversationBackend = "legacy" | "hermes";
+export type ConversationBackend = "internal";
 
 export type NormalizedConversationReply = {
   text: string;
@@ -11,18 +11,11 @@ export type NormalizedConversationReply = {
   } | null;
 };
 
-export function resolveConversationBackend(input: {
-  requestedBackend: ConversationBackend;
-  hermesEnabled: boolean;
-}): ConversationBackend {
-  if (input.requestedBackend === "hermes" && !input.hermesEnabled) {
-    return "legacy";
-  }
-
-  return input.requestedBackend;
+export function resolveConversationBackend(): ConversationBackend {
+  return "internal";
 }
 
-export function normalizeHermesReply(input: {
+export function normalizeConversationReply(input: {
   content: string;
   toolCall?: {
     name: string;

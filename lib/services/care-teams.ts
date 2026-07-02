@@ -52,8 +52,6 @@ export type MemberAccessGrantView = {
   updatedAt: string;
 };
 
-export type NeonateAccessGrantView = MemberAccessGrantView;
-
 export type TeamShareCandidate = {
   id: string;
   name: string;
@@ -84,20 +82,6 @@ type MemberAccessResolution = {
   sourceTeamId?: string | null;
 };
 
-type NeonateAccessResolution = {
-  archiveId: string;
-  effectiveAccessRole: EffectiveAccessRole;
-  source: 'OWNER' | 'GRANT';
-  ownerDoctorProfile: {
-    id: string;
-    realName: string;
-    hospitalName: string;
-    departmentName: string;
-    title: string;
-  } | null;
-  sourceTeamId?: string | null;
-};
-
 function serializeDate(value: Date) {
   return value.toISOString();
 }
@@ -113,7 +97,7 @@ function mapDoctorSummary(doctorProfile: Pick<DoctorProfile, 'id' | 'realName' |
 }
 
 async function createDoctorCollaborationAuditLog(input: {
-  resourceType: 'PATIENT_MEMBER' | 'NEONATE_ARCHIVE' | 'CARE_TEAM';
+  resourceType: 'PATIENT_MEMBER' | 'CARE_TEAM';
   resourceId: string;
   action: string;
   actorDoctorProfileId?: string | null;
@@ -133,7 +117,6 @@ async function createDoctorCollaborationAuditLog(input: {
     },
   });
 }
-
 async function getDoctorProfileOrThrow(doctorProfileId: string) {
   const doctor = await prisma.doctorProfile.findUnique({
     where: { id: doctorProfileId },
@@ -657,16 +640,6 @@ export async function removeDoctorFromCareTeam(input: {
       },
     });
 
-    await tx.neonateArchiveAccessGrant.updateMany({
-      where: {
-        doctorProfileId: input.targetDoctorProfileId,
-        sourceTeamId: input.teamId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: now,
-      },
-    });
   });
 
   await createDoctorCollaborationAuditLog({
@@ -733,16 +706,6 @@ export async function adminRemoveDoctorFromCareTeam(input: {
       },
     });
 
-    await tx.neonateArchiveAccessGrant.updateMany({
-      where: {
-        doctorProfileId: input.targetDoctorProfileId,
-        sourceTeamId: input.teamId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: now,
-      },
-    });
   });
 
   await createDoctorCollaborationAuditLog({
@@ -1220,378 +1183,6 @@ export async function revokeMemberAccessGrant(input: {
   return serializeMemberGrant(revoked);
 }
 
-async function getNeonateOwner(archiveId: string) {
-  return prisma.doctorNeonateArchive.findUnique({
-    where: { id: archiveId },
-    include: {
-      doctorProfile: true,
-    },
-  });
-}
-
-export async function resolveDoctorNeonateAccess(archiveId: string, doctorProfileId: string): Promise<NeonateAccessResolution | null> {
-  const archive = await getNeonateOwner(archiveId);
-
-  if (!archive) {
-    return null;
-  }
-
-  if (archive.doctorProfileId === doctorProfileId) {
-    return {
-      archiveId,
-      effectiveAccessRole: 'OWNER',
-      source: 'OWNER',
-      ownerDoctorProfile: mapDoctorSummary(archive.doctorProfile),
-    };
-  }
-
-  const grant = await prisma.neonateArchiveAccessGrant.findFirst({
-    where: {
-      archiveId,
-      doctorProfileId,
-      revokedAt: null,
-      sourceTeam: {
-        isActive: true,
-        memberships: {
-          some: {
-            doctorProfileId,
-          },
-        },
-      },
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
-
-  if (!grant) {
-    return null;
-  }
-
-  return {
-    archiveId,
-    effectiveAccessRole: grant.accessRole === 'COLLABORATOR' ? 'COLLABORATOR' : 'READONLY',
-    source: 'GRANT',
-    ownerDoctorProfile: mapDoctorSummary(archive.doctorProfile),
-    sourceTeamId: grant.sourceTeamId,
-  };
-}
-
-export async function assertDoctorCanAccessNeonate(archiveId: string, doctorProfileId: string) {
-  const access = await resolveDoctorNeonateAccess(archiveId, doctorProfileId);
-  if (!access) {
-    throw new Error('当前医生无权访问该新生儿病房档案');
-  }
-  return access;
-}
-
-export async function assertDoctorCanWriteNeonate(archiveId: string, doctorProfileId: string) {
-  const access = await assertDoctorCanAccessNeonate(archiveId, doctorProfileId);
-  if (access.effectiveAccessRole === 'READONLY') {
-    throw new Error('只读协作者不能修改该新生儿档案');
-  }
-  return access;
-}
-
-export async function assertDoctorOwnsNeonate(archiveId: string, doctorProfileId: string) {
-  const access = await assertDoctorCanAccessNeonate(archiveId, doctorProfileId);
-  if (access.effectiveAccessRole !== 'OWNER') {
-    throw new Error('只有档案负责人可以管理该新生儿档案的共享权限');
-  }
-  return access;
-}
-
-function serializeNeonateGrant(grant: {
-  id: string;
-  accessRole: CareAccessRole;
-  sourceTeam: {
-    id: string;
-    name: string;
-    hospitalName: string;
-    departmentName: string;
-    isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-    memberships: Array<{ teamRole: CareTeamRole }>;
-  };
-  doctorProfile: Pick<DoctorProfile, 'id' | 'realName' | 'hospitalName' | 'departmentName' | 'title'>;
-  grantedByDoctorProfile: Pick<DoctorProfile, 'id' | 'realName'>;
-  createdAt: Date;
-  updatedAt: Date;
-}): NeonateAccessGrantView {
-  return {
-    id: grant.id,
-    accessRole: grant.accessRole,
-    sourceTeam: serializeTeamSummary(grant.sourceTeam),
-    targetDoctor: {
-      doctorProfileId: grant.doctorProfile.id,
-      realName: grant.doctorProfile.realName,
-      hospitalName: grant.doctorProfile.hospitalName,
-      departmentName: grant.doctorProfile.departmentName,
-      title: grant.doctorProfile.title,
-    },
-    grantedByDoctor: {
-      doctorProfileId: grant.grantedByDoctorProfile.id,
-      realName: grant.grantedByDoctorProfile.realName,
-    },
-    createdAt: serializeDate(grant.createdAt),
-    updatedAt: serializeDate(grant.updatedAt),
-  };
-}
-
-export async function listNeonateAccessOverview(archiveId: string, doctorProfileId: string) {
-  const access = await assertDoctorCanAccessNeonate(archiveId, doctorProfileId);
-  const ownerArchive = await getNeonateOwner(archiveId);
-  const grants = await prisma.neonateArchiveAccessGrant.findMany({
-    where: {
-      archiveId,
-      revokedAt: null,
-    },
-    include: {
-      sourceTeam: {
-        include: {
-          memberships: {
-            select: {
-              teamRole: true,
-            },
-          },
-        },
-      },
-      doctorProfile: true,
-      grantedByDoctorProfile: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  return {
-    effectiveAccessRole: access.effectiveAccessRole,
-    ownerDoctorProfile: ownerArchive ? mapDoctorSummary(ownerArchive.doctorProfile) : null,
-    grants: grants.filter((grant) => grant.sourceTeam.isActive).map(serializeNeonateGrant),
-    shareableTeams: access.effectiveAccessRole === 'OWNER' ? await listShareableTeamsForDoctor(doctorProfileId) : [],
-  };
-}
-
-export async function createNeonateAccessGrant(input: {
-  ownerDoctorProfileId: string;
-  archiveId: string;
-  targetDoctorProfileId: string;
-  sourceTeamId: string;
-  accessRole: CareAccessRole;
-}) {
-  await assertDoctorOwnsNeonate(input.archiveId, input.ownerDoctorProfileId);
-  await assertGrantDoctorsInSameTeam({
-    actorDoctorProfileId: input.ownerDoctorProfileId,
-    targetDoctorProfileId: input.targetDoctorProfileId,
-    sourceTeamId: input.sourceTeamId,
-  });
-
-  if (input.ownerDoctorProfileId === input.targetDoctorProfileId) {
-    throw new Error('不能把新生儿档案共享给自己');
-  }
-
-  const existing = await prisma.neonateArchiveAccessGrant.findFirst({
-    where: {
-      archiveId: input.archiveId,
-      doctorProfileId: input.targetDoctorProfileId,
-      revokedAt: null,
-    },
-  });
-
-  if (
-    existing &&
-    existing.sourceTeamId === input.sourceTeamId &&
-    existing.accessRole === input.accessRole
-  ) {
-    const grant = await prisma.neonateArchiveAccessGrant.findUniqueOrThrow({
-      where: { id: existing.id },
-      include: {
-        sourceTeam: {
-          include: {
-            memberships: {
-              select: {
-                teamRole: true,
-              },
-            },
-          },
-        },
-        doctorProfile: true,
-        grantedByDoctorProfile: true,
-      },
-    });
-    return serializeNeonateGrant(grant);
-  }
-
-  const grant = await prisma.$transaction(async (tx) => {
-    await tx.neonateArchiveAccessGrant.updateMany({
-      where: {
-        archiveId: input.archiveId,
-        doctorProfileId: input.targetDoctorProfileId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: new Date(),
-      },
-    });
-
-    return tx.neonateArchiveAccessGrant.create({
-      data: {
-        archiveId: input.archiveId,
-        doctorProfileId: input.targetDoctorProfileId,
-        sourceTeamId: input.sourceTeamId,
-        accessRole: input.accessRole,
-        grantedByDoctorProfileId: input.ownerDoctorProfileId,
-      },
-      include: {
-        sourceTeam: {
-          include: {
-            memberships: {
-              select: {
-                teamRole: true,
-              },
-            },
-          },
-        },
-        doctorProfile: true,
-        grantedByDoctorProfile: true,
-      },
-    });
-  });
-
-  await createDoctorCollaborationAuditLog({
-    resourceType: 'NEONATE_ARCHIVE',
-    resourceId: input.archiveId,
-    action: 'NEONATE_ACCESS_GRANTED',
-    actorDoctorProfileId: input.ownerDoctorProfileId,
-    targetDoctorProfileId: input.targetDoctorProfileId,
-    sourceTeamId: input.sourceTeamId,
-    metadata: {
-      accessRole: input.accessRole,
-    },
-  });
-
-  return serializeNeonateGrant(grant);
-}
-
-export async function updateNeonateAccessGrant(input: {
-  ownerDoctorProfileId: string;
-  grantId: string;
-  accessRole: CareAccessRole;
-}) {
-  const grant = await prisma.neonateArchiveAccessGrant.findUnique({
-    where: { id: input.grantId },
-    include: {
-      sourceTeam: {
-        include: {
-          memberships: {
-            select: {
-              teamRole: true,
-            },
-          },
-        },
-      },
-      doctorProfile: true,
-      grantedByDoctorProfile: true,
-    },
-  });
-
-  if (!grant || grant.revokedAt) {
-    throw new Error('未找到有效的新生儿共享授权');
-  }
-
-  await assertDoctorOwnsNeonate(grant.archiveId, input.ownerDoctorProfileId);
-
-  const updated = await prisma.neonateArchiveAccessGrant.update({
-    where: { id: input.grantId },
-    data: {
-      accessRole: input.accessRole,
-    },
-    include: {
-      sourceTeam: {
-        include: {
-          memberships: {
-            select: {
-              teamRole: true,
-            },
-          },
-        },
-      },
-      doctorProfile: true,
-      grantedByDoctorProfile: true,
-    },
-  });
-
-  await createDoctorCollaborationAuditLog({
-    resourceType: 'NEONATE_ARCHIVE',
-    resourceId: grant.archiveId,
-    action: 'NEONATE_ACCESS_ROLE_UPDATED',
-    actorDoctorProfileId: input.ownerDoctorProfileId,
-    targetDoctorProfileId: grant.doctorProfileId,
-    sourceTeamId: grant.sourceTeamId,
-    metadata: {
-      accessRole: input.accessRole,
-    },
-  });
-
-  return serializeNeonateGrant(updated);
-}
-
-export async function revokeNeonateAccessGrant(input: {
-  ownerDoctorProfileId: string;
-  grantId: string;
-}) {
-  const grant = await prisma.neonateArchiveAccessGrant.findUnique({
-    where: { id: input.grantId },
-    include: {
-      sourceTeam: {
-        include: {
-          memberships: {
-            select: {
-              teamRole: true,
-            },
-          },
-        },
-      },
-      doctorProfile: true,
-      grantedByDoctorProfile: true,
-    },
-  });
-
-  if (!grant || grant.revokedAt) {
-    throw new Error('未找到有效的新生儿共享授权');
-  }
-
-  await assertDoctorOwnsNeonate(grant.archiveId, input.ownerDoctorProfileId);
-
-  const revoked = await prisma.neonateArchiveAccessGrant.update({
-    where: { id: input.grantId },
-    data: {
-      revokedAt: new Date(),
-    },
-    include: {
-      sourceTeam: {
-        include: {
-          memberships: {
-            select: {
-              teamRole: true,
-            },
-          },
-        },
-      },
-      doctorProfile: true,
-      grantedByDoctorProfile: true,
-    },
-  });
-
-  await createDoctorCollaborationAuditLog({
-    resourceType: 'NEONATE_ARCHIVE',
-    resourceId: grant.archiveId,
-    action: 'NEONATE_ACCESS_REVOKED',
-    actorDoctorProfileId: input.ownerDoctorProfileId,
-    targetDoctorProfileId: grant.doctorProfileId,
-    sourceTeamId: grant.sourceTeamId,
-  });
-
-  return serializeNeonateGrant(revoked);
-}
-
 export async function listAccessibleMemberRoles(doctorProfileId: string) {
   const ownedAssignments = await prisma.careAssignment.findMany({
     where: {
@@ -1669,64 +1260,6 @@ export async function listAccessibleMemberRoles(doctorProfileId: string) {
   return Array.from(roleMap.values());
 }
 
-export async function listAccessibleNeonateRoles(doctorProfileId: string) {
-  const ownedArchives = await prisma.doctorNeonateArchive.findMany({
-    where: {
-      doctorProfileId,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  const sharedGrants = await prisma.neonateArchiveAccessGrant.findMany({
-    where: {
-      doctorProfileId,
-      revokedAt: null,
-      sourceTeam: {
-        isActive: true,
-        memberships: {
-          some: {
-            doctorProfileId,
-          },
-        },
-      },
-    },
-  });
-
-  const roleMap = new Map<
-    string,
-    {
-      archiveId: string;
-      effectiveAccessRole: EffectiveAccessRole;
-      source: 'OWNER' | 'GRANT';
-    }
-  >();
-
-  for (const archive of ownedArchives) {
-    roleMap.set(archive.id, {
-      archiveId: archive.id,
-      effectiveAccessRole: 'OWNER',
-      source: 'OWNER',
-    });
-  }
-
-  for (const grant of sharedGrants) {
-    const current = roleMap.get(grant.archiveId);
-    if (current?.effectiveAccessRole === 'OWNER') {
-      continue;
-    }
-
-    roleMap.set(grant.archiveId, {
-      archiveId: grant.archiveId,
-      effectiveAccessRole: grant.accessRole === 'COLLABORATOR' ? 'COLLABORATOR' : 'READONLY',
-      source: 'GRANT',
-    });
-  }
-
-  return Array.from(roleMap.values());
-}
-
 export async function revokeActiveMemberAccessGrantsForMember(memberId: string) {
   await prisma.memberCareAccessGrant.updateMany({
     where: {
@@ -1748,21 +1281,6 @@ export async function logPatientWriteAction(input: {
   return createDoctorCollaborationAuditLog({
     resourceType: 'PATIENT_MEMBER',
     resourceId: input.memberId,
-    action: input.action,
-    actorDoctorProfileId: input.actorDoctorProfileId,
-    metadata: input.metadata,
-  });
-}
-
-export async function logNeonateWriteAction(input: {
-  actorDoctorProfileId: string;
-  archiveId: string;
-  action: string;
-  metadata?: Record<string, unknown>;
-}) {
-  return createDoctorCollaborationAuditLog({
-    resourceType: 'NEONATE_ARCHIVE',
-    resourceId: input.archiveId,
     action: input.action,
     actorDoctorProfileId: input.actorDoctorProfileId,
     metadata: input.metadata,

@@ -82,12 +82,15 @@ test("Agent admin model loading should use keyId instead of keyValue", async () 
   assert.match(source, /keyId:\s*matchingKey\.id/);
 });
 
-test("AI control plane copy should distinguish project-side keys from Hermes upstream config", async () => {
+test("AI control plane copy should describe project-side provider keys", async () => {
   const apiKeySource = await readFile("app/admin/apikeys/page.tsx", "utf8");
   const agentSource = await readFile("app/admin/agent/page.tsx", "utf8");
 
-  assert.match(apiKeySource, /Hermes Runtime 自己的上游模型配置/);
-  assert.match(agentSource, /不会直接写入 Hermes Runtime 自己的上游 provider 配置/);
+  assert.match(apiKeySource, /text \/ asr \/ tts/);
+  assert.match(apiKeySource, /FastGPT|自定义 HTTP/);
+  assert.match(agentSource, /provider\/model 偏好/);
+  assert.match(agentSource, /knowledgeConsoleUrl/);
+  assert.doesNotMatch(apiKeySource + agentSource, /Hermes Runtime|HERMES_API_SERVER/);
 });
 
 test("MCP API keys should validate by hash and list only previews", async () => {
@@ -113,7 +116,6 @@ test("MCP key creation should surface failures and prefer streamableHTTP guidanc
     [
       "app/api/mcp/scale/route.ts",
       "app/api/mcp/memory/route.ts",
-      "app/api/mcp/growth/route.ts",
     ].map((filePath) => readFile(filePath, "utf8"))
   );
 

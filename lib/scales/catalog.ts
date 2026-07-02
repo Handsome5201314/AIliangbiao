@@ -59,7 +59,6 @@ const audienceSchema = z.enum([
 
 const productGroupSchema = z.enum([
   "clinical_child",
-  "growth",
 ]) satisfies z.ZodType<ScaleProductGroup>;
 
 const statusSchema = z.enum([

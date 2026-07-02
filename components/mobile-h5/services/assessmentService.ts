@@ -134,7 +134,7 @@ type AnswerMappingResponse = {
   scaleId: string;
   scaleVersion?: string;
   questionId: number;
-  source?: 'rule' | 'hermes' | 'llm';
+  source?: 'rule' | 'llm';
   conversationSessionId?: string;
   followUpQuestion?: string;
   mapping: {
@@ -150,7 +150,7 @@ type AnswerMappingResponse = {
 
 type QuestionnaireVoiceIntentResponse = {
   mode: 'questionnaire';
-  source: 'rule' | 'hermes';
+  source: 'rule' | 'llm';
   conversationSessionId?: string;
   result: {
     intent: string;
@@ -463,7 +463,7 @@ export async function mapNaturalLanguageAnswer(params: {
       score,
       confidence: data.result.confidence,
       evidence,
-      method: score === null ? 'unmatched' : data.source === 'hermes' ? 'mapping_hint' : 'option_alias',
+      method: score === null ? 'unmatched' : data.source === 'llm' ? 'mapping_hint' : 'option_alias',
     },
     needsConfirmation:
       score !== null &&

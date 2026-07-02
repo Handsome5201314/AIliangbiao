@@ -17,7 +17,6 @@ import {
 
 const requestSchema = z.object({
   surface: z.enum(["agent", "doctor_bot"]),
-  conversationBackend: z.enum(["legacy", "hermes"]).default("hermes"),
   voiceMode: z.enum(["stable", "experimental"]).default("stable"),
   language: z.enum(["zh", "en"]).optional(),
   doctorBotSlug: z.string().optional(),
@@ -73,7 +72,6 @@ export async function POST(request: NextRequest) {
           consentGiven: Boolean(body.triageContext?.consentGiven),
           language,
         },
-        requestedBackend: body.conversationBackend,
         conversationId: `agent:${agentSession.session_id}`,
         memberContextSummary,
         tenantContext: buildAgentTenantContextFromSession(agentSession),
@@ -99,22 +97,8 @@ export async function POST(request: NextRequest) {
       visitorSessionId: body.visitorSessionId,
       content,
       language: body.language,
-      requestedBackend: body.conversationBackend,
     });
-    const toolCall =
-      "toolCall" in doctorBotResult.reply
-        ? doctorBotResult.reply.toolCall
-        : doctorBotResult.reply.actionCard
-          ? {
-              name: "suggest_assessment",
-              args: {
-                scaleId: doctorBotResult.reply.actionCard.scaleId,
-                reason: doctorBotResult.reply.actionCard.reason,
-                cardTitle: doctorBotResult.reply.actionCard.title,
-                cardBody: doctorBotResult.reply.actionCard.body,
-              },
-            }
-          : null;
+    const toolCall = doctorBotResult.reply.toolCall || null;
 
     return NextResponse.json({
       success: true,
